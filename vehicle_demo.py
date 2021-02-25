@@ -17,6 +17,8 @@ from twisted.protocols.basic import LineReceiver
 from twisted.internet import reactor
 import re
 
+import mapGenerator
+
 tl = Timeloop()
 
 global mainWin
@@ -520,141 +522,29 @@ class MainWindow(QMainWindow):
         self.endButton.clicked.connect(self.on_end_clicked)
         
         self.drawIntersection = True
-        
-        # Generating our coordinates to follow
-        self.xCoordinates = []
-        self.yCoordinates = []
-        self.vCoordinates = []
-        
-        # Set up the target intervals
-        targetRadius = self.intersectionStraightLength + (self.intersectionWidth / 2)
-        targetArcLength = self.distanceInterval/targetRadius
-        
-        # Generate the coordintes in a line first
-        xCurrent = - self.intersectionStraightLength - (self.intersectionWidth/2)
-        yCurrent = 0
-        
-        self.xCoordinates.append(xCurrent)
-        self.yCoordinates.append(yCurrent)
-        if abs(xCurrent) <= (self.intersectionWidth/2):
-            # Add this to light group 1
-            self.vCoordinates.append(1)
-        else:
-            # No light group, no control
-            self.vCoordinates.append(0)
 
-        while True:
-            xCurrent = xCurrent + self.distanceInterval
-            if xCurrent < (self.intersectionStraightLength + (self.intersectionWidth/2)):
-                self.xCoordinates.append(xCurrent)
-                self.yCoordinates.append(yCurrent)
-                if abs(xCurrent) <= (self.intersectionWidth/2):
-                    # Add this to light group 1
-                    self.vCoordinates.append(1)
-                else:
-                    # No light group, no control
-                    self.vCoordinates.append(0)
-            else:
-                break
-        
-        remaining = (self.intersectionStraightLength + (self.intersectionWidth/2)) - xCurrent
-        #print ( " Remaining: ", remaining )
-        #print ( " Distance Interval: " , self.distanceInterval )
-        startL = self.distanceInterval - remaining
-        #print ( " StartL: ", startL )
-        thetaCurrent = math.radians(startL/targetRadius) + math.radians(270)
-        #print ( " Current Theta: ", thetaCurrent )
-        #print ( " Target Radius: ", targetRadius )
-        xCurrent = targetRadius * math.cos(thetaCurrent) + self.intersectionStraightLength + (self.intersectionWidth/2)
-        YCurrent = targetRadius * math.sin(thetaCurrent) + self.intersectionStraightLength + (self.intersectionWidth/2)
-        
-        self.xCoordinates.append(xCurrent)
-        self.yCoordinates.append(yCurrent)
-        self.vCoordinates.append(0)
+        self.xCoordinates, self.yCoordinates, self.vCoordinates = mapGenerator.generateFigureEight(self.intersectionStraightLength, self.intersectionWidth, self.distanceInterval)
 
-        while True:
-            thetaCurrent = thetaCurrent + targetArcLength
-            if thetaCurrent > math.radians(540):
-                break
-            xCurrent = targetRadius * math.cos(thetaCurrent) + self.intersectionStraightLength + (self.intersectionWidth/2)
-            yCurrent = targetRadius * math.sin(thetaCurrent) + self.intersectionStraightLength + (self.intersectionWidth/2)
-            self.xCoordinates.append(xCurrent)
-            self.yCoordinates.append(yCurrent)
-            # No light group, no control
-            self.vCoordinates.append(0)
-            
-        # Generate the coordintes in a line second
-        yCurrent = self.intersectionStraightLength + (self.intersectionWidth/2)
-        xCurrent = 0
-        
-        self.xCoordinates.append(xCurrent)
-        self.yCoordinates.append(yCurrent)
-        if abs(yCurrent) <= (self.intersectionWidth/2):
-            # Add this to light group 1
-            self.vCoordinates.append(2)
-        else:
-            # No light group, no control
-            self.vCoordinates.append(0)
-
-        while True:
-            yCurrent = yCurrent - self.distanceInterval
-            if yCurrent >= (-self.intersectionStraightLength - (self.intersectionWidth/2)):
-                self.xCoordinates.append(xCurrent)
-                self.yCoordinates.append(yCurrent)
-                if abs(yCurrent) <= (self.intersectionWidth/2):
-                    # Add this to light group 1
-                    self.vCoordinates.append(2)
-                else:
-                    # No light group, no control
-                    self.vCoordinates.append(0)
-            else:
-                break
-        
-        #print ( " X CUrrent: ", xCurrent )
-        remaining = - (self.intersectionStraightLength - (self.intersectionWidth/2)) + yCurrent
-        #print ( " Remaining: ", remaining )
-        #print ( " Distance Interval: " , self.distanceInterval )
-        startL = self.distanceInterval - remaining
-        #print ( " StartL: ", startL )
-        thetaCurrent = - math.radians(startL/targetRadius)
-        #print ( " Current Theta: ", thetaCurrent )
-        #print ( " Target Radius: ", targetRadius )
-        xCurrent = targetRadius * math.cos(thetaCurrent) - self.intersectionStraightLength - (self.intersectionWidth/2)
-        yCurrent = targetRadius * math.sin(thetaCurrent) - self.intersectionStraightLength - (self.intersectionWidth/2)
-
-        self.xCoordinates.append(xCurrent)
-        self.yCoordinates.append(yCurrent)
-        self.vCoordinates.append(0)
-        
-        while True:
-            thetaCurrent = thetaCurrent - targetArcLength
-            if thetaCurrent < math.radians(-270):
-                break
-            xCurrent = targetRadius * math.cos(thetaCurrent) - self.intersectionStraightLength - (self.intersectionWidth/2)
-            yCurrent = targetRadius * math.sin(thetaCurrent) - self.intersectionStraightLength - (self.intersectionWidth/2)
-            self.xCoordinates.append(xCurrent)
-            self.yCoordinates.append(yCurrent)
-            # No light group, no control
-            self.vCoordinates.append(0)
-            
+        # Set this to true after we have set the coordinates set
+        # as this will enable the GUI to draw.
         self.drawCoordinates = True
 
         # Start the tcp server
         # Commenting out for movement over to Flask instead of reactor
-        # reactor.listenTCP(12345, SimpleProtocolFactory(), interface='192.168.1.162')
-        # reactor.run()
+        reactor.listenTCP(12345, SimpleProtocolFactory(), interface='192.168.1.162')
+        reactor.run()
 
         # Running in a thread
         # Commenting out for movement over to Flask instead of reactor
-        # Thread(target=reactor.run, args=(False,)).start()
+        Thread(target=reactor.run, args=(False,)).start()
         
-        #time.sleep(1)
+        time.sleep(1)
 
         # Lets create some vehicles, this would be done automatically as vehicles are added if this is not a simulation
         newvehicle1 = Vehicle()
         newvehicle1.initialVehicleAtPosition(
             (- (self.intersectionWidth * self.meters_to_print_scale / 2) - 50) / self.meters_to_print_scale, 0, 0,
-            self.xCoordinates, self.yCoordinates, self.vCoordinates, len(vehicles), True)
+            self.xCoordinates, self.yCoordinates, self.vCoordinates, len(vehicles), False)
         vehicles.append(newvehicle1)
 
         newvehicle2 = Vehicle()
