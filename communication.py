@@ -4,7 +4,6 @@
 from flask import Flask, jsonify, request
 from flask_restx import Api, Resource, fields
 
-RSU = None
 
 flask_app = Flask(__name__)
 app = Api(app = flask_app, version='1.0', title='One Tenth Scale RSU',
