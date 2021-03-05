@@ -165,6 +165,7 @@ class Vehicle:
 
         self.id = None
         self.simVehicle = True
+        self.key = None
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, xCoordinates, yCoordinates, vCoordinates, id, simVehicle):
         self.targetVelocityGeneral = 0
@@ -209,17 +210,17 @@ class Vehicle:
         #print ( self.motorAcceleration )
         self.velocity += self.motorAcceleration * timestep
 
-    def update_localization(self):
+    def update_localization(self, cav_x = None, cav_y = None, cav_theta = None, cav_velocity = None):
         if self.simVehicle:
             # Update the localization, we could inject error here if we want
             self.localizationPositionX = self.positionX_sim
             self.localizationPositionY = self.positionY_sim
         else:
             # Update the localization from real data
-            self.localizationPositionX = pose[self.id][0] + self.positionX_offset
-            self.localizationPositionY = pose[self.id][1] + self.positionY_offset
-            self.theta = pose[self.id][2] + self.theta_offset
-            self.velocity = pose[self.id][3]
+            self.localizationPositionX = cav_x + self.positionX_offset
+            self.localizationPositionY = cav_y + self.positionY_offset
+            self.theta = cav_theta + self.theta_offset
+            self.velocity = cav_velocity
 
     def pure_pursuit_control(self):
 

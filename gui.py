@@ -105,7 +105,7 @@ class MainWindow(QMainWindow):
         self.labelVehicleAcceleration = []
 
         self.vehiclesLock.acquire()
-        for idx, vehicle in enumerate(self.vehicles):
+        for idx, vehicle in self.vehicles.items():
             self.labelVehicleSpeed.append(QLabel(self))
             self.labelVehicleSpeed[idx].setText('Speed Vehicle ' + str(idx) + ':')
             self.labelVehicleSpeed[idx].move(1000, 80 + 80 * idx)
@@ -173,7 +173,7 @@ class MainWindow(QMainWindow):
         if (self.time - self.lastPositionUpdate) >= 10:
             self.lastPositionUpdate = self.time
             self.vehiclesLock.acquire()
-            for vehicle in self.vehicles:
+            for key, vehicle in self.vehicles.items():
                 # Update vehicle position based on physics
                 vehicle.updatePosition(.01)
                 self.drawTrafficLight = True
@@ -205,7 +205,7 @@ class MainWindow(QMainWindow):
             else:
                 self.lightTime += 1
             self.vehiclesLock.acquire()
-            for idx, vehicle in enumerate(self.vehicles):
+            for idx, vehicle in self.vehicles.items():
                 if self.lineVehicleSpeed[idx].text() == "":
                     # Need to pass here in case the user is still typing
                     pass
@@ -227,7 +227,7 @@ class MainWindow(QMainWindow):
 
                         # Get the last known location of all other vehicles
                         vehicleList = []
-                        for otherIdx, otherVehicle in enumerate(self.vehicles):
+                        for otherIdx, otherVehicle in self.vehicles.items():
                             if idx != otherIdx:
                                 vehicleList.append(otherVehicle.get_location())
 
@@ -360,7 +360,7 @@ class MainWindow(QMainWindow):
             # self.drawVehicle = False
 
         if self.drawVehicle:
-            for idx, vehicle in enumerate(self.vehicles):
+            for idx, vehicle in self.vehicles.items():
                 pen = QPen()
                 pen.setWidth(4)
                 pen.setBrush(Qt.green)

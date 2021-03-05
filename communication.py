@@ -12,13 +12,10 @@ app = Api(app = flask_app, version='1.0', title='One Tenth Scale RSU',
 name_space = app.namespace('RSU', description='One Tenth Scale RSU operations')
 
 RSUVehicleCheckinResponse = app.model('RSUVehicleCheckinResponse', {
-                                'pause': fields.Boolean(required=True,
-                                                        description="True if Simulation is paused.",
-                                                        example=True,
-                                                        help="Pause cannot be blank."),
                                 't_v': fields.Float(required=True,
-                                                        description="Target velocity.",
-                                                        example=1),
+                                                        description="Lets us set velocity target from the app, 0 Simulation is paused.",
+                                                        example=0.1,
+                                                        help="Pause cannot be blank."),
                                 't_x': fields.Float(required=True,
                                                          description="Transform X shift to global map.",
                                                          example=1.01),
@@ -38,106 +35,114 @@ RSUVehicleCheckinResponse = app.model('RSUVehicleCheckinResponse', {
                                                     description="Transform Roll shift to global map.",
                                                     example=1.01),
                                 'route_x': fields.List(fields.Float,
-                                                       required=True,
-                                                       description="X values of route corrdinates in order.",
-                                                       example=1.01),
+                                                        required=True,
+                                                        description="X values of route corrdinates in order.",
+                                                        example=1.01),
                                 'route_y': fields.List(fields.Float,
-                                                      required=True,
-                                                      description="Y values of route corrdinates in order.",
-                                                      example=1.01),
+                                                        required=True,
+                                                        description="Y values of route corrdinates in order.",
+                                                        example=1.01),
                                 'route_TFL': fields.List(fields.Integer,
-                                                      required=True,
-                                                      description="TFL cotnrol values for points in route.",
-                                                      example=1.01),
+                                                        required=True,
+                                                        description="TFL control values for points in route.",
+                                                        example=1.01),
+                                'tfl_state': fields.List(fields.Integer,
+                                                        required=True,
+                                                        description="State of traffic lighs.",
+                                                        example=1),
+                                'veh_locations': fields.List(fields.Float,
+                                                        required=True,
+                                                        description="Location of vehicles x.",
+                                                        example=0.0),
                                 'timestep': fields.Float(required=True,
                                                         description="Current timestep of RSU",
                                                         example=1.01)
 })
 
 RSUVehicleRegisterResponse = app.model('RSUVehicleRegisterResponse', {
-                                'pause': fields.Boolean(required=True,
-                                                        description="True if Simulation is paused.",
-                                                        example=True,
-                                                        help="Pause cannot be blank."),
+                                't_v': fields.Float(required=True,
+                                                        description="Lets us set velocity target from the app, 0 Simulation is paused.",
+                                                        example=0.1,
+                                                        help="Target velocity cannot be blank."),
                                 'tfl_state': fields.List(fields.Integer,
                                                         required=True,
                                                         description="State of traffic lighs.",
                                                         example=1),
-                                'veh_locations_x': fields.List(fields.Float,
+                                'veh_locations': fields.List(fields.Float,
                                                          required=True,
                                                          description="Location of vehicles x.",
                                                          example=0.0),
-                                'veh_locations_y': fields.List(fields.Float,
-                                                         required=True,
-                                                         description="Location of vehicles y.",
-                                                         example=-2.56),
-                                'veh_locations_yaw': fields.List(fields.Float,
-                                                         required=True,
-                                                         description="Location of vehicles yaw.",
-                                                         example=1.23),
                                 'timestep': fields.Float(required=True,
                                                         description="Current timestep of RSU",
                                                         example=1.01)
 })
 
-@name_space.route("/checkin")
+
+@name_space.route("/register/", methods=['POST'])
 class MainClass(Resource):
 
     @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
              params={})
     @app.doc(description="This method can be called while a RSU instance is running to resgister a cav and get the coordinate transpose and route for said vehicle.")
     @app.response(200, 'Success', RSUVehicleCheckinResponse)
-
-
-    def json_example(self):
+    def post(self):
+        print("got request")
+        print(request.is_json)
         request_data = request.get_json()
+        print("data:",request_data)
         try:
             if request_data:
                 key = request_data['key']
-                vehicle_id = request_data['vehicle_id']
-                timestamp = request_data['timestamp']
-                x = request_data['x']
-                y = request_data['y']
-                z = request_data['z']
-                roll = request_data['roll']
-                pitch = request_data['pitch']
-                yaw = request_data['yaw']
+                vehicle_id = int(request_data['vehicle_id'])
+                timestamp = float(request_data['timestamp'])
+                x = float(request_data['x'])
+                y = float(request_data['y'])
+                z = float(request_data['z'])
+                roll = float(request_data['roll'])
+                pitch = float(request_data['pitch'])
+                yaw = float(request_data['yaw'])
 
-                returnObject = RSU.register(key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw)
+                print("recieved")
+
+                returnObject = flask_app.config['RSUClass'].register(key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw)
+
+                print("replying")
 
                 return jsonify(
                     returnObject
                 )
         except Exception as e:
             name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+            print ( str(e) )
 
-@name_space.route("/checkin")
-class MainClass(Resource):
-
-    @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
-             params={})
-    @app.doc(description="This method can be called after a CAV is registered to update the position of the vehicle, log detections, and get the state of traffic lighs.")
-    @app.response(200, 'Success', RSUVehicleCheckinResponse)
-
-    def json_example(self):
-        request_data = request.get_json()
-        try:
-            if request_data:
-                key = request_data['key']
-                vehicle_id = request_data['vehicle_id']
-                timestamp = request_data['timestamp']
-                x = request_data['x']
-                y = request_data['y']
-                z = request_data['z']
-                roll = request_data['roll']
-                pitch = request_data['pitch']
-                yaw = request_data['yaw']
-                detections = request_data['detections']
-
-                returnObject = RSU.checkin(key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw, detections)
-
-                return jsonify(
-                    returnObject
-                )
-        except Exception as e:
-            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+#
+# @name_space.route("/checkin", methods=['GET', 'POST'])
+# class MainClass(Resource):
+#
+#     @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
+#              params={})
+#     @app.doc(description="This method can be called after a CAV is registered to update the position of the vehicle, log detections, and get the state of traffic lighs.")
+#     @app.response(200, 'Success', RSUVehicleCheckinResponse)
+#
+#     def json_example(self):
+#         request_data = request.get_json()
+#         try:
+#             if request_data:
+#                 key = request_data['key']
+#                 vehicle_id = request_data['vehicle_id']
+#                 timestamp = float(request_data['timestamp'])
+#                 x = float(request_data['x'])
+#                 y = float(request_data['y'])
+#                 z = float(request_data['z'])
+#                 roll = float(request_data['roll'])
+#                 pitch = float(request_data['pitch'])
+#                 yaw = float(request_data['yaw'])
+#                 detections = request_data['detections']
+#
+#                 returnObject = flask_app.config['RSUClass'].checkin(key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw, detections)
+#
+#                 return jsonify(
+#                     returnObject
+#                 )
+#         except Exception as e:
+#             name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
