@@ -166,6 +166,9 @@ class Vehicle:
         self.id = None
         self.simVehicle = True
         self.key = None
+
+        self.cameraDetections = []
+        self.lidarDetections = []
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, xCoordinates, yCoordinates, vCoordinates, id, simVehicle):
         self.targetVelocityGeneral = 0
@@ -296,8 +299,8 @@ class Vehicle:
             self.v_pid.setpoint = self.targetVelocity
             self.motorAcceleration = self.v_pid(self.velocity)
             #print("veh" + str(self.id) + " TV:", str(self.targetVelocity) + " MA:" + str(self.motorAcceleration))
-        if self.simVehicle == False:
-            commands[self.id] = [-self.steeringAcceleration, self.motorAcceleration]
+        # if self.simVehicle == False:
+        #     commands[self.id] = [-self.steeringAcceleration, self.motorAcceleration]
 
     def calc_distance(self, point_x, point_y):
         dx = self.localizationPositionX - point_x

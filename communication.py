@@ -12,7 +12,7 @@ app = Api(app = flask_app, version='1.0', title='One Tenth Scale RSU',
 name_space = app.namespace('RSU', description='One Tenth Scale RSU operations')
 
 RSUVehicleCheckinResponse = app.model('RSUVehicleCheckinResponse', {
-                                't_v': fields.Float(required=True,
+                                'v_t': fields.Float(required=True,
                                                         description="Lets us set velocity target from the app, 0 Simulation is paused.",
                                                         example=0.1,
                                                         help="Pause cannot be blank."),
@@ -78,19 +78,19 @@ RSUVehicleRegisterResponse = app.model('RSUVehicleRegisterResponse', {
 })
 
 
-@name_space.route("/register/", methods=['POST'])
+@name_space.route("/register/", methods=['GET'])
 class MainClass(Resource):
 
     @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
              params={})
     @app.doc(description="This method can be called while a RSU instance is running to resgister a cav and get the coordinate transpose and route for said vehicle.")
     @app.response(200, 'Success', RSUVehicleCheckinResponse)
-    def post(self):
+    def get(self):
         print("got request")
         print(request.is_json)
         request_data = request.get_json()
-        print("data:",request_data)
         try:
+            print("data:", request_data)
             if request_data:
                 key = request_data['key']
                 vehicle_id = int(request_data['vehicle_id'])
@@ -115,34 +115,36 @@ class MainClass(Resource):
             name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
             print ( str(e) )
 
-#
-# @name_space.route("/checkin", methods=['GET', 'POST'])
-# class MainClass(Resource):
-#
-#     @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
-#              params={})
-#     @app.doc(description="This method can be called after a CAV is registered to update the position of the vehicle, log detections, and get the state of traffic lighs.")
-#     @app.response(200, 'Success', RSUVehicleCheckinResponse)
-#
-#     def json_example(self):
-#         request_data = request.get_json()
-#         try:
-#             if request_data:
-#                 key = request_data['key']
-#                 vehicle_id = request_data['vehicle_id']
-#                 timestamp = float(request_data['timestamp'])
-#                 x = float(request_data['x'])
-#                 y = float(request_data['y'])
-#                 z = float(request_data['z'])
-#                 roll = float(request_data['roll'])
-#                 pitch = float(request_data['pitch'])
-#                 yaw = float(request_data['yaw'])
-#                 detections = request_data['detections']
-#
-#                 returnObject = flask_app.config['RSUClass'].checkin(key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw, detections)
-#
-#                 return jsonify(
-#                     returnObject
-#                 )
-#         except Exception as e:
-#             name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+
+@name_space.route("/checkin/", methods=['GET'])
+class MainClass(Resource):
+
+    @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
+             params={})
+    @app.doc(description="This method can be called after a CAV is registered to update the position of the vehicle, log detections, and get the state of traffic lighs.")
+    @app.response(200, 'Success', RSUVehicleCheckinResponse)
+    def get(self):
+        print("got request")
+        print(request.is_json)
+        request_data = request.get_json()
+        try:
+            print("data:", request_data)
+            if request_data:
+                key = request_data['key']
+                vehicle_id = int(request_data['vehicle_id'])
+                timestamp = float(request_data['timestamp'])
+                x = float(request_data['x'])
+                y = float(request_data['y'])
+                z = float(request_data['z'])
+                roll = float(request_data['roll'])
+                pitch = float(request_data['pitch'])
+                yaw = float(request_data['yaw'])
+                detections = request_data['detections']
+
+                returnObject = flask_app.config['RSUClass'].checkin(key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw, detections)
+
+                return jsonify(
+                    returnObject
+                )
+        except Exception as e:
+            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")

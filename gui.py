@@ -206,7 +206,10 @@ class MainWindow(QMainWindow):
                 self.lightTime += 1
             self.vehiclesLock.acquire()
             for idx, vehicle in self.vehicles.items():
-                if self.lineVehicleSpeed[idx].text() == "":
+                if self.pause_simulation:
+                    # Make sure we relay the pause to our vehicles
+                    vehicle.targetVelocityGeneral = 0.0
+                elif self.lineVehicleSpeed[idx].text() == "" or self.lineVehicleSpeed[idx].text() == ".":
                     # Need to pass here in case the user is still typing
                     pass
                 else:
@@ -445,6 +448,15 @@ class MainWindow(QMainWindow):
                                   self.translateY(y3 * self.mapSpecs.meters_to_print_scale))
                 painter.drawPoint(self.translateX(x4 * self.mapSpecs.meters_to_print_scale),
                                   self.translateY(y4 * self.mapSpecs.meters_to_print_scale))
+
+                # Now draw the vehicle detections
+                pen.setBrush(Qt.cyan)
+                pen.setWidth(4)
+                painter.setPen(pen)
+                for each in vehicle.lidarDetections:
+                    #print ( each )
+                    painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                 self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
             # self.drawVehicle = False
 
         if self.drawTrafficLight:

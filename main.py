@@ -42,7 +42,7 @@ class RSU():
     def register(self, key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw):
         # Check if this vehicle ID is taken or not
         if vehicle_id in self.vehicles:
-            print ( " Error: Vehicle ID already in use!")
+            print ( " Warning: Vehicle ID already in use!")
 
         # TODO: replace this with somethign better, this is the init funciton that arbitrarily locates the vehicles at positions
         # and if the vehicle is not at the correct location this will not work
@@ -69,7 +69,7 @@ class RSU():
         #     False)
 
         # Set the key so we have some security
-        newvehicle.key = key
+        self.vehicles[vehicle_id].key = key
 
         # Now init the vehicle at a location
         self.vehicles[vehicle_id].update_localization(x, y, yaw, 0.0)
@@ -80,7 +80,7 @@ class RSU():
 
         # Get the last known location of all other vehicles
         vehicleList = []
-        for idx, vehicle in enumerate(vehicles):
+        for idx, vehicle in self.vehicles.items():
             vehicleList.append(vehicle.get_location())
 
         # Now update our current PID with respect to other vehicles
@@ -92,12 +92,29 @@ class RSU():
         self.vehicles[vehicle_id].update_pid()
 
         # Finally we can create the return messages
-        return [self.vehicles[vehicle_id].targetVelocity, init_x, init_y, 0.0, init_yaw, 0.0, 0.0, self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, trafficLightArray, vehicleList, time.time()]
+        registerResponse = dict(
+            v_t=self.vehicles[vehicle_id].targetVelocityGeneral,
+            t_x=init_x,
+            t_y=init_y,
+            t_z="0.0",
+            t_roll="0.0",
+            t_pitch="0.0",
+            t_yaw=init_yaw,
+            route_x=self.mapSpecs.xCoordinates,
+            route_y=self.mapSpecs.yCoordinates,
+            route_TFL=self.mapSpecs.vCoordinates,
+            tfl_state=trafficLightArray,
+            veh_locations=vehicleList,
+            timestep=time.time()
+        )
 
+        return registerResponse
 
-    def checkin(self, key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw):
+    def checkin(self, key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw, detections):
         # Double check our security, this is pretty naive at this point
         if self.vehicles[vehicle_id].key == key:
+            # TODO: possibly do these calculation after responding to increase response time
+
             # Calculate our velocity using our last position
             velocity = self.calc_velocity(self.vehicles[vehicle_id].localizationPositionX, self.vehicles[vehicle_id].localizationPositionY, x, y, yaw)
 
@@ -108,9 +125,15 @@ class RSU():
             # We update this just for the visualizer
             self.vehicles[vehicle_id].pure_pursuit_control()
 
+            #print ( "detections: ", detections["lidar_obj"] )
+
+            # Lets add the detections to the vehicle class
+            self.vehicles[vehicle_id].cameraDetections = detections["cam_obj"]
+            self.vehicles[vehicle_id].lidarDetections = detections["lidar_obj"]
+
             # Get the last known location of all other vehicles
             vehicleList = []
-            for idx, vehicle in enumerate(vehicles):
+            for idx, vehicle in self.vehicles.items():
                 vehicleList.append(vehicle.get_location())
 
             # Now update our current PID with respect to other vehicles
@@ -121,8 +144,16 @@ class RSU():
             # on the actual car and then it will be displayed on the UI
             self.vehicles[vehicle_id].update_pid()
 
+            # Finally we can create the return messages
+            registerResponse = dict(
+                v_t=self.vehicles[vehicle_id].targetVelocity,
+                tfl_state=trafficLightArray,
+                veh_locations=vehicleList,
+                timestep=time.time()
+            )
+
             # Finally we can create the return message
-            return [self.vehicles[vehicle_id].targetVelocity, trafficLightArray, vehicleList, time.time()]
+            return registerResponse
 
     def calc_velocity(self, x1, y1, x2, y2, theta):
         velocity = math.hypot(x2 - x1, y2 - y1) * (1/8)
