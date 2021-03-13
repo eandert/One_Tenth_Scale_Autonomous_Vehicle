@@ -17,10 +17,11 @@ def angleDifference( angle1, angle2 ):
         return diff
 
 class MainWindow(QMainWindow):
-    def __init__(self, mapSpecs, vehiclesLock, vehicles, trafficLightArray):
+    def __init__(self, mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray):
         print ( " GUI Started ")
 
         self.vehicles = vehicles
+        self.sensors = sensors
         self.trafficLightArray = trafficLightArray
         self.pause_simulation = True
         self.vehiclesLock = vehiclesLock
@@ -252,6 +253,9 @@ class MainWindow(QMainWindow):
     def translateY(self, y):
         return self.mapSpecs.centerY - y
 
+    def translateDetections(self, x, y, theta, x_offset, y_offset, theta_offset):
+        return ( x * math.cos(theta + theta_offset)) - (y * math.sin(theta + theta_offset)) + x_offset, ( x * math.sin(theta + theta_offset)) + (y * math.cos(theta + theta_offset)) + y_offset
+
     def drawTargetArc(self, x0, y0, x1, y1, x2, y2, painter):
         r = math.hypot(x1 - x0, y1 - y0)
         x = x0 - r
@@ -449,15 +453,91 @@ class MainWindow(QMainWindow):
                 painter.drawPoint(self.translateX(x4 * self.mapSpecs.meters_to_print_scale),
                                   self.translateY(y4 * self.mapSpecs.meters_to_print_scale))
 
-                # Now draw the vehicle detections
+                # Now draw the vehicle lidar detections
                 pen.setBrush(Qt.cyan)
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in vehicle.lidarDetections:
                     #print ( each )
-                    painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
-                                 self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
+                    transX, transY = self.translateDetections(each[1], each[2], each[3], vehicle.positionX_offset, vehicle.positionY_offset, vehicle.theta_offset)
+                    painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
+                                 self.translateY(transY * self.mapSpecs.meters_to_print_scale))
+
+                # Now draw the vehicle camera detections
+                pen.setBrush(Qt.darkMagenta)
+                pen.setWidth(4)
+                painter.setPen(pen)
+                for each in vehicle.cameraDetections:
+                    # print ( each )
+                    transX, transY = self.translateDetections(each[1], each[2], each[3], vehicle.positionX_offset,
+                                                              vehicle.positionY_offset, vehicle.theta_offset)
+                    painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
+                                      self.translateY(transY * self.mapSpecs.meters_to_print_scale))
             # self.drawVehicle = False
+
+        if self.drawVehicle:
+            for idx, vehicle in self.sensors.items():
+                pen = QPen()
+                pen.setWidth(4)
+                pen.setBrush(Qt.darkBlue)
+                painter.setPen(pen)
+                # Draw the camera position
+                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                 self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                             vehicle.wheelbaseLength * .5 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                     vehicle.theta)),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                             vehicle.wheelbaseLength * .5 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     vehicle.theta)))
+                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                            vehicle.wheelbaseWidth * self.mapSpecs.meters_to_print_scale) * math.cos(
+                    vehicle.theta + math.radians(90))),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                             vehicle.wheelbaseWidth * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     vehicle.theta + math.radians(90))),
+                                 self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                             vehicle.wheelbaseWidth * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                     vehicle.theta + math.radians(90))),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                             vehicle.wheelbaseWidth * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     vehicle.theta + math.radians(90))))
+
+                # Draw the FOV
+                pen = QPen()
+                pen.setWidth(.5)
+                pen.setBrush(Qt.darkBlue)
+                painter.setPen(pen)
+
+                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                 self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                         5.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                     vehicle.theta + math.radians(180 + 80))),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                         5.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     vehicle.theta + math.radians(180 + 80))))
+
+                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                 self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                         5.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                     vehicle.theta + math.radians(180 + -80))),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                         5.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     vehicle.theta + math.radians(180 + -80))))
+
+
+                # Now draw the camera detections
+                pen.setBrush(Qt.darkMagenta)
+                pen.setWidth(4)
+                painter.setPen(pen)
+                for each in vehicle.cameraDetections:
+                    # print ( each )
+                    transX, transY = self.translateDetections(each[1], each[2], each[3], vehicle.positionX_offset,
+                                                              vehicle.positionY_offset, vehicle.theta_offset)
+                    painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
+                                      self.translateY(transY * self.mapSpecs.meters_to_print_scale))
 
         if self.drawTrafficLight:
             pen = QPen()

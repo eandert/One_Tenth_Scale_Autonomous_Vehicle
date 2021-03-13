@@ -86,14 +86,15 @@ class MainClass(Resource):
     @app.doc(description="This method can be called while a RSU instance is running to resgister a cav and get the coordinate transpose and route for said vehicle.")
     @app.response(200, 'Success', RSUVehicleCheckinResponse)
     def get(self):
-        print("got request")
-        print(request.is_json)
+        #print("got request")
+        #print(request.is_json)
         request_data = request.get_json()
         try:
-            print("data:", request_data)
+            #print("data:", request_data)
             if request_data:
                 key = request_data['key']
-                vehicle_id = int(request_data['vehicle_id'])
+                id = int(request_data['id'])
+                type = int(request_data['type'])
                 timestamp = float(request_data['timestamp'])
                 x = float(request_data['x'])
                 y = float(request_data['y'])
@@ -102,11 +103,17 @@ class MainClass(Resource):
                 pitch = float(request_data['pitch'])
                 yaw = float(request_data['yaw'])
 
-                print("recieved")
+                #print("recieved")
 
-                returnObject = flask_app.config['RSUClass'].register(key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw)
+                returnObject = flask_app.config['RSUClass'].register(key, id, type, timestamp, x, y, z, roll, pitch, yaw)
 
-                print("replying")
+                #print("replying")
+
+                if type == 0:
+                    print ( "Registered vehicle: " + str(id) + " at " + str(timestamp) )
+                elif type == 1:
+                    print ( "Registered sensor: " + str(id) + " at " + str(timestamp) )
+
 
                 return jsonify(
                     returnObject
@@ -124,14 +131,15 @@ class MainClass(Resource):
     @app.doc(description="This method can be called after a CAV is registered to update the position of the vehicle, log detections, and get the state of traffic lighs.")
     @app.response(200, 'Success', RSUVehicleCheckinResponse)
     def get(self):
-        print("got request")
-        print(request.is_json)
+        #print("got request")
+        #print(request.is_json)
         request_data = request.get_json()
         try:
-            print("data:", request_data)
+            #print("data:", request_data)
             if request_data:
                 key = request_data['key']
-                vehicle_id = int(request_data['vehicle_id'])
+                id = int(request_data['id'])
+                type = int(request_data['type'])
                 timestamp = float(request_data['timestamp'])
                 x = float(request_data['x'])
                 y = float(request_data['y'])
@@ -141,7 +149,14 @@ class MainClass(Resource):
                 yaw = float(request_data['yaw'])
                 detections = request_data['detections']
 
-                returnObject = flask_app.config['RSUClass'].checkin(key, vehicle_id, timestamp, x, y, z, roll, pitch, yaw, detections)
+                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw)
+
+                flask_app.config['RSUQueue'].put([key, id, type, timestamp, detections])
+
+                if type == 0:
+                    print("Vehicle: " + str(id) + " updated at " + str(timestamp))
+                elif type == 1:
+                    print("Sensor: " + str(id) + " updated at " + str(timestamp))
 
                 return jsonify(
                     returnObject

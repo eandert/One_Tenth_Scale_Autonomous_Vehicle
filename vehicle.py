@@ -220,8 +220,8 @@ class Vehicle:
             self.localizationPositionY = self.positionY_sim
         else:
             # Update the localization from real data
-            self.localizationPositionX = cav_x + self.positionX_offset
-            self.localizationPositionY = cav_y + self.positionY_offset
+            self.localizationPositionX = ((cav_x * math.cos(self.theta_offset)) - (cav_y * math.sin(self.theta_offset))) + self.positionX_offset
+            self.localizationPositionY = ((cav_y * math.cos(self.theta_offset)) + (cav_x * math.sin(self.theta_offset))) + self.positionY_offset
             self.theta = cav_theta + self.theta_offset
             self.velocity = cav_velocity
 
