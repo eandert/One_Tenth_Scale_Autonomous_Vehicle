@@ -253,8 +253,10 @@ class MainWindow(QMainWindow):
     def translateY(self, y):
         return self.mapSpecs.centerY - y
 
-    def translateDetections(self, x, y, theta, x_offset, y_offset, theta_offset):
-        return ( x * math.cos(theta + theta_offset)) - (y * math.sin(theta + theta_offset)) + x_offset, ( x * math.sin(theta + theta_offset)) + (y * math.cos(theta + theta_offset)) + y_offset
+    def translateDetections(self, x, y, theta, sens_x, sens_y, sens_theta):
+        # Have to do this to convert to gui coordinate system from actual
+        sens_theta = sens_theta - math.radians(180)
+        return ( x * math.cos(theta + sens_theta)) - (y * math.sin(theta + sens_theta)) + sens_x , ( x * math.sin(theta + sens_theta)) + (y * math.cos(theta + sens_theta )) + sens_y
 
     def drawTargetArc(self, x0, y0, x1, y1, x2, y2, painter):
         r = math.hypot(x1 - x0, y1 - y0)
@@ -459,7 +461,7 @@ class MainWindow(QMainWindow):
                 painter.setPen(pen)
                 for each in vehicle.lidarDetections:
                     #print ( each )
-                    transX, transY = self.translateDetections(each[1], each[2], each[3], vehicle.positionX_offset, vehicle.positionY_offset, vehicle.theta_offset)
+                    transX, transY = self.translateDetections(each[1], each[2], math.atan2(each[2], each[1]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
                     painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
                                  self.translateY(transY * self.mapSpecs.meters_to_print_scale))
 
@@ -469,8 +471,7 @@ class MainWindow(QMainWindow):
                 painter.setPen(pen)
                 for each in vehicle.cameraDetections:
                     # print ( each )
-                    transX, transY = self.translateDetections(each[1], each[2], each[3], vehicle.positionX_offset,
-                                                              vehicle.positionY_offset, vehicle.theta_offset)
+                    transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
                     painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
                                       self.translateY(transY * self.mapSpecs.meters_to_print_scale))
             # self.drawVehicle = False
@@ -533,9 +534,10 @@ class MainWindow(QMainWindow):
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in vehicle.cameraDetections:
-                    # print ( each )
-                    transX, transY = self.translateDetections(each[1], each[2], each[3], vehicle.positionX_offset,
-                                                              vehicle.positionY_offset, vehicle.theta_offset)
+                    print ( each )
+                    transX, transY = self.translateDetections(each[2], -each[1], math.atan2(-each[1], each[2]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
+                    print ( transX, transY )
+                    print ( vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta )
                     painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
                                       self.translateY(transY * self.mapSpecs.meters_to_print_scale))
 

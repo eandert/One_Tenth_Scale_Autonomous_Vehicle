@@ -31,13 +31,13 @@ class RSU():
                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles), False)
             self.vehicles[0] = newvehicle1
 
-            newvehicle2 = vehicle.Vehicle()
-            newvehicle2.initialVehicleAtPosition(0, (
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-                                                 270,
-                                                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
-                                                 True)
-            self.vehicles[1] = newvehicle2
+            # newvehicle2 = vehicle.Vehicle()
+            # newvehicle2.initialVehicleAtPosition(0, (
+            #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+            #                                      270,
+            #                                      mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
+            #                                      True)
+            # self.vehicles[1] = newvehicle2
 
             newSensor = vehicle.Vehicle()
             newSensor.initialVehicleAtPosition(
@@ -67,17 +67,6 @@ class RSU():
                 init_yaw = 270
 
             # TODO: Improve this to add the cars dynamically
-            # # Lets make a new vehicle
-            # newvehicle = vehicle.Vehicle()
-            # newvehicle.initialVehicleAtPosition(
-            #     init_x,
-            #     init_y,
-            #     0,
-            #     mapSpecs.xCoordinates,
-            #     mapSpecs.yCoordinates,
-            #     mapSpecs.vCoordinates,
-            #     vehicle_id,
-            #     False)
 
             # Set the key so we have some security
             self.vehicles[id].key = key
@@ -134,17 +123,6 @@ class RSU():
                 init_yaw = -45
 
             # TODO: Improve this to add the cars dynamically
-            # # Lets make a new vehicle
-            # newvehicle = vehicle.Vehicle()
-            # newvehicle.initialVehicleAtPosition(
-            #     init_x,
-            #     init_y,
-            #     0,
-            #     mapSpecs.xCoordinates,
-            #     mapSpecs.yCoordinates,
-            #     mapSpecs.vCoordinates,
-            #     vehicle_id,
-            #     False)
 
             # Set the key so we have some security
             self.sensors[id].key = key
@@ -297,6 +275,3 @@ t2.start()
 communication.flask_app.config['RSUClass'] = sim
 communication.flask_app.config['RSUQueue'] = q
 communication.flask_app.run(host='192.168.1.162')
-
-#while(True):
-#    time.sleep(1)
