@@ -28,24 +28,41 @@ class RSU():
             newvehicle1.initialVehicleAtPosition(
                 (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
                 0,
-                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles), False)
-            self.vehicles[0] = newvehicle1
+                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 0, False)
 
             # newvehicle2 = vehicle.Vehicle()
             # newvehicle2.initialVehicleAtPosition(0, (
             #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
             #                                      270,
             #                                      mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
-            #                                      True)
-            # self.vehicles[1] = newvehicle2
+            #                                      False)
+
+            newvehicle2 = vehicle.Vehicle()
+            newvehicle2.initialVehicleAtPosition(
+                2.0 * (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
+                0,
+                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, False)
 
             newSensor = vehicle.Vehicle()
             newSensor.initialVehicleAtPosition(
                 (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
                     (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
                 -45,
-                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.sensors), True)
+                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 2, True)
+
+            self.vehicles[0] = newvehicle1
+            self.vehicles[1] = newvehicle2
             self.sensors[0] = newSensor
+
+            print("Pos veh 0: ", (- (
+                        mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
+                  0, 0)
+            print("Pos veh 1: ", 2*(- (
+                        mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
+                  0, 0)
+            print("Pos sens 0: ", (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
+                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+                -45)
 
         self.vehiclesLock.release()
 
@@ -62,9 +79,10 @@ class RSU():
                 init_y = 0.0
                 init_yaw = 0
             elif id == 1:
-                init_x = 0.0
-                init_y = ((mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale
-                init_yaw = 270
+                init_x = 2.0 * (- (
+                            mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale
+                init_y = 0.0
+                init_yaw = 0
 
             # TODO: Improve this to add the cars dynamically
 
@@ -201,7 +219,7 @@ def BackendProcessor(q, vehicles, sensors, trafficLightArray):
     while True:
         message = q.get()
         #print ( message )
-        key, id, type, timestamp, detections = message
+        key, id, type, timestamp, x, y, yaw, detections = message
 
         # See if we are dealing with a sensor or a vehicle
         if type == 1:
@@ -209,6 +227,12 @@ def BackendProcessor(q, vehicles, sensors, trafficLightArray):
             if sensors[id].key == key:
                 # Lets add the detections to the sensor class
                 sensors[id].cameraDetections = detections["cam_obj"]
+                with open("output.csv", "a") as file:
+                    file.write("cam," + str(id) + "," + str(x)
+                               + "," + str(y)
+                               + "," + str(yaw)
+                               + "," + str(detections)
+                               + "\n")
         elif type == 0:
             # Double check our security, this is pretty naive at this point
             if vehicles[id].key == key:
@@ -236,6 +260,13 @@ def BackendProcessor(q, vehicles, sensors, trafficLightArray):
                 # We still do this here just for debugging as it should match the PID controls
                 # on the actual car and then it will be displayed on the UI
                 vehicles[id].update_pid()
+
+                with open("output.csv", "a") as file:
+                    file.write("cav," + str(id) + "," + str(x)
+                               + "," + str(y)
+                               + "," + str(yaw)
+                               + "," + str(detections)
+                               +"\n")
 
 
 def main(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray):
@@ -274,4 +305,4 @@ t2.start()
 # Startup the web service
 communication.flask_app.config['RSUClass'] = sim
 communication.flask_app.config['RSUQueue'] = q
-communication.flask_app.run(host='192.168.1.162')
+communication.flask_app.run(host='192.168.0.103')

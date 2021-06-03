@@ -4,7 +4,7 @@ import math
 class MapSpecs():
     def __init__(self):
         # Intersection Params
-        self.intersectionStraightLength = .5
+        self.intersectionStraightLength = 1.0
         self.intersectionWidth = .5
         self.centerX = 500
         self.centerY = 500

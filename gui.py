@@ -171,14 +171,15 @@ class MainWindow(QMainWindow):
         self.time = round(time.time() * 1000)
 
         # 100HZ
-        if (self.time - self.lastPositionUpdate) >= 10:
-            self.lastPositionUpdate = self.time
-            self.vehiclesLock.acquire()
-            for key, vehicle in self.vehicles.items():
-                # Update vehicle position based on physics
-                vehicle.updatePosition(.01)
-                self.drawTrafficLight = True
-            self.vehiclesLock.release()
+        # if (self.time - self.lastPositionUpdate) >= 10:
+        #     self.lastPositionUpdate = self.time
+        #     self.vehiclesLock.acquire()
+        #     for key, vehicle in self.vehicles.items():
+        #         # Update vehicle position based on physics
+        #         if vehicle.simVehicle:
+        #             vehicle.updatePosition(.01)
+        #     self.vehiclesLock.release()
+        #     self.drawTrafficLight = True
 
         # 8HZ
         if (self.time - self.lastLocalizationUpdate) >= 125:
@@ -207,6 +208,8 @@ class MainWindow(QMainWindow):
                 self.lightTime += 1
             self.vehiclesLock.acquire()
             for idx, vehicle in self.vehicles.items():
+                if vehicle.simVehicle:
+                    vehicle.updatePosition(.125)
                 if self.pause_simulation:
                     # Make sure we relay the pause to our vehicles
                     vehicle.targetVelocityGeneral = 0.0
@@ -240,6 +243,7 @@ class MainWindow(QMainWindow):
                         # We can't update the PID controls until after all positions are known
                         vehicle.update_pid()
             self.vehiclesLock.release()
+            self.drawTrafficLight = True
 
         QApplication.processEvents()
         self.update()
@@ -534,10 +538,10 @@ class MainWindow(QMainWindow):
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in vehicle.cameraDetections:
-                    print ( each )
+                    #print ( each )
                     transX, transY = self.translateDetections(each[2], -each[1], math.atan2(-each[1], each[2]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
-                    print ( transX, transY )
-                    print ( vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta )
+                    #print ( transX, transY )
+                    #print ( vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta )
                     painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
                                       self.translateY(transY * self.mapSpecs.meters_to_print_scale))
 

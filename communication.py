@@ -3,6 +3,7 @@
 
 from flask import Flask, jsonify, request
 from flask_restx import Api, Resource, fields
+import time
 
 
 flask_app = Flask(__name__)
@@ -131,6 +132,7 @@ class MainClass(Resource):
     @app.doc(description="This method can be called after a CAV is registered to update the position of the vehicle, log detections, and get the state of traffic lighs.")
     @app.response(200, 'Success', RSUVehicleCheckinResponse)
     def get(self):
+        time1 = time.time()
         #print("got request")
         #print(request.is_json)
         request_data = request.get_json()
@@ -151,12 +153,14 @@ class MainClass(Resource):
 
                 returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw)
 
-                flask_app.config['RSUQueue'].put([key, id, type, timestamp, detections])
+                flask_app.config['RSUQueue'].put([key, id, type, timestamp, x, y, yaw, detections])
 
                 if type == 0:
                     print("Vehicle: " + str(id) + " updated at " + str(timestamp))
                 elif type == 1:
                     print("Sensor: " + str(id) + " updated at " + str(timestamp))
+
+                print ( "Response took: ", time.time() - time1)
 
                 return jsonify(
                     returnObject
