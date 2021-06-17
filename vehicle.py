@@ -3,106 +3,7 @@ import numpy as np
 from simple_pid import PID
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
-
-
-# class SimpleProtocol(LineReceiver):
-#
-#     def parse_incoming(self, string):
-#         string_array = str(string).strip().strip('\x00').split(':')
-#         return string_array
-#
-#     def calc_velocity(self, x1, y1, x2, y2, theta):
-#         velocity = math.hypot(x2 - x1, y2 - y1) * (1/8)
-#         expected_theta = math.atan2(y2 - y1, x2 - x1)
-#         if not (theta < (expected_theta + math.radians(45)) and theta > (expected_theta - math.radians(45))):
-#             # We are traveling backwards so adjust the velocity accordingly
-#             velocity = -velocity
-#         return velocity
-#
-#     def connectionMade(self):
-#         print ( 'connectionMade' )
-#
-#     def updateVehicleLocationOnly(self, id):
-#         # Update ourself
-#         vehicles[id].update_localization()
-#
-#     def updateVehicle(self, id):
-#         # Update ourself
-#         vehicles[id].update_localization()
-#         vehicles[id].recieve_coordinate_group_commands(trafficLightArray)
-#         vehicles[id].pure_pursuit_control()
-#
-#         # Get the last known location of all other vehicles
-#         vehicleList = []
-#         for idx, vehicle in enumerate(vehicles):
-#             vehicleList.append(vehicle.get_location())
-#
-#         # Now update our current PID with respect to other vehicles
-#         vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList, id)
-#         # We can't update the PID controls until after all positions are known
-#         vehicles[id].update_pid()
-#
-#     def getVehicleRoute(self, id):
-#         # Get our route
-#         return vehicles[id].get_route()
-#
-#     # NOTE: lineReceived(...) doesn't seem to get called
-#
-#     def dataReceived(self, data):
-#         global stored_data
-#         #data = self.parse_incoming(data.decode('utf-8'))
-#
-#         print ( data )
-#         print ( len(data) )
-#         print (data[0],data[1],data[2],data[7],data[12])
-#
-#         if (len(data) >= 13) and chr(data[0]) == '[' and chr(data[1]) == 'R' and chr(data[2]) == ',' and chr(data[7]) == ',' and chr(data[12]) == ']':
-#             print ( "Case R")
-#             vehicle_id = int.from_bytes(data[3:6], byteorder='little')
-#             message_length = int.from_bytes(data[8:11], byteorder='little')
-#             return_message = bytes("R", 'utf-8') + (0).to_bytes(4, byteorder='big')# + self.getVehicleRoute(data[1])
-#             print ( " Sending back: " + str(return_message))
-#             self.sendLine(return_message)
-#             #for index in range(13):
-#             #    del stored_data[0]
-#         elif data[0] == 'P':
-#             if len(data) != 5:
-#                 print("Error: invalid data received")
-#                 return
-#
-#             # Check if the vehicle ID exists yet
-#             # 0: ID, 1: x, 2: y, 3: theta
-#             if data[0] in pose:
-#                 #print("case1")
-#                 velocity = self.calc_velocity(float(pose[data[0]][1]), float(pose[data[0]][2]), float(data[1]),
-#                                               float(data[2]), float(data[3]))
-#                 pose[data[0]] = [float(data[1]), float(data[2]), float(data[3]), velocity, int(round(time.time() * 1000))]
-#                 # We should have updated controls from the simulator by now
-#             else:
-#                 #print("case2")
-#                 # Not enough data to calculate velocity, assume it is 0 for now
-#                 velocity = 0.0
-#                 pose[data[0]] = [float(data[1]), float(data[2]), float(data[3]), velocity, int(round(time.time() * 1000))]
-#                 # init the control array to 0
-#                 # Since this is the first time we have data, start the controls at 0 until we get the velocity
-#                 commands[data[0]] = [0, 0]
-#
-#             if pause_simulation:
-#                 self.updateVehicleLocationOnly(int(data[0]))
-#                 commands[data[0]] = [0, 0]
-#             else:
-#                 self.updateVehicle(int(data[0]))
-#
-#             message = str(commands[data[0]][0]) + ":" + str(commands[data[0]][1])
-#             self.sendLine(message.encode('utf-8'))
-#
-#         #print(pose[data[0]])
-#         #print(commands[data[0]])
-#
-# class SimpleProtocolFactory(Factory):
-#
-#     def buildProtocol(self, addr):
-#         return SimpleProtocol()
+from shapely.geometry.linestring import LineString
 
 def angleDifference( angle1, angle2 ):
     diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi;
@@ -118,8 +19,8 @@ class Vehicle:
         self.width = .3
         self.length = .57
         self.wheelbaseLengthFromRear = .1
-        self.wheelbaseLength = .4
-        self.wheelbaseWidth = .1
+        self.wheelbaseLength = .35
+        self.wheelbaseWidth = .245
         self.steeringAngleMax = 30.0
         self.velocityMax = 1.0
         
@@ -300,7 +201,7 @@ class Vehicle:
         self.coordinateGroupVelocities = commands
 
     def get_location(self):
-        return [self.localizationPositionX, self.localizationPositionY, self.theta, self.targetVelocity, .2]
+        return [self.localizationPositionX, self.localizationPositionY, self.theta, self.targetVelocity, 0]
 
     def get_route(self):
         messageString = ""
@@ -325,7 +226,92 @@ class Vehicle:
                 return True
         return False
 
-    def check_positions_of_other_vehicles_adjust_velocity(self, positions, myIndex):
+
+    def check_in_range_and_fov(self, target_angle, distance, center_angle, horizontal_fov, max_range):
+        angle_diff = ((center_angle - target_angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
+        if abs(angle_diff) <= (horizontal_fov/2.0) and (distance <= max_range):
+            return True
+        return False
+
+
+    def fake_lidar_and_camera(self, positions, objects, lidar_range, lidar_error, cam_range, cam_error, cam_center_angle, cam_fov):
+
+        #print ( "FAKING LIDAR" )
+        lidar_point_cloud = []
+        camera_array = []
+
+        # Get the points the Slamware M1M1 should generate
+        lidar_freq = 7000/8
+        angle_change = (2*math.pi) / lidar_freq
+
+        # Create all the vehicle polygons and combine them into one big list
+        polygons = []
+        for idx, vehicle in enumerate(positions):
+            # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
+            x1 = vehicle[0] + ((self.wheelbaseWidth/2 + vehicle[4])*math.cos(vehicle[2]+math.radians(90)) + ((self.wheelbaseLengthFromRear + vehicle[4])*math.cos(vehicle[2]-math.radians(180))))
+            y1 = vehicle[1] + ((self.wheelbaseWidth/2 + vehicle[4])*math.sin(vehicle[2]+math.radians(90)) + ((self.wheelbaseLengthFromRear + vehicle[4])*math.sin(vehicle[2]-math.radians(180))))
+            x2 = vehicle[0] + ((self.wheelbaseWidth/2 + vehicle[4])*math.cos(vehicle[2]-math.radians(90)) + ((self.wheelbaseLengthFromRear + vehicle[4])*math.cos(vehicle[2]-math.radians(180))))
+            y2 = vehicle[1] + ((self.wheelbaseWidth/2 + vehicle[4])*math.sin(vehicle[2]-math.radians(90)) + ((self.wheelbaseLengthFromRear + vehicle[4])*math.sin(vehicle[2]-math.radians(180))))
+            x3 = vehicle[0] + ((self.wheelbaseWidth/2 + vehicle[4])*math.cos(vehicle[2]-math.radians(90)) + ((self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4])*math.cos(vehicle[2])))
+            y3 = vehicle[1] + ((self.wheelbaseWidth/2 + vehicle[4])*math.sin(vehicle[2]-math.radians(90)) + ((self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4])*math.sin(vehicle[2])))
+            x4 = vehicle[0] + ((self.wheelbaseWidth/2 + vehicle[4])*math.cos(vehicle[2]+math.radians(90)) + ((self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4])*math.cos(vehicle[2])))
+            y4 = vehicle[1] + ((self.wheelbaseWidth/2 + vehicle[4])*math.sin(vehicle[2]+math.radians(90)) + ((self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4])*math.sin(vehicle[2])))
+            polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
+            polygons.append(polygon)
+
+        # Generate fake lidar data from the points
+        for angle_idx in range(int(lidar_freq)):
+            intersections = []
+            intersections_origin_point = []
+            intersections_count = 0
+            intersect_dist = 9999999999
+            final_point = None
+            final_polygon = None
+
+            # Go through all the polygons that the line intersects with and add them
+            for poly in polygons:
+                line = [(self.localizationPositionX, self.localizationPositionY), (self.localizationPositionX + (lidar_range*math.cos(angle_idx * angle_change)), self.localizationPositionY + (lidar_range*math.sin(angle_idx * angle_change)))]
+                shapely_line = LineString(line)
+                intersections += list(poly.intersection(shapely_line).coords)
+                for idx in range(len(intersections) - intersections_count):
+                    intersections_origin_point.append(poly)
+                intersections_count = len(intersections)
+
+            # Don't forget the other objects as well (already should be a list of polygons)
+            for poly in objects:
+                line = [(self.localizationPositionX, self.localizationPositionY), (self.localizationPositionX + (lidar_range*math.cos(angle_idx * angle_change)), self.localizationPositionY + (lidar_range*math.sin(angle_idx * angle_change)))]
+                shapely_line = LineString(line)
+                intersections += list(poly.intersection(shapely_line).coords)
+                for idx in range(len(intersections) - intersections_count):
+                    intersections_origin_point.append(poly)
+                intersections_count = len(intersections)
+
+            # Get the closest intersection with a polygon as that will be where our lidar beam stops
+            for point, polygon in zip(intersections,intersections_origin_point):
+                dist = math.hypot(point[0] - self.localizationPositionX, point[1] - self.localizationPositionY)
+                if dist < intersect_dist:
+                    final_point = point
+                    intersect_dist = dist
+                    final_polygon = polygon
+
+            # Make sure this worked and is not None
+            if final_point != None:
+                lidar_point_cloud.append(final_point)
+
+                #print ( "fp" )
+
+                # See if we can add a camera point as well
+                if self.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, self.theta + cam_center_angle, math.radians(cam_fov)/2.0, cam_range):
+                    # Object checks out and is in range and not blocked
+                    # TODO: Do a little better approxamation of percent seen and account for this
+                    point = list(final_polygon.centroid.coords)[0]
+                    if point not in camera_array:
+                        camera_array.append(point)
+
+        return lidar_point_cloud, camera_array
+
+
+    def check_positions_of_other_vehicles_adjust_velocity(self, positions):
         self.followDistance = 99
         self.distance_pid_control_en = False
         for idx, each in enumerate(positions):

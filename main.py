@@ -3,10 +3,14 @@ import time
 import math
 from threading import Lock, Thread
 from queue import Queue
-import vehicle
 import gui
 import mapGenerator
 import communication
+
+import sys
+sys.path.insert(1, '../One_Tenth_Scale_Autonomous_Vehicle')
+
+import vehicle
 
 
 global mainWin
@@ -28,7 +32,7 @@ class RSU():
             newvehicle1.initialVehicleAtPosition(
                 (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
                 0,
-                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 0, False)
+                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 0, True)
 
             # newvehicle2 = vehicle.Vehicle()
             # newvehicle2.initialVehicleAtPosition(0, (
@@ -41,7 +45,7 @@ class RSU():
             newvehicle2.initialVehicleAtPosition(
                 2.0 * (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
                 0,
-                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, False)
+                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, True)
 
             newSensor = vehicle.Vehicle()
             newSensor.initialVehicleAtPosition(
@@ -305,4 +309,4 @@ t2.start()
 # Startup the web service
 communication.flask_app.config['RSUClass'] = sim
 communication.flask_app.config['RSUQueue'] = q
-communication.flask_app.run(host='192.168.0.103')
+communication.flask_app.run(host="localhost") #host='192.168.0.103')
