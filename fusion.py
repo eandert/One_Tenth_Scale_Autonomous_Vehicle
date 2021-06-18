@@ -271,101 +271,34 @@ def computeDistance(a, b, epsilon=1e-5):
     return distance
 
 
-class LIDAR:
+class Fusion:
     def __init__(self, timestamp):
         # Set other parameters for the class
         self.trackedList = []
         self.id = 0
         self.time = 0
         self.prev_time = timestamp
-        self.min_size = .1
+        self.min_size = .2
 
         # Indicate our success
         print('Started LIDAR successfully...')
 
-    def processLidarFrame(self, output, timestamp):
+    def processFusionFrame(self, input, timestamp):
         debug = False
-
-        array = np.array(output)
-        db = DBSCAN(eps=0.1, min_samples=3).fit(array)
-        y_pred = db.fit_predict(array)
-
-        if debug:
-            print(y_pred)
-
-        # Get the length and intiialize the arrays accordingly
-        n_clusters_ = len(set(y_pred)) - (1 if -1 in y_pred else 0)
-        clusterMaxRange = [0.0] * n_clusters_
-        centerPointsX = [0.0] * n_clusters_
-        centerPointsY = [0.0] * n_clusters_
-        numPoints = [0] * n_clusters_
-
-        # Get the centerpoint avarage
-        for point, idx in zip(array, y_pred):
-            numPoints[idx] += 1
-            centerPointsX[idx] += point[0]
-            centerPointsY[idx] += point[1]
-        for idx, num in enumerate(numPoints):
-            centerPointsX[idx] = centerPointsX[idx] / num
-            centerPointsY[idx] = centerPointsY[idx] / num
-
-        # Get the max range of the points from the centerpoint
-        for point, idx in zip(array, y_pred):
-            newRange = math.hypot(point[0] - centerPointsX[idx], point[1] - centerPointsY[idx])
-            if newRange > clusterMaxRange[idx]:
-                clusterMaxRange[idx] = newRange
-        if debug:
-            print(clusterMaxRange)
-            print(centerPointsX, centerPointsY)
-
-        # Filter out the big objects from the small ones
-        # Small objects could be our vehicles, big ones are stationary
-        # This is a pretty arbitrary assumption but it works well for
-        # our test case
-        bigX = []
-        bigY = []
-        smallX = []
-        smallY = []
-        for clusterRange, x, y in zip(clusterMaxRange, centerPointsX, centerPointsY):
-            if clusterRange > .1:
-                bigX.append(x)
-                bigY.append(y)
-            else:
-                smallX.append(x)
-                smallY.append(y)
 
         # For now we are only going to consider the small detections
         # TODO: do something with the large ones
         detections_position_list = []
         detections_list = []
-        for x, y in zip(smallX, smallY):
+        for obj in input:
+            x = obj[1]
+            y = obj[2]
             detections_position_list.append(
                 [x - self.min_size, y - self.min_size, x + self.min_size, y + self.min_size])
             detections_list.append([0, 90, x, y, self.min_size * 2])
 
         # Call the matching function to modilfy our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp)
-
-        # Print the clusters as well as the small and large points on top
-        if debug:
-            plt.cla()
-            # Create our output array
-            plotx = []
-            ploty = []
-            labels = []
-            for detection in self.trackedList:
-                if detection.lastHistory >= 1:
-                    plotx.append(detection.x)
-                    ploty.append(detection.y)
-                    labels.append(detection.id)
-            plt.scatter(array[:, 0], array[:, 1], c=y_pred, cmap='Paired')
-            plt.scatter(plotx, ploty, c='yellow')
-            for i, txt in enumerate(labels):
-                plt.annotate(txt, (plotx[i], ploty[i]))
-            plt.scatter(bigX, bigY, c='red')
-            # plt.scatter(centerPointsX, centerPointsY)
-            plt.title("DBSCAN")
-            plt.pause(0.05)
 
         result = []
         for track in self.trackedList:
