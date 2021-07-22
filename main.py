@@ -1,16 +1,9 @@
-import sys
 import time
 import math
+import sys
 from threading import Lock, Thread
 from queue import Queue
-import gui
-import mapGenerator
-import communication
-
-import sys
-sys.path.insert(1, '../One_Tenth_Scale_Autonomous_Vehicle')
-
-import vehicle
+from road_side_unit.src import mapGenerator, communication, vehicle, gui
 
 
 global mainWin
