@@ -280,11 +280,10 @@ class LIDAR:
         self.id = 0
         self.time = 0
         self.prev_time = timestamp
-        self.min_size = .1
+        self.min_size = .2
 
         # Indicate our success
         print('Started LIDAR successfully...')
-
 
     def processLidarFrame(self, output, timestamp):
         debug = False
@@ -349,9 +348,13 @@ class LIDAR:
         # TODO: do something with the large ones
         detections_position_list = []
         detections_list = []
-        for x,y in zip(smallX, smallY):
-            detections_position_list.append([x - self.min_size, y - self.min_size, x + self.min_size, y + self.min_size])
-            detections_list.append([0, 90, x, y, self.min_size*2])
+
+        for obj in input:
+            x = obj[1]
+            y = obj[2]
+            detections_position_list.append(
+                [x - self.min_size, y - self.min_size, x + self.min_size, y + self.min_size])
+            detections_list.append([0, 90, x, y, self.min_size * 2])
 
         # Call the matching function to modilfy our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp)
