@@ -1,6 +1,9 @@
 import math
 
 
+''' This class generates a map for use with 1/10 scale RC car demo. The main case is
+a simple figure 8 intersection and this is done using some parameters. Later this 
+class will be ammended to work with SUMO and allow more complex maps to be generated. '''
 class MapSpecs():
     def __init__(self):
         # Intersection Params
