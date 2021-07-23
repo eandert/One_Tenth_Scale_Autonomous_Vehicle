@@ -349,9 +349,7 @@ class LIDAR:
         detections_position_list = []
         detections_list = []
 
-        for obj in input:
-            x = obj[1]
-            y = obj[2]
+        for x, y in zip(smallX, smallY):
             detections_position_list.append(
                 [x - self.min_size, y - self.min_size, x + self.min_size, y + self.min_size])
             detections_list.append([0, 90, x, y, self.min_size * 2])

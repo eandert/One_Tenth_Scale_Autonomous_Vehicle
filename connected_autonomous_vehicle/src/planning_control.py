@@ -329,6 +329,7 @@ class Planner:
     def check_positions_of_other_vehicles_adjust_velocity(self, positions, myIndex):
         self.followDistance = 99
         self.distance_pid_control_en = False
+        point = Point(self.targetIndexX, self.targetIndexY)
         for idx, each in enumerate(positions):
             if myIndex != idx:
                 # Create a bounding box for each vehicle that is length + 2*buffer long and width + 2*buffer wide
@@ -340,7 +341,7 @@ class Planner:
                 y3 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]-math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.sin(each[2])))
                 x4 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]+math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.cos(each[2])))
                 y4 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]+math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.sin(each[2])))
-                point = Point(self.targetIndexX, self.targetIndexY)
+
                 polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
                 #print(polygon.contains(point))
                 #if self.check_if_point_in_rectangle(x1, y1, x2, y2, self.targetIndexX, self.targetIndexY):
