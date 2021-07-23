@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         self.vehiclesLock = vehiclesLock
 
         # Set to engage a full simulation world w/ no real vehicles and fake time
-        self.full_simulation = True
+        self.full_simulation = False
 
         # Create the simulated LIDARs, planner, etc.
         self.lidarRecognitionList = []
@@ -78,6 +78,12 @@ class MainWindow(QMainWindow):
         self.labelName = QLabel(self)
         self.labelName.setText('Settings:')
         self.labelName.move(1000, 20)
+
+        self.sensorsButton = QPushButton('Sensors Disabled', self)
+        self.sensorsButton.resize(140, 32)
+        self.sensorsButton.move(1000, 350)
+
+        self.sensorsButton.clicked.connect(self.on_sensors_clicked)
 
         self.testGroup = QButtonGroup(self)  # Radio button group
 
@@ -196,6 +202,14 @@ class MainWindow(QMainWindow):
         self.startButton.setEnabled(True)
         self.pause_simulation = True
 
+    def on_sensors_clicked(self):
+        if self.sensorsButton.text() == 'Sensors Enabled':
+            self.full_simulation = False
+            self.sensorsButton.setText('Sensors Disabled')
+        else:
+            self.full_simulation = True
+            self.sensorsButton.setText('Sensors Enabled')
+
     def on_end_clicked(self):
         sys.exit()
 
@@ -257,13 +271,13 @@ class MainWindow(QMainWindow):
                     vehicle.targetVelocityGeneral = float(self.lineVehicleSpeed[idx].text())
                 if vehicle.simVehicle:
                     if self.pause_simulation:
-                        print("veh" + str(idx) + " pause")
+                        #print("veh" + str(idx) + " pause")
                         vehicle.update_localization()
                         vehicle.distance_pid_control_overide = True
                         vehicle.targetVelocity = 0.0
                         vehicle.update_pid()
                     else:
-                        print("veh" + str(idx) + " play")
+                        #print("veh" + str(idx) + " play")
                         # Update ourself
                         vehicle.update_localization()
                         vehicle.recieve_coordinate_group_commands(self.trafficLightArray)
@@ -275,66 +289,54 @@ class MainWindow(QMainWindow):
                             if idx != otherIdx:
                                 vehicleList.append(otherVehicle.get_location())
 
-                        # Create that fake LIDAR
-                        if self.lidarRecognitionList[idx] != None:
-                            point_cloud, camera_array = vehicle.fake_lidar_and_camera(vehicleList, [], 15.0, 0.0, 15.0, 0.0, 0.0, 160.0)
+                        if self.full_simulation:
 
-                            # print( point_cloud )
-                            # print( camera_array )
+                            # Create that fake LIDAR
+                            if self.lidarRecognitionList[idx] != None:
+                                point_cloud, camera_array = vehicle.fake_lidar_and_camera(vehicleList, [], 15.0, 0.0, 15.0, 0.0, 0.0, 160.0)
 
-                            lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0)
-                            # print ( lidarcoordinates )
+                                # print( point_cloud )
+                                # print( camera_array )
 
-                            #pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
-                            pos = [0,0,0]
+                                lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0)
+                                # print ( lidarcoordinates )
 
-                            # Lets add the detections to the vehicle class
-                            vehicle.lidarDetections = []
-                            for each in lidarcoordinates:
-                                new = rotate((0, 0), (float(each[1]), float(each[2])), pos[2])
-                                sensed_x = new[0] + pos[0]
-                                sensed_y = new[1] + pos[1]
-                                vehicle.lidarDetections.append((sensed_x, sensed_y))
+                                #pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
+                                pos = [0,0,0]
 
-                            # Raw LIDAR for debug only
-                            #vehicle.lidarPoints = point_cloud
+                                # Lets add the detections to the vehicle class
+                                vehicle.lidarDetections = []
+                                for each in lidarcoordinates:
+                                    new = rotate((0, 0), (float(each[1]), float(each[2])), pos[2])
+                                    sensed_x = new[0] + pos[0]
+                                    sensed_y = new[1] + pos[1]
+                                    vehicle.lidarDetections.append((sensed_x, sensed_y))
 
-                            vehicle.cameraDetections = camera_array
+                                # Raw LIDAR for debug only
+                                #vehicle.lidarPoints = point_cloud
 
-                            a = [-.5, .5, .5, -.5]
-                            b = [-.6, .6, .4, -.4]
-                            # print("dist ", fusion.computeDistance(a, b), a, b)
+                                vehicle.cameraDetections = camera_array
 
-                            # Do the local fusion like we would on the vehicle
-                            print("Fusion begin, ", vehicle.cameraDetections, vehicle.lidarDetections)
-                            self.localFusion[idx].processDetectionFrame(0, self.time/1000.0, vehicle.cameraDetections, .5)
-                            print("mid")
-                            self.localFusion[idx].processDetectionFrame(1, self.time/1000.0, vehicle.lidarDetections, .5)
-                            print("Post Matching")
-                            results = self.localFusion[idx].fuseDetectionFrame()
-                            print("Post Kalman")
-                            # print(results)
+                                a = [-.5, .5, .5, -.5]
+                                b = [-.6, .6, .4, -.4]
+                                # print("dist ", fusion.computeDistance(a, b), a, b)
 
-                            # Add to the GUI
-                            vehicle.fusionDetections = []
-                            for each in results:
-                                sensed_x = each[1]
-                                sensed_y = each[2]
-                                vehicle.fusionDetections.append((sensed_x, sensed_y))
+                                # Do the local fusion like we would on the vehicle
+                                print("Fusion begin, ", vehicle.cameraDetections, vehicle.lidarDetections)
+                                self.localFusion[idx].processDetectionFrame(0, self.time/1000.0, vehicle.cameraDetections, .5)
+                                print("mid")
+                                self.localFusion[idx].processDetectionFrame(1, self.time/1000.0, vehicle.lidarDetections, .5)
+                                print("Post Matching")
+                                results = self.localFusion[idx].fuseDetectionFrame()
+                                print("Post Kalman")
+                                # print(results)
 
-                            # print(vehicle.fusionDetections)
-                            # Add to the global fusion like we received it as a message
-                            #self.globalFusion.processDetectionFrame(idx, self.time, localFusion)
-
-                        # Lets add the detections to the vehicle class
-                        # for each in point_cloud:
-                        #         new = rotate((0, 0), (float(each[1]), float(each[2])), pos[2])
-                        #     sensed_x = new[0] + pos[0]
-                        #     sensed_y = new[1] + pos[1]
-                        #     if each[5] == "L":
-                        #         self.vehicles[id].lidarDetections.append([sensed_x, sensed_y])
-                        #     else:
-                        #         self.vehicles[id].cameraDetections.append([sensed_x, sensed_y])
+                                # Add to the GUI
+                                vehicle.fusionDetections = []
+                                for each in results:
+                                    sensed_x = each[1]
+                                    sensed_y = each[2]
+                                    vehicle.fusionDetections.append((sensed_x, sensed_y))
 
                         # Now update our current PID with respect to other vehicles
                         vehicle.check_positions_of_other_vehicles_adjust_velocity(vehicleList)
