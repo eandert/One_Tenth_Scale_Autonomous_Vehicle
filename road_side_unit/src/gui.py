@@ -1,4 +1,3 @@
-import sys
 import time
 import math
 import sys
@@ -6,15 +5,13 @@ from PyQt5.QtWidgets import *
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-import matplotlib.pyplot as plt
 
 # For simulation
-from connected_autonomous_vehicle.src import lidar_recognition
-from road_side_unit.src import fusion
+from connected_autonomous_vehicle.src import lidar_recognition, local_fusion
 
 
 def angleDifference( angle1, angle2 ):
-    diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi;
+    diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi
     if diff < -math.pi:
         return diff + (2*math.pi)
     else:
@@ -53,7 +50,7 @@ class MainWindow(QMainWindow):
         for idx, veh in self.vehicles.items():
             if veh.simVehicle:
                 self.lidarRecognitionList.append(lidar_recognition.LIDAR(0.0))
-                self.localFusion.append(fusion.FUSION())
+                self.localFusion.append(local_fusion.FUSION())
             else:
                 self.lidarRecognitionList.append(None)
                 self.localFusion.append(None)
@@ -294,9 +291,7 @@ class MainWindow(QMainWindow):
                             # Create that fake LIDAR
                             if self.lidarRecognitionList[idx] != None:
                                 point_cloud, camera_array = vehicle.fake_lidar_and_camera(vehicleList, [], 15.0, 0.0, 15.0, 0.0, 0.0, 160.0)
-
-                                # print( point_cloud )
-                                # print( camera_array )
+                                vehicle.cameraDetections = camera_array
 
                                 lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0)
                                 # print ( lidarcoordinates )
@@ -312,14 +307,8 @@ class MainWindow(QMainWindow):
                                     sensed_y = new[1] + pos[1]
                                     vehicle.lidarDetections.append((sensed_x, sensed_y))
 
-                                # Raw LIDAR for debug only
-                                #vehicle.lidarPoints = point_cloud
-
-                                vehicle.cameraDetections = camera_array
-
-                                a = [-.5, .5, .5, -.5]
-                                b = [-.6, .6, .4, -.4]
-                                # print("dist ", fusion.computeDistance(a, b), a, b)
+                                # Raw LIDAR for debug
+                                vehicle.lidarPoints = point_cloud
 
                                 # Do the local fusion like we would on the vehicle
                                 print("Fusion begin, ", vehicle.cameraDetections, vehicle.lidarDetections)

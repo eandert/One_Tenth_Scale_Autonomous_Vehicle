@@ -3,7 +3,8 @@ import math
 import sys
 from threading import Lock, Thread
 from queue import Queue
-from road_side_unit.src import mapGenerator, communication, vehicle, gui
+from road_side_unit.src import mapGenerator, communication, gui
+from connected_autonomous_vehicle.src import planning_control
 
 
 global mainWin
@@ -21,7 +22,7 @@ class RSU():
 
         # Lets create some simulation vehicles, this would be done automatically as vehicles are added if this is not a simulation
         if isSimulation:
-            newvehicle1 = vehicle.Vehicle()
+            newvehicle1 = planning_control.Planner()
             newvehicle1.initialVehicleAtPosition(
                 (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
                 0,
@@ -34,22 +35,22 @@ class RSU():
             #                                      mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
             #                                      False)
 
-            newvehicle2 = vehicle.Vehicle()
+            newvehicle2 = planning_control.Planner()
             newvehicle2.initialVehicleAtPosition(
                 2.0 * (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
                 0,
                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, True)
 
-            newSensor = vehicle.Vehicle()
-            newSensor.initialVehicleAtPosition(
-                (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-                -45,
-                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 2, True)
+            # newSensor = vehicle.planning_control()
+            # newSensor.initialVehicleAtPosition(
+            #     (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
+            #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+            #     -45,
+            #     mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 2, True)
 
             self.vehicles[0] = newvehicle1
             self.vehicles[1] = newvehicle2
-            self.sensors[0] = newSensor
+            #self.sensors[0] = newSensor
 
             print("Pos veh 0: ", (- (
                         mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,

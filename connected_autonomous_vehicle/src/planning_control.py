@@ -63,7 +63,15 @@ class Planner:
         self.targetFollowDistance = 1
 
         self.id = None
-        self.simVehicle = False
+        self.simVehicle = True
+        self.key = None
+
+        self.cameraDetections = []
+        self.lidarDetections = []
+        self.fusionDetections = []
+
+        # Raw LIDAR for gui debug
+        self.lidarPoints = []
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
         self.targetVelocityGeneral = 0
@@ -194,16 +202,16 @@ class Planner:
 
     def update_pid(self):
         if self.distance_pid_control_en and not self.distance_pid_control_overide:
-            print("TD", self.targetFollowDistance, "FD", self.followDistance)
+            # print("TD", self.targetFollowDistance, "FD", self.followDistance)
             self.d_pid.setpoint = self.targetFollowDistance
             self.motorAcceleration = self.d_pid(self.followDistance)
         else:
             # Default to velocity PID cotnrol
-            print("TV", self.targetVelocity)
+            # print("TV", self.targetVelocity)
             self.v_pid.setpoint = self.targetVelocity
             self.motorAcceleration = self.v_pid(self.velocity)
         # Check for pause and we have no reverse
-        if self.targetVelocityGeneral == 0.0 or self.targetVelocity <= 0.0:
+        if self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0 and not self.simVehicle):
             self.motorAcceleration = 0.0
         #if self.simVehicle == False:
             #commands[self.id] = [-self.steeringAcceleration, self.motorAcceleration]
@@ -242,10 +250,18 @@ class Planner:
                 return True
         return False
 
-    def fake_lidar(self, positions, objects, lidar_range, lidar_error, myIndex):
+    def check_in_range_and_fov(self, target_angle, distance, center_angle, horizontal_fov, max_range):
+        angle_diff = ((center_angle - target_angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
+        if abs(angle_diff) <= (horizontal_fov/2.0) and (distance <= max_range):
+            return True
+        return False
 
-        print("FAKING LIDAR")
+    def fake_lidar_and_camera(self, positions, objects, lidar_range, lidar_error, cam_range, cam_error,
+                              cam_center_angle, cam_fov):
+
+        # print ( "FAKING LIDAR" )
         lidar_point_cloud = []
+        camera_array = []
 
         # Get the points the Slamware M1M1 should generate
         lidar_freq = 7000 / 8
@@ -254,48 +270,34 @@ class Planner:
         # Create all the vehicle polygons and combine them into one big list
         polygons = []
         for idx, vehicle in enumerate(positions):
-            if myIndex != idx:
-                # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
-                x1 = vehicle[0] + (
-                            (self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
-                                (self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(
-                            vehicle[2] - math.radians(180))))
-                y1 = vehicle[1] + (
-                            (self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
-                                (self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(
-                            vehicle[2] - math.radians(180))))
-                x2 = vehicle[0] + (
-                            (self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
-                                (self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(
-                            vehicle[2] - math.radians(180))))
-                y2 = vehicle[1] + (
-                            (self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
-                                (self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(
-                            vehicle[2] - math.radians(180))))
-                x3 = vehicle[0] + (
-                            (self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
-                                (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(
-                            vehicle[2])))
-                y3 = vehicle[1] + (
-                            (self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
-                                (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(
-                            vehicle[2])))
-                x4 = vehicle[0] + (
-                            (self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
-                                (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(
-                            vehicle[2])))
-                y4 = vehicle[1] + (
-                            (self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
-                                (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(
-                            vehicle[2])))
-                polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
-                polygons.append(polygon)
+            # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
+            x1 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
+                        (self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
+            y1 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
+                        (self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
+            x2 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
+                        (self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
+            y2 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
+                        (self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
+            x3 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
+                        (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(vehicle[2])))
+            y3 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
+                        (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(vehicle[2])))
+            x4 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
+                        (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(vehicle[2])))
+            y4 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
+                        (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(vehicle[2])))
+            polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
+            polygons.append(polygon)
 
         # Generate fake lidar data from the points
         for angle_idx in range(int(lidar_freq)):
             intersections = []
+            intersections_origin_point = []
+            intersections_count = 0
             intersect_dist = 9999999999
             final_point = None
+            final_polygon = None
 
             # Go through all the polygons that the line intersects with and add them
             for poly in polygons:
@@ -304,6 +306,9 @@ class Planner:
                 self.localizationPositionY + (lidar_range * math.sin(angle_idx * angle_change)))]
                 shapely_line = LineString(line)
                 intersections += list(poly.intersection(shapely_line).coords)
+                for idx in range(len(intersections) - intersections_count):
+                    intersections_origin_point.append(poly)
+                intersections_count = len(intersections)
 
             # Don't forget the other objects as well (already should be a list of polygons)
             for poly in objects:
@@ -312,51 +317,65 @@ class Planner:
                 self.localizationPositionY + (lidar_range * math.sin(angle_idx * angle_change)))]
                 shapely_line = LineString(line)
                 intersections += list(poly.intersection(shapely_line).coords)
+                for idx in range(len(intersections) - intersections_count):
+                    intersections_origin_point.append(poly)
+                intersections_count = len(intersections)
 
             # Get the closest intersection with a polygon as that will be where our lidar beam stops
-            for point in intersections:
+            for point, polygon in zip(intersections, intersections_origin_point):
                 dist = math.hypot(point[0] - self.localizationPositionX, point[1] - self.localizationPositionY)
                 if dist < intersect_dist:
                     final_point = point
+                    intersect_dist = dist
+                    final_polygon = polygon
 
             # Make sure this worked and is not None
             if final_point != None:
                 lidar_point_cloud.append(final_point)
 
-        # print ( lidar_point_cloud )
-        return lidar_point_cloud
+                # print ( "fp" )
 
-    def check_positions_of_other_vehicles_adjust_velocity(self, positions, myIndex):
+                # See if we can add a camera point as well
+                if self.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, self.theta + cam_center_angle,
+                                               math.radians(cam_fov) / 2.0, cam_range):
+                    # Object checks out and is in range and not blocked
+                    # TODO: Do a little better approxamation of percent seen and account for this
+                    point = list(final_polygon.centroid.coords)[0]
+                    if point not in camera_array:
+                        camera_array.append(point)
+
+        return lidar_point_cloud, camera_array
+
+    def check_positions_of_other_vehicles_adjust_velocity(self, positions):
         self.followDistance = 99
         self.distance_pid_control_en = False
         point = Point(self.targetIndexX, self.targetIndexY)
         for idx, each in enumerate(positions):
-            if myIndex != idx:
-                # Create a bounding box for each vehicle that is length + 2*buffer long and width + 2*buffer wide
-                x1 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]+math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]-math.radians(180))))
-                y1 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]+math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]-math.radians(180))))
-                x2 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]-math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]-math.radians(180))))
-                y2 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]-math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]-math.radians(180))))
-                x3 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]-math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.cos(each[2])))
-                y3 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]-math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.sin(each[2])))
-                x4 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]+math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.cos(each[2])))
-                y4 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]+math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.sin(each[2])))
+            # Create a bounding box for each vehicle that is length + 2*buffer long and width + 2*buffer wide
+            x1 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]+math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]-math.radians(180))))
+            y1 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]+math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]-math.radians(180))))
+            x2 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]-math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]-math.radians(180))))
+            y2 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]-math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]-math.radians(180))))
+            x3 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]-math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.cos(each[2])))
+            y3 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]-math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.sin(each[2])))
+            x4 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]+math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.cos(each[2])))
+            y4 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]+math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.sin(each[2])))
 
-                polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
-                #print(polygon.contains(point))
-                #if self.check_if_point_in_rectangle(x1, y1, x2, y2, self.targetIndexX, self.targetIndexY):
-                if polygon.contains(point):
-                    #print ( "True" )
-                    # Within the safety buffer, adjust speed to be that of the front vehicle
-                    #if self.targetVelocity > each[3]:
-                    #    self.targetVelocity = each[3]
-                    # For distance control
-                    targetFollowDistance = self.length - self.wheelbaseLengthFromRear + self.Lfc
-                    followDistance = math.hypot(each[0]+((2*self.length - 2*self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]))-self.localizationPositionX,each[1]+((2*self.length - 2*self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]))-self.localizationPositionY)
-                    if self.followDistance > followDistance:
-                        self.followDistance = followDistance
-                        self.targetFollowDistance = targetFollowDistance
-                        self.distance_pid_control_en = True
+            polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
+            #print(polygon.contains(point))
+            #if self.check_if_point_in_rectangle(x1, y1, x2, y2, self.targetIndexX, self.targetIndexY):
+            if polygon.contains(point):
+                #print ( "True" )
+                # Within the safety buffer, adjust speed to be that of the front vehicle
+                #if self.targetVelocity > each[3]:
+                #    self.targetVelocity = each[3]
+                # For distance control
+                targetFollowDistance = self.length - self.wheelbaseLengthFromRear + self.Lfc
+                followDistance = math.hypot(each[0]+((2*self.length - 2*self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]))-self.localizationPositionX,each[1]+((2*self.length - 2*self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]))-self.localizationPositionY)
+                if self.followDistance > followDistance:
+                    self.followDistance = followDistance
+                    self.targetFollowDistance = targetFollowDistance
+                    self.distance_pid_control_en = True
 
     def check_steering_angle_possible(self, x, y):
         # This equation is a quick check for if it is possible to get to the current point based on geometry
