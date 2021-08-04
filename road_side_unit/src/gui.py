@@ -9,6 +9,23 @@ from PyQt5.QtGui import *
 # For simulation
 from connected_autonomous_vehicle.src import lidar_recognition, local_fusion
 
+# Defines the colors for various elements of the GUI
+brush_color = {
+    "vehicle": Qt.darkBlue,
+    "camera": Qt.darkBlue,
+    "camera_fov": Qt.lightGray,
+    "traffic_light_green": Qt.green,
+    "traffic_light_yellow": Qt.yellow,
+    "traffic_light_red": Qt.red,
+    "waypoint": Qt.darkGray,
+    "target_point": Qt.darkRed,
+    "wheel_angle": Qt.red,
+    "bounding_box": Qt.gray,
+    "lidar_detection_centroid": Qt.cyan,
+    "camera_detection_centroid": Qt.darkYellow,
+    "sensor_fusion_centroid": Qt.black
+}
+
 
 def angleDifference( angle1, angle2 ):
     diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi
@@ -31,11 +48,11 @@ def rotate(origin, point, angle):
     return qx, qy
 
 class MainWindow(QMainWindow):
-    def __init__(self, mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray):
+    def __init__(self, mapSpecs, vehiclesLock, cav, cis, trafficLightArray):
         print ( " GUI Started ")
 
-        self.vehicles = vehicles
-        self.sensors = sensors
+        self.vehicles = cav
+        self.cis = cis
         self.trafficLightArray = trafficLightArray
         self.pause_simulation = True
         self.vehiclesLock = vehiclesLock
@@ -176,6 +193,8 @@ class MainWindow(QMainWindow):
 
         self.drawVehicle = True
 
+        self.drawCamera = True
+
         # Initialize target points
         # for vehicle in vehicles:
         #    vehicle.pursuit_index = vehicle.search_target_index()
@@ -268,13 +287,11 @@ class MainWindow(QMainWindow):
                     vehicle.targetVelocityGeneral = float(self.lineVehicleSpeed[idx].text())
                 if vehicle.simVehicle:
                     if self.pause_simulation:
-                        #print("veh" + str(idx) + " pause")
                         vehicle.update_localization()
                         vehicle.distance_pid_control_overide = True
                         vehicle.targetVelocity = 0.0
                         vehicle.update_pid()
                     else:
-                        #print("veh" + str(idx) + " play")
                         # Update ourself
                         vehicle.update_localization()
                         vehicle.recieve_coordinate_group_commands(self.trafficLightArray)
@@ -287,15 +304,15 @@ class MainWindow(QMainWindow):
                                 vehicleList.append(otherVehicle.get_location())
 
                         if self.full_simulation:
-
                             # Create that fake LIDAR
                             if self.lidarRecognitionList[idx] != None:
                                 point_cloud, camera_array = vehicle.fake_lidar_and_camera(vehicleList, [], 15.0, 0.0, 15.0, 0.0, 0.0, 160.0)
                                 vehicle.cameraDetections = camera_array
 
                                 lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0)
-                                # print ( lidarcoordinates )
 
+                                # Vehicle position can be the map centroid in sim
+                                # because we are generating the detection WRT the centroid
                                 #pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
                                 pos = [0,0,0]
 
@@ -311,14 +328,9 @@ class MainWindow(QMainWindow):
                                 vehicle.lidarPoints = point_cloud
 
                                 # Do the local fusion like we would on the vehicle
-                                print("Fusion begin, ", vehicle.cameraDetections, vehicle.lidarDetections)
                                 self.localFusion[idx].processDetectionFrame(0, self.time/1000.0, vehicle.cameraDetections, .5)
-                                print("mid")
                                 self.localFusion[idx].processDetectionFrame(1, self.time/1000.0, vehicle.lidarDetections, .5)
-                                print("Post Matching")
                                 results = self.localFusion[idx].fuseDetectionFrame()
-                                print("Post Kalman")
-                                # print(results)
 
                                 # Add to the GUI
                                 vehicle.fusionDetections = []
@@ -329,8 +341,43 @@ class MainWindow(QMainWindow):
 
                         # Now update our current PID with respect to other vehicles
                         vehicle.check_positions_of_other_vehicles_adjust_velocity(vehicleList)
+
                         # We can't update the PID controls until after all positions are known
                         vehicle.update_pid()
+                for idx, cis in self.cis.items():
+                    # Do this if we are not in a full sim
+                    if not self.full_simulation and cis.simCIS:
+                        # CISs should not move but we can do this anyway just in case
+                        cis.updatePosition(.125)
+                    if cis.simCIS:
+                        if self.pause_simulation:
+                            cis.update_localization()
+                        else:
+                            # Update ourself
+                            cis.update_localization()
+
+                            # Get the last known location of all other vehicles
+                            vehicleList = []
+                            for otherIdx, otherVehicle in self.vehicles.items():
+                                if idx != otherIdx:
+                                    vehicleList.append(otherVehicle.get_location())
+
+                            if self.full_simulation:
+                                # Create that fake LIDAR
+                                if self.lidarRecognitionList[idx] != None:
+                                    camera_array = cis.fake_camera(vehicleList, [], 15.0,
+                                                                       0.0, 15.0, 0.0, 0.0,
+                                                                       160.0)
+                                    cis.cameraDetections = camera_array
+
+                                    # CIS position can be the map centroid in sim
+                                    # because we are generating the detection WRT the centroid
+                                    # pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
+                                    pos = [0, 0, 0]
+
+                                    # Fusion detection frame is the same as single camera (for now)
+                                    # Add to the GUI
+                                    cis.fusionDetections = camera_array
             self.vehiclesLock.release()
 
             self.drawTrafficLight = True
@@ -452,11 +499,24 @@ class MainWindow(QMainWindow):
         if self.drawCoordinates:
             pen = QPen()
             pen.setWidth(2)
-            painter.setPen(pen)
 
-            for x, y in zip(self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates):
+            for x, y, intersection in zip(self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates):
                 # painter.translate(self.mapSpecs.centerX-15, self.mapSpecs.centerY-30);
                 # painter.rotate(90);
+                if intersection == 0:
+                    # No inersection here
+                    pen.setBrush(brush_color['waypoint'])
+                    pen.setWidth(2)
+                elif self.trafficLightArray[intersection] == 2:
+                    pen.setWidth(4)
+                    pen.setBrush(brush_color['traffic_light_green'])
+                elif self.trafficLightArray[intersection] == 1:
+                    pen.setWidth(4)
+                    pen.setBrush(brush_color['traffic_light_yellow'])
+                else:
+                    pen.setWidth(4)
+                    pen.setBrush(brush_color['traffic_light_red'])
+                painter.setPen(pen)
                 painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * x),
                                   self.translateY(self.mapSpecs.meters_to_print_scale * y))
 
@@ -466,7 +526,7 @@ class MainWindow(QMainWindow):
             for idx, vehicle in self.vehicles.items():
                 pen = QPen()
                 pen.setWidth(4)
-                pen.setBrush(Qt.green)
+                pen.setBrush(brush_color['vehicle'])
                 painter.setPen(pen)
                 # Draw the vehicle position
                 painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
@@ -490,13 +550,13 @@ class MainWindow(QMainWindow):
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
                                      vehicle.theta + math.radians(90))))
                 # Draw the target point
-                pen.setBrush(Qt.red)
+                pen.setBrush(brush_color['target_point'])
                 painter.setPen(pen)
                 painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * vehicle.targetIndexX),
                                   self.translateY(self.mapSpecs.meters_to_print_scale * vehicle.targetIndexY))
                 # painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * vehicle.centerPointX),
                 #                  self.translateY(self.mapSpecs.meters_to_print_scale * vehicle.centerPointY))
-                pen.setBrush(Qt.gray)
+                pen.setBrush(brush_color['wheel_angle'])
                 pen.setWidth(1)
                 painter.setPen(pen)
                 self.drawTargetArc(vehicle.centerPointX, vehicle.centerPointY, vehicle.localizationPositionX,
@@ -506,7 +566,7 @@ class MainWindow(QMainWindow):
                 self.labelVehicleSpeedTarget[idx].setText('VT=' + str(round(vehicle.targetVelocity, 2)))
                 self.labelVehicleAcceleration[idx].setText('AA=' + str(round(vehicle.motorAcceleration, 2)))
 
-                pen.setBrush(Qt.blue)
+                pen.setBrush(brush_color['bounding_box'])
                 pen.setWidth(4)
                 painter.setPen(pen)
                 buffer = 0.1
@@ -550,7 +610,7 @@ class MainWindow(QMainWindow):
                                   self.translateY(y4 * self.mapSpecs.meters_to_print_scale))
 
                 # Now draw the vehicle lidar detections
-                pen.setBrush(Qt.cyan)
+                pen.setBrush(brush_color['lidar_detection_centroid'])
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in vehicle.lidarDetections:
@@ -560,7 +620,7 @@ class MainWindow(QMainWindow):
                                       self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
                 # Now draw the vehicle camera detections
-                pen.setBrush(Qt.darkMagenta)
+                pen.setBrush(brush_color['camera_detection_centroid'])
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in vehicle.cameraDetections:
@@ -569,7 +629,7 @@ class MainWindow(QMainWindow):
                                       self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
                 # Now draw the vehicle fusion detections
-                pen.setBrush(Qt.black)
+                pen.setBrush(brush_color['sensor_fusion_centroid'])
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in vehicle.fusionDetections:
@@ -579,68 +639,68 @@ class MainWindow(QMainWindow):
 
             # self.drawVehicle = False
 
-        if self.drawVehicle:
-            for idx, vehicle in self.sensors.items():
+        if self.drawCamera:
+            for idx, cis in self.cis.items():
                 pen = QPen()
                 pen.setWidth(4)
-                pen.setBrush(Qt.darkBlue)
+                pen.setBrush(brush_color['camera'])
                 painter.setPen(pen)
                 # Draw the camera position
-                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale),
-                                 self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                                             vehicle.wheelbaseLength * .5 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta)),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             vehicle.wheelbaseLength * .5 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta)))
-                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                            (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                    vehicle.theta + math.radians(90))),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta + math.radians(90))),
-                                 self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-                                             (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(90))),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-                                             (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta + math.radians(90))))
+                painter.drawLine(self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                 self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                 self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                             cis.wheelbaseLength * .5 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                     cis.theta)),
+                                 self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                             cis.wheelbaseLength * .5 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     cis.theta)))
+                painter.drawLine(self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                            (cis.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                    cis.theta + math.radians(90))),
+                                 self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                             (cis.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     cis.theta + math.radians(90))),
+                                 self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                             (cis.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                     cis.theta + math.radians(90))),
+                                 self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                             (cis.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     cis.theta + math.radians(90))))
 
                 # Draw the FOV
                 pen = QPen()
                 pen.setWidth(.5)
-                pen.setBrush(Qt.darkBlue)
+                pen.setBrush(brush_color['camera_fov'])
                 painter.setPen(pen)
 
-                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale),
-                                 self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                painter.drawLine(self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                 self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                 self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                          5.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(180 + 80))),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                     cis.theta + math.radians(180 + 80))),
+                                 self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                          5.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta + math.radians(180 + 80))))
+                                     cis.theta + math.radians(180 + 80))))
 
-                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale),
-                                 self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                painter.drawLine(self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                 self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                 self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                          5.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(180 + -80))),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                     cis.theta + math.radians(180 + -80))),
+                                 self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                          5.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta + math.radians(180 + -80))))
+                                     cis.theta + math.radians(180 + -80))))
 
 
                 # Now draw the camera detections
-                pen.setBrush(Qt.darkMagenta)
+                pen.setBrush(brush_color['camera_detection_centroid'])
                 pen.setWidth(4)
                 painter.setPen(pen)
-                for each in vehicle.cameraDetections:
+                for each in cis.cameraDetections:
                     #print ( each )
-                    transX, transY = self.translateDetections(each[2], -each[1], math.atan2(-each[1], each[2]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
+                    transX, transY = self.translateDetections(each[2], -each[1], math.atan2(-each[1], each[2]), cis.localizationPositionX, cis.localizationPositionY, cis.theta)
                     #print ( transX, transY )
-                    #print ( vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta )
+                    #print ( cis.localizationPositionX, cis.localizationPositionY, cis.theta )
                     painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
                                       self.translateY(transY * self.mapSpecs.meters_to_print_scale))
 

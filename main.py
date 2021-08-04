@@ -5,7 +5,7 @@ from threading import Lock, Thread
 from queue import Queue
 from road_side_unit.src import mapGenerator, communication, gui
 from connected_autonomous_vehicle.src import planning_control
-
+from connected_infrastructure_sensor.src import planning_control as cam_planning
 
 global mainWin
 
@@ -41,16 +41,15 @@ class RSU():
                 0,
                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, True)
 
-            # newSensor = vehicle.planning_control()
-            # newSensor.initialVehicleAtPosition(
-            #     (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
-            #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-            #     -45,
-            #     mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 2, True)
+            newSensor = cam_planning.Planner()
+            newSensor.initialVehicleAtPosition(
+                (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
+                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+                -45, 2, True)
 
             self.vehicles[0] = newvehicle1
             self.vehicles[1] = newvehicle2
-            #self.sensors[0] = newSensor
+            self.sensors[0] = newSensor
 
             print("Pos veh 0: ", (- (
                         mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
@@ -285,7 +284,7 @@ pose = {}
 trafficLightArray = [0, 2, 0]
 
 # Setup the mapspecs
-mapSpecs = mapGenerator.MapSpecs()
+mapSpecs = mapGenerator.MapSpecs(0)
 sim = RSU(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, True)
 
 # Start up the GUI as it's own thread
