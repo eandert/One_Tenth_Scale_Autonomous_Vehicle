@@ -1,4 +1,4 @@
-# Traxxis RC Car Control Master Node
+# Traxxis 1/10 Scale RC Car Autonomous Vehicle Repositoy
 Demonstration code for running a small vehicle intersection with figure 8 loop using SLAM.
 
 Simulation:
