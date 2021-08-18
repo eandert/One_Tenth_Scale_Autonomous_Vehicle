@@ -150,6 +150,7 @@ class Tracked:
                 # We have valid data
                 # Transition matrix
                 elapsed = self.lastTracked - self.prev_time
+                print("elapsed ", elapsed)
                 if elapsed < 0.0:
                     print( "Error time elapsed is incorrect! " + str(elapsed) )
                     # Set to arbitrary time
@@ -168,10 +169,15 @@ class Tracked:
 
                 tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0, 0, 0],
                                     [0, lidarMeasureH[1], 0, 0, 0, 0, 0, 0],
-                                    [camMeasureH[0], 0, 0, 0, 0, 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0, 0, 0, 0, 0]])
+                                    [0, 0, camMeasureH[0], 0, 0, 0, 0, 0],
+                                    [0, 0, 0, camMeasureH[1], 0, 0, 0, 0]])
 
-                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
+                measure_with_error = np.array(
+                    [X_hat_t[0][0] - lidarMeasure[0], X_hat_t[1][0] - lidarMeasure[1], X_hat_t[0][0] - camMeasure[0], X_hat_t[1][0] - camMeasure[1]])
+
+                measure_with_error = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
+
+                print ( measure_with_error )
                 
                 # Measurment cov
                 self.R_t = np.array(
@@ -180,7 +186,7 @@ class Tracked:
                      [0, 0, camCov[0][0], camCov[0][1]],
                      [0, 0, camCov[1][0], camCov[1][1]]])
 
-                Z_t = (measure).transpose()
+                Z_t = (measure_with_error).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
                 X_t, self.P_t = update(X_hat_t, self.P_hat_t, Z_t, self.R_t, tempH_t)
                 self.X_hat_t = X_t
@@ -203,10 +209,10 @@ class Tracked:
                 print("Error time elapsed is incorrect! " + str(elapsed))
                 # Set to arbitrary time
                 elapsed = 0.125
-            self.F_t = np.array([[1, 0, 0, 0, elapsed, 0, elapsed*elapsed, 0]
-                                    , [0, 1, 0, 0, 0, elapsed, 0, elapsed*elapsed]
-                                    , [0, 0, 1, 0, elapsed, 0, elapsed*elapsed, 0]
-                                    , [0, 0, 0, 1, 0, elapsed, 0, elapsed*elapsed]
+            self.F_t = np.array([[1, 0, 0, 0, elapsed, 0, elapsed, 0]
+                                    , [0, 1, 0, 0, 0, elapsed, 0, elapsed]
+                                    , [0, 0, 1, 0, elapsed, 0, elapsed, 0]
+                                    , [0, 0, 0, 1, 0, elapsed, 0, elapsed]
                                     , [0, 0, 0, 0, 1, 0, elapsed, 0]
                                     , [0, 0, 0, 0, 0, 1, 0, elapsed]
                                     , [0, 0, 0, 0, 0, 0, 1, 0]
@@ -388,10 +394,12 @@ class FUSION:
                     # We are the best according to arbitrarily broken tie and can be added
                     if first:
                         added.append(add)
+                        print("new_p")
                         new = Tracked(detections_list_positions[add][0], detections_list_positions[add][1],
                                       detections_list_positions[add][2], detections_list_positions[add][3],
                                       detection_list[add][0], detection_list[add][1], detection_list[add][2],
                                       detection_list[add][3], detection_list[add][4], detection_list[add][5], timestamp, self.id)
+                        print("new")
                         if self.id < 1000000:
                             self.id += 1
                         else:
@@ -400,7 +408,9 @@ class FUSION:
 
             else:
                 for dl, dlp in zip(detection_list, detections_list_positions):
+                    print("add_p")
                     new = Tracked(dlp[0], dlp[1], dlp[2], dlp[3], dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], timestamp, self.id)
+                    print ("add")
                     if self.id < 1000:
                         self.id += 1
                     else:

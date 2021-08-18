@@ -69,6 +69,7 @@ class Planner:
         self.cameraDetections = []
         self.lidarDetections = []
         self.fusionDetections = []
+        self.rawLidarDetections = []
 
         # Raw LIDAR for gui debug
         self.lidarPoints = []
@@ -225,7 +226,7 @@ class Planner:
         self.coordinateGroupVelocities = commands
 
     def get_location(self):
-        return [self.localizationPositionX, self.localizationPositionY, self.theta, self.targetVelocity, .2, self.width, self.length]
+        return [self.localizationPositionX, self.localizationPositionY, self.theta, self.targetVelocity, 0, self.width, self.length]
 
     def get_route(self):
         messageString = ""
@@ -272,21 +273,21 @@ class Planner:
         for idx, vehicle in enumerate(positions):
             # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
             x1 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
-                        (self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
+                        (vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
             y1 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
-                        (self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
+                        (vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
             x2 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
-                        (self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
+                        (vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
             y2 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
-                        (self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
+                        (vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
             x3 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
-                        (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(vehicle[2])))
+                        (self.wheelbaseLength + vehicle[4]) * math.cos(vehicle[2])))
             y3 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
-                        (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(vehicle[2])))
+                        (self.wheelbaseLength + vehicle[4]) * math.sin(vehicle[2])))
             x4 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
-                        (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.cos(vehicle[2])))
+                        (self.wheelbaseLength + vehicle[4]) * math.cos(vehicle[2])))
             y4 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
-                        (self.wheelbaseLength - self.wheelbaseLengthFromRear + vehicle[4]) * math.sin(vehicle[2])))
+                        (self.wheelbaseLength + vehicle[4]) * math.sin(vehicle[2])))
             polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
             polygons.append(polygon)
 
@@ -332,8 +333,6 @@ class Planner:
             # Make sure this worked and is not None
             if final_point != None:
                 lidar_point_cloud.append(final_point)
-
-                # print ( "fp" )
 
                 # See if we can add a camera point as well
                 if self.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, self.theta + cam_center_angle,
