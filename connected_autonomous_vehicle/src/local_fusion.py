@@ -62,12 +62,13 @@ class Tracked:
 
         # Set up the Kalman filter
         # Initial State cov
-        self.P_t = np.identity(8)
+        self.P_t = np.identity(6)
+        self.P_hat_t = np.identity(6)
         # Process cov
-        self.Q_t = np.identity(8)
+        self.Q_t = np.identity(6)
         # End if it not commented
         # Control matrix
-        self.B_t = np.array([[0], [0], [0], [0], [0], [0], [0], [0]])
+        self.B_t = np.array([[0], [0], [0], [0], [0], [0]])
         # Control vector
         self.U_t = 0
         # Measurment Matrix
@@ -103,6 +104,19 @@ class Tracked:
          x - self.min_size, y + self.min_size, x + self.min_size, y - self.min_size
         ]
 
+    def clearLastFrame(self):
+        self.xmin_list = []
+        self.ymin_list = []
+        self.xmax_list = []
+        self.ymax_list = []
+        self.x_list = []
+        self.y_list = []
+        self.type_list = []
+        self.confidence_list = []
+        self.lastTracked_list = []
+        self.crossSection_list = []
+        self.sensorId_List = []
+
     def fusion(self):
         debug = False
 
@@ -128,7 +142,7 @@ class Tracked:
         if self.idx == 0:
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
-            if camMeasure[0] != 0 and lidarMeasure[0]:
+            if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
                 x_out = (camMeasure[0] + lidarMeasure[0]) / 2.0
                 y_out = (camMeasure[1] + lidarMeasure[1]) / 2.0
             elif camMeasure[0] != 0:
@@ -139,9 +153,8 @@ class Tracked:
                 y_out = lidarMeasure[1]
             # Store so that next fusion is better
             self.X_hat_t = np.array(
-                [[x_out], [y_out], [0], [0], [0], [0], [0], [0]])
+                [[x_out], [y_out], [0], [0], [0], [0]])
             self.prev_time = self.lastTracked
-            print(x_out, y_out, lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1], self.idx)
             self.x = x_out
             self.y = y_out
             self.idx += 1
@@ -155,21 +168,19 @@ class Tracked:
                     # Set to arbitrary time
                     elapsed = 0.125
 
-                self.F_t = np.array([[1, 0, 0, 0, elapsed, 0, elapsed*elapsed, 0],
-                                    [0, 1, 0, 0, 0, elapsed, 0, elapsed*elapsed],
-                                    [0, 0, 1, 0, elapsed, 0, elapsed*elapsed, 0],
-                                    [0, 0, 0, 1, 0, elapsed, 0, elapsed*elapsed],
-                                    [0, 0, 0, 0, 1, 0, elapsed, 0],
-                                    [0, 0, 0, 0, 0, 1, 0, elapsed],
-                                    [0, 0, 0, 0, 0, 0, 1, 0],
-                                    [0, 0, 0, 0, 0, 0, 0, 1]])
+                self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
+                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
+                                    [0, 0, 1, 0, elapsed, 0],
+                                    [0, 0, 0, 1, 0, elapsed],
+                                    [0, 0, 0, 0, 1, 0],
+                                    [0, 0, 0, 0, 0, 1]])
                 
                 X_hat_t, self.P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0, 0, 0, 0, 0],
-                                    [camMeasureH[0], 0, 0, 0, 0, 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0, 0, 0, 0, 0]])
+                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
+                                    [0, lidarMeasureH[1], 0, 0, 0, 0],
+                                    [camMeasureH[0], 0, 0, 0, 0, 0],
+                                    [0, camMeasureH[1], 0, 0, 0, 0]])
 
                 measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
                 
@@ -180,6 +191,8 @@ class Tracked:
                      [0, 0, camCov[0][0], camCov[0][1]],
                      [0, 0, camCov[1][0], camCov[1][1]]])
 
+                print ( tempH_t, measure, self.R_t )
+
                 Z_t = (measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
                 X_t, self.P_t = update(X_hat_t, self.P_hat_t, Z_t, self.R_t, tempH_t)
@@ -187,7 +200,6 @@ class Tracked:
                 self.P_hat_t = self.P_t
                 x_out = X_t[0][0]
                 y_out = X_t[1][0]
-                print ( x_out, y_out, lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1], self.idx)
                 self.prev_time = self.lastTracked
                 self.x = x_out
                 self.y = y_out
@@ -198,19 +210,16 @@ class Tracked:
     def getKalmanPred(self, time):
         if self.idx > 0:
             elapsed = time - self.prev_time
-            print("elapsed ", elapsed)
             if elapsed < 0.0:
                 print("Error time elapsed is incorrect! " + str(elapsed))
                 # Set to arbitrary time
                 elapsed = 0.125
-            self.F_t = np.array([[1, 0, 0, 0, elapsed, 0, elapsed*elapsed, 0]
-                                    , [0, 1, 0, 0, 0, elapsed, 0, elapsed*elapsed]
-                                    , [0, 0, 1, 0, elapsed, 0, elapsed*elapsed, 0]
-                                    , [0, 0, 0, 1, 0, elapsed, 0, elapsed*elapsed]
-                                    , [0, 0, 0, 0, 1, 0, elapsed, 0]
-                                    , [0, 0, 0, 0, 0, 1, 0, elapsed]
-                                    , [0, 0, 0, 0, 0, 0, 1, 0]
-                                    , [0, 0, 0, 0, 0, 0, 0, 1]])
+            self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
+                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
+                                    [0, 0, 1, 0, elapsed, 0],
+                                    [0, 0, 0, 1, 0, elapsed],
+                                    [0, 0, 0, 0, 1, 0],
+                                    [0, 0, 0, 0, 0, 1]])
             X_hat_t, P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             return X_hat_t[0][0], X_hat_t[1][0]
@@ -274,6 +283,8 @@ class FUSION:
         for track in self.trackedList:
             track.fusion()
             result.append([track.id, track.x, track.y])
+            # Clear the previous detection list
+            track.clearLastFrame()
 
         return result
 
@@ -287,17 +298,12 @@ class FUSION:
             detections_position_list.append([det[0] - self.min_size, det[1] + self.min_size, det[0] + self.min_size, det[1] - self.min_size])
             detections_list.append([0, 90, det[0], det[1], self.min_size * 2, sensor_id])
 
-        print("past")
-        print(detections_position_list)
-
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
 
     def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime):
         matches = []
-        print ( len(detections_list_positions) )
         if len(detections_list_positions) > 0:
-            print(len(self.trackedList))
             if len(self.trackedList) > 0:
                 numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 4)
                 thisFrameTrackTree = BallTree(numpy_formatted, metric=computeDistance)
@@ -422,9 +428,16 @@ def prediction(X_hat_t_1, P_t_1, F_t, B_t, U_t, Q_t):
     return X_hat_t, P_t
 
 def update(X_hat_t, P_t, Z_t, R_t, H_t):
-    K_prime = P_t.dot(H_t.transpose()).dot(np.linalg.inv(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
+    K_prime = P_t.dot(H_t.transpose()).dot(inv(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
     # print("K:\n",K_prime)
     # print("X_hat:\n",X_hat_t)
     X_t = X_hat_t + K_prime.dot(Z_t - H_t.dot(X_hat_t))
     P_t = P_t - K_prime.dot(H_t).dot(P_t)
     return X_t, P_t
+
+def inv(m):
+    a, b = m.shape
+    if a != b:
+        raise ValueError("Only square matrices are invertible.")
+    i = np.eye(a, a)
+    return np.linalg.lstsq(m, i, rcond=None)[0]
