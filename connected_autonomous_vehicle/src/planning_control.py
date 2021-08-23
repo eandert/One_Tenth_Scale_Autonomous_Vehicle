@@ -4,6 +4,7 @@ from simple_pid import PID
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from shapely.geometry.linestring import LineString
+from connected_autonomous_vehicle.src import local_fusion
 
 
 ''' Helper function to calculate the difference between 2 angles in radians'''
@@ -73,6 +74,12 @@ class Planner:
 
         # Raw LIDAR for gui debug
         self.lidarPoints = []
+
+        # Start sensors with standard error model
+        self.lidarSensor = local_fusion.Sensor("M1M1", 0.0, 360, 15.0,
+                                               .05, .067, .05, .15)
+        self.cameraSensor = local_fusion.Sensor("IMX160", 0.0, 160, 10.0,
+                                               .025, .150, .10, .10)
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
         self.targetVelocityGeneral = 0

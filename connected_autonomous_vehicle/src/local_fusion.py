@@ -9,6 +9,146 @@ CAMERA = 0
 LIDAR = 1
 
 
+class BivariateGaussian:
+    # This class is for creating and storing error terms of a sensor using 
+    # mu and covariance so they can be fed into kalman filters and printed
+    def __init__(self, a, b, phi, mu = None, cov = None):
+        if cov is None:
+            # Create the bivariate gaussian matrix
+            self.mu = np.array([0.0,0.0])
+            self.covariance = [[a, 0], [0, b]]
+
+            # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
+            rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
+            self.covariance = np.matmul(rotate, self.covariance)
+            self.covariance = np.matmul(self.covariance, rotate.transpose())
+        else:
+            # Create the bivariate gaussian matrix
+            self.mu = mu
+            self.covariance = cov
+
+    def ellipsify(self, num = 50, multiplier = 3):
+        # Default multiplier is 2 because that should cover 95% of errors
+        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
+        #print("a (ellipsify) ", str(a))
+        #print("b (ellipsify)", str(b))
+        #print("phi (ellipsify) ", str(math.degrees(phi)))
+        ellipse = []
+        pointEvery = math.radians(360/num)
+        for count in range(num + 1):
+            cur_angle = pointEvery * count
+            range_val = self.calculateRadiusAtAngle(a, b, phi, cur_angle) * multiplier
+            x_val = self.mu[0] + range_val * math.cos(cur_angle)
+            y_val = self.mu[1] + range_val * math.sin(cur_angle)
+            ellipse.append([x_val,y_val])
+
+        return ellipse
+
+    def dot(self):
+
+        ellipse = []
+
+        ellipse.append([self.mu[0], self.mu[1]])
+        ellipse.append([self.mu[0], self.mu[1]+.1])
+        ellipse.append([self.mu[0], self.mu[1]-.1])
+        ellipse.append([self.mu[0], self.mu[1]])
+        ellipse.append([self.mu[0]+.1, self.mu[1]])
+        ellipse.append([self.mu[0]-.1, self.mu[1]])
+        ellipse.append([self.mu[0], self.mu[1]])
+
+        return ellipse
+
+    def calculateRadiusAtAngle(self, a, b, phi, measurementAngle):
+        denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 ) / 2
+        if denominator == 0:
+            print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
+            #print ( a, b, phi, measurementAngle )
+            return 0
+        else:
+            return ( a * b ) / math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 ) / 2
+
+    def calcSelfRadiusAtAnlge(self, angle):
+        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
+        return self.calculateRadiusAtAngle(a, b, phi, angle)
+
+    def extractErrorElipseParamsFromBivariateGaussian(self):
+        # Eigenvalue and eigenvector computations
+        w, v = np.linalg.eig(self.covariance)
+
+        # Use the eigenvalue to figure out which direction is larger
+        if abs(w[0]) > abs(w[1]):
+            a = abs(w[0])
+            b = abs(w[1])
+            phi = math.atan2(v[0, 0], v[1, 0])
+        else:
+            a = abs(w[1])
+            b = abs(w[0])
+            phi = math.atan2(v[0, 1], v[1, 1])
+
+        return a, b, phi
+
+
+class Sensor:
+    # This object is for storing and calculating expected sensor accuracy for 
+    # object. In full simulation we inject error and generate expected error 
+    # gaussians. In real world we only generate expected error gaussians.
+    def __init__(self, sensor_name, center_angle, field_of_view, max_distance, radial_error_x, radial_error_b, distal_error_x, distal_error_b):
+        self.sensor_name = sensor_name
+        self.center_angle = center_angle
+        self.field_of_view = field_of_view
+        self.max_distance = max_distance
+        self.radial_error_x = radial_error_x
+        self.radial_error_b = radial_error_b
+        self.distal_error_x = distal_error_x
+        self.distal_error_b = distal_error_b
+
+    def checkInRangeAndFOV(self, object_angle, object_distance):
+        anglediff = ((self.center_angle - object_angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
+        if abs(anglediff) <= (self.field_of_view) and (object_distance <= self.max_distance):
+            return True
+        return False
+        
+    def getRadialErrorAtDistance(self, object_distance):
+        # This version we are disregarding horizontal crosssection for now
+        return self.radial_error_b + (object_distance * self.radial_error_x)
+        
+    def getDistanceErrorAtDistance(self, object_distance):
+        return self.distal_error_b + (object_distance * self.distal_error_x)
+
+    def calculateErrorGaussian(self, object_relative_angle, object_distance, simulation):
+        if self.checkInRangeAndFOV(object_relative_angle, object_distance):
+            radial_error = self.getRadialErrorAtDistance(object_distance)
+            distal_error = self.getDistanceErrorAtDistance(object_distance)
+            # Calculate our expected elipse error bounds
+            elipse_a_expected = 2 * (object_distance * math.sin(radial_error / 2))
+            elipse_b_expected = distal_error
+            if elipse_a_expected < elipse_b_expected:
+                elipse_temp = elipse_a_expected
+                elipse_a_expected = elipse_b_expected
+                elipse_b_expected = elipse_temp
+                elipse_angle_expected = object_relative_angle
+            else:
+                elipse_angle_expected = object_relative_angle + math.radians(90)
+            expected_error_gaussian = BivariateGaussian(elipse_a_expected,
+                                      elipse_b_expected,
+                                      elipse_angle_expected)
+            # Calcuate the actual error if this is a simulation, otherwise just return
+            if simulation:
+                # Calculate our expected errors in x,y coordinates
+                errorX_expected = ((object_distance + distal_error) * math.cos(
+                    object_relative_angle + radial_error))
+                errorY_expected = ((object_distance + distal_error) * math.sin(
+                    object_relative_angle + radial_error))
+                actual_sim_error = [errorX_expected, errorY_expected]
+                return True, expected_error_gaussian, actual_sim_error
+            else:
+                actual_sim_error = [0.0, 0.0]
+                return True, expected_error_gaussian, actual_sim_error
+        else:
+            # Fallthrough case just in case this is out of the FOV of the sensor
+            return False, None, None
+
+
 class Tracked:
     # This object tracks a single object that has been detected in a video frame.
     # We use this primarily to match objects seen between frames and included in here
@@ -247,13 +387,14 @@ def computeDistance(a, b, epsilon=1e-5):
         distance = 1 - iou
     return distance
 
-# Fusion is a special class for matching and fusing detections for a variety of sources.
-# The inpus is scalable and therefore must be generated before being fed into this class.
-# A unique list of detections is required from each individual sensor or pre-fused device
-# output or it will not be matched. Detections too close to each other may be combined.
-# This is a modified version of the frame-by-frame tracker seen in:
-# https://github.com/eandert/Jetson_Nano_Camera_Vehicle_Tracker
+
 class FUSION:
+    # Fusion is a special class for matching and fusing detections for a variety of sources.
+    # The inpus is scalable and therefore must be generated before being fed into this class.
+    # A unique list of detections is required from each individual sensor or pre-fused device
+    # output or it will not be matched. Detections too close to each other may be combined.
+    # This is a modified version of the frame-by-frame tracker seen in:
+    # https://github.com/eandert/Jetson_Nano_Camera_Vehicle_Tracker
     def __init__(self):
         # Set other parameters for the class
         self.trackedList = []
@@ -428,14 +569,14 @@ def prediction(X_hat_t_1, P_t_1, F_t, B_t, U_t, Q_t):
     return X_hat_t, P_t
 
 def update(X_hat_t, P_t, Z_t, R_t, H_t):
-    K_prime = P_t.dot(H_t.transpose()).dot(inv(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
+    K_prime = P_t.dot(H_t.transpose()).dot(inverse(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
     # print("K:\n",K_prime)
     # print("X_hat:\n",X_hat_t)
     X_t = X_hat_t + K_prime.dot(Z_t - H_t.dot(X_hat_t))
     P_t = P_t - K_prime.dot(H_t).dot(P_t)
     return X_t, P_t
 
-def inv(m):
+def inverse(m):
     a, b = m.shape
     if a != b:
         raise ValueError("Only square matrices are invertible.")

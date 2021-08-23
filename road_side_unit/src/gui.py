@@ -164,17 +164,6 @@ class MainWindow(QMainWindow):
         # as this will enable the GUI to draw.
         self.drawCoordinates = True
 
-        # Start the tcp server
-        # Commenting out for movement over to Flask instead of reactor
-        #reactor.listenTCP(12345, SimpleProtocolFactory(), interface='192.168.1.162')
-        #reactor.run()
-
-        # Running in a thread
-        # Commenting out for movement over to Flask instead of reactor
-        #Thread(target=reactor.run, args=(False,)).start()
-
-        #time.sleep(1)
-
         self.labelVehicleSpeed = []
         self.lineVehicleSpeed = []
         self.labelVehicleSpeedActual = []
@@ -213,12 +202,6 @@ class MainWindow(QMainWindow):
         self.drawVehicle = True
 
         self.drawCamera = True
-
-        # Initialize target points
-        # for vehicle in vehicles:
-        #    vehicle.pursuit_index = vehicle.search_target_index()
-
-        # self.drawVehicle = True
 
         print ( " GUI Init end ")
 
