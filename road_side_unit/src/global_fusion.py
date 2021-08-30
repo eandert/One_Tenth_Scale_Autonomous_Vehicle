@@ -9,6 +9,146 @@ CAMERA = 0
 LIDAR = 1
 
 
+class BivariateGaussian:
+    # This class is for creating and storing error terms of a sensor using 
+    # mu and covariance so they can be fed into kalman filters and printed
+    def __init__(self, a, b, phi, mu = None, cov = None):
+        if cov is None:
+            # Create the bivariate gaussian matrix
+            self.mu = np.array([0.0,0.0])
+            self.covariance = [[a, 0], [0, b]]
+
+            # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
+            rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
+            self.covariance = np.matmul(rotate, self.covariance)
+            self.covariance = np.matmul(self.covariance, rotate.transpose())
+        else:
+            # Create the bivariate gaussian matrix
+            self.mu = mu
+            self.covariance = cov
+
+    def ellipsify(self, num = 50, multiplier = 3):
+        # Default multiplier is 2 because that should cover 95% of errors
+        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
+        #print("a (ellipsify) ", str(a))
+        #print("b (ellipsify)", str(b))
+        #print("phi (ellipsify) ", str(math.degrees(phi)))
+        ellipse = []
+        pointEvery = math.radians(360/num)
+        for count in range(num + 1):
+            cur_angle = pointEvery * count
+            range_val = self.calculateRadiusAtAngle(a, b, phi, cur_angle) * multiplier
+            x_val = self.mu[0] + range_val * math.cos(cur_angle)
+            y_val = self.mu[1] + range_val * math.sin(cur_angle)
+            ellipse.append([x_val,y_val])
+
+        return ellipse
+
+    def dot(self):
+
+        ellipse = []
+
+        ellipse.append([self.mu[0], self.mu[1]])
+        ellipse.append([self.mu[0], self.mu[1]+.1])
+        ellipse.append([self.mu[0], self.mu[1]-.1])
+        ellipse.append([self.mu[0], self.mu[1]])
+        ellipse.append([self.mu[0]+.1, self.mu[1]])
+        ellipse.append([self.mu[0]-.1, self.mu[1]])
+        ellipse.append([self.mu[0], self.mu[1]])
+
+        return ellipse
+
+    def calculateRadiusAtAngle(self, a, b, phi, measurementAngle):
+        denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 ) / 2
+        if denominator == 0:
+            print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
+            #print ( a, b, phi, measurementAngle )
+            return 0
+        else:
+            return ( a * b ) / math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 ) / 2
+
+    def calcSelfRadiusAtAnlge(self, angle):
+        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
+        return self.calculateRadiusAtAngle(a, b, phi, angle)
+
+    def extractErrorElipseParamsFromBivariateGaussian(self):
+        # Eigenvalue and eigenvector computations
+        w, v = np.linalg.eig(self.covariance)
+
+        # Use the eigenvalue to figure out which direction is larger
+        if abs(w[0]) > abs(w[1]):
+            a = abs(w[0])
+            b = abs(w[1])
+            phi = math.atan2(v[0, 0], v[1, 0])
+        else:
+            a = abs(w[1])
+            b = abs(w[0])
+            phi = math.atan2(v[0, 1], v[1, 1])
+
+        return a, b, phi
+
+
+class Sensor:
+    # This object is for storing and calculating expected sensor accuracy for 
+    # object. In full simulation we inject error and generate expected error 
+    # gaussians. In real world we only generate expected error gaussians.
+    def __init__(self, sensor_name, center_angle, field_of_view, max_distance, radial_error_x, radial_error_b, distal_error_x, distal_error_b):
+        self.sensor_name = sensor_name
+        self.center_angle = center_angle
+        self.field_of_view = field_of_view
+        self.max_distance = max_distance
+        self.radial_error_x = radial_error_x
+        self.radial_error_b = radial_error_b
+        self.distal_error_x = distal_error_x
+        self.distal_error_b = distal_error_b
+
+    def checkInRangeAndFOV(self, object_angle, object_distance):
+        anglediff = ((self.center_angle - object_angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
+        if abs(anglediff) <= (self.field_of_view) and (object_distance <= self.max_distance):
+            return True
+        return False
+        
+    def getRadialErrorAtDistance(self, object_distance):
+        # This version we are disregarding horizontal crosssection for now
+        return self.radial_error_b + (object_distance * self.radial_error_x)
+        
+    def getDistanceErrorAtDistance(self, object_distance):
+        return self.distal_error_b + (object_distance * self.distal_error_x)
+
+    def calculateErrorGaussian(self, object_relative_angle, object_distance, simulation):
+        if self.checkInRangeAndFOV(object_relative_angle, object_distance):
+            radial_error = self.getRadialErrorAtDistance(object_distance)
+            distal_error = self.getDistanceErrorAtDistance(object_distance)
+            # Calculate our expected elipse error bounds
+            elipse_a_expected = 2 * (object_distance * math.sin(radial_error / 2))
+            elipse_b_expected = distal_error
+            if elipse_a_expected < elipse_b_expected:
+                elipse_temp = elipse_a_expected
+                elipse_a_expected = elipse_b_expected
+                elipse_b_expected = elipse_temp
+                elipse_angle_expected = object_relative_angle
+            else:
+                elipse_angle_expected = object_relative_angle + math.radians(90)
+            expected_error_gaussian = BivariateGaussian(elipse_a_expected,
+                                      elipse_b_expected,
+                                      elipse_angle_expected)
+            # Calcuate the actual error if this is a simulation, otherwise just return
+            if simulation:
+                # Calculate our expected errors in x,y coordinates
+                errorX_expected = ((object_distance + distal_error) * math.cos(
+                    object_relative_angle + radial_error))
+                errorY_expected = ((object_distance + distal_error) * math.sin(
+                    object_relative_angle + radial_error))
+                actual_sim_error = [errorX_expected, errorY_expected]
+                return True, expected_error_gaussian, actual_sim_error
+            else:
+                actual_sim_error = [0.0, 0.0]
+                return True, expected_error_gaussian, actual_sim_error
+        else:
+            # Fallthrough case just in case this is out of the FOV of the sensor
+            return False, None, None
+
+
 class Tracked:
     # This object tracks a single object that has been detected in a video frame.
     # We use this primarily to match objects seen between frames and included in here
@@ -62,12 +202,13 @@ class Tracked:
 
         # Set up the Kalman filter
         # Initial State cov
-        self.P_t = np.identity(8)
+        self.P_t = np.identity(6)
+        self.P_hat_t = np.identity(6)
         # Process cov
-        self.Q_t = np.identity(8)
+        self.Q_t = np.identity(6)
         # End if it not commented
         # Control matrix
-        self.B_t = np.array([[0], [0], [0], [0], [0], [0], [0], [0]])
+        self.B_t = np.array([[0], [0], [0], [0], [0], [0]])
         # Control vector
         self.U_t = 0
         # Measurment Matrix
@@ -103,6 +244,19 @@ class Tracked:
          x - self.min_size, y + self.min_size, x + self.min_size, y - self.min_size
         ]
 
+    def clearLastFrame(self):
+        self.xmin_list = []
+        self.ymin_list = []
+        self.xmax_list = []
+        self.ymax_list = []
+        self.x_list = []
+        self.y_list = []
+        self.type_list = []
+        self.confidence_list = []
+        self.lastTracked_list = []
+        self.crossSection_list = []
+        self.sensorId_List = []
+
     def fusion(self):
         debug = False
 
@@ -128,7 +282,7 @@ class Tracked:
         if self.idx == 0:
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
-            if camMeasure[0] != 0 and lidarMeasure[0]:
+            if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
                 x_out = (camMeasure[0] + lidarMeasure[0]) / 2.0
                 y_out = (camMeasure[1] + lidarMeasure[1]) / 2.0
             elif camMeasure[0] != 0:
@@ -139,9 +293,8 @@ class Tracked:
                 y_out = lidarMeasure[1]
             # Store so that next fusion is better
             self.X_hat_t = np.array(
-                [[x_out], [y_out], [0], [0], [0], [0], [0], [0]])
+                [[x_out], [y_out], [0], [0], [0], [0]])
             self.prev_time = self.lastTracked
-            print(x_out, y_out, lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1], self.idx)
             self.x = x_out
             self.y = y_out
             self.idx += 1
@@ -150,34 +303,26 @@ class Tracked:
                 # We have valid data
                 # Transition matrix
                 elapsed = self.lastTracked - self.prev_time
-                print("elapsed ", elapsed)
                 if elapsed < 0.0:
                     print( "Error time elapsed is incorrect! " + str(elapsed) )
                     # Set to arbitrary time
                     elapsed = 0.125
 
-                self.F_t = np.array([[1, 0, 0, 0, elapsed, 0, elapsed*elapsed, 0],
-                                    [0, 1, 0, 0, 0, elapsed, 0, elapsed*elapsed],
-                                    [0, 0, 1, 0, elapsed, 0, elapsed*elapsed, 0],
-                                    [0, 0, 0, 1, 0, elapsed, 0, elapsed*elapsed],
-                                    [0, 0, 0, 0, 1, 0, elapsed, 0],
-                                    [0, 0, 0, 0, 0, 1, 0, elapsed],
-                                    [0, 0, 0, 0, 0, 0, 1, 0],
-                                    [0, 0, 0, 0, 0, 0, 0, 1]])
+                self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
+                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
+                                    [0, 0, 1, 0, elapsed, 0],
+                                    [0, 0, 0, 1, 0, elapsed],
+                                    [0, 0, 0, 0, 1, 0],
+                                    [0, 0, 0, 0, 0, 1]])
                 
                 X_hat_t, self.P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0, 0, 0, 0, 0],
-                                    [0, 0, camMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, 0, 0, camMeasureH[1], 0, 0, 0, 0]])
+                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
+                                    [0, lidarMeasureH[1], 0, 0, 0, 0],
+                                    [camMeasureH[0], 0, 0, 0, 0, 0],
+                                    [0, camMeasureH[1], 0, 0, 0, 0]])
 
-                measure_with_error = np.array(
-                    [X_hat_t[0][0] - lidarMeasure[0], X_hat_t[1][0] - lidarMeasure[1], X_hat_t[0][0] - camMeasure[0], X_hat_t[1][0] - camMeasure[1]])
-
-                measure_with_error = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
-
-                print ( measure_with_error )
+                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
                 
                 # Measurment cov
                 self.R_t = np.array(
@@ -186,14 +331,13 @@ class Tracked:
                      [0, 0, camCov[0][0], camCov[0][1]],
                      [0, 0, camCov[1][0], camCov[1][1]]])
 
-                Z_t = (measure_with_error).transpose()
+                Z_t = (measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
                 X_t, self.P_t = update(X_hat_t, self.P_hat_t, Z_t, self.R_t, tempH_t)
                 self.X_hat_t = X_t
                 self.P_hat_t = self.P_t
                 x_out = X_t[0][0]
                 y_out = X_t[1][0]
-                print ( x_out, y_out, lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1], self.idx)
                 self.prev_time = self.lastTracked
                 self.x = x_out
                 self.y = y_out
@@ -204,19 +348,16 @@ class Tracked:
     def getKalmanPred(self, time):
         if self.idx > 0:
             elapsed = time - self.prev_time
-            print("elapsed ", elapsed)
             if elapsed < 0.0:
                 print("Error time elapsed is incorrect! " + str(elapsed))
                 # Set to arbitrary time
                 elapsed = 0.125
-            self.F_t = np.array([[1, 0, 0, 0, elapsed, 0, elapsed, 0]
-                                    , [0, 1, 0, 0, 0, elapsed, 0, elapsed]
-                                    , [0, 0, 1, 0, elapsed, 0, elapsed, 0]
-                                    , [0, 0, 0, 1, 0, elapsed, 0, elapsed]
-                                    , [0, 0, 0, 0, 1, 0, elapsed, 0]
-                                    , [0, 0, 0, 0, 0, 1, 0, elapsed]
-                                    , [0, 0, 0, 0, 0, 0, 1, 0]
-                                    , [0, 0, 0, 0, 0, 0, 0, 1]])
+            self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
+                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
+                                    [0, 0, 1, 0, elapsed, 0],
+                                    [0, 0, 0, 1, 0, elapsed],
+                                    [0, 0, 0, 0, 1, 0],
+                                    [0, 0, 0, 0, 0, 1]])
             X_hat_t, P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             return X_hat_t[0][0], X_hat_t[1][0]
@@ -244,13 +385,14 @@ def computeDistance(a, b, epsilon=1e-5):
         distance = 1 - iou
     return distance
 
-# Fusion is a special class for matching and fusing detections for a variety of sources.
-# The inpus is scalable and therefore must be generated before being fed into this class.
-# A unique list of detections is required from each individual sensor or pre-fused device
-# output or it will not be matched. Detections too close to each other may be combined.
-# This is a modified version of the frame-by-frame tracker seen in:
-# https://github.com/eandert/Jetson_Nano_Camera_Vehicle_Tracker
+
 class FUSION:
+    # Fusion is a special class for matching and fusing detections for a variety of sources.
+    # The inpus is scalable and therefore must be generated before being fed into this class.
+    # A unique list of detections is required from each individual sensor or pre-fused device
+    # output or it will not be matched. Detections too close to each other may be combined.
+    # This is a modified version of the frame-by-frame tracker seen in:
+    # https://github.com/eandert/Jetson_Nano_Camera_Vehicle_Tracker
     def __init__(self):
         # Set other parameters for the class
         self.trackedList = []
@@ -280,6 +422,8 @@ class FUSION:
         for track in self.trackedList:
             track.fusion()
             result.append([track.id, track.x, track.y])
+            # Clear the previous detection list
+            track.clearLastFrame()
 
         return result
 
@@ -293,17 +437,12 @@ class FUSION:
             detections_position_list.append([det[0] - self.min_size, det[1] + self.min_size, det[0] + self.min_size, det[1] - self.min_size])
             detections_list.append([0, 90, det[0], det[1], self.min_size * 2, sensor_id])
 
-        print("past")
-        print(detections_position_list)
-
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
 
     def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime):
         matches = []
-        print ( len(detections_list_positions) )
         if len(detections_list_positions) > 0:
-            print(len(self.trackedList))
             if len(self.trackedList) > 0:
                 numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 4)
                 thisFrameTrackTree = BallTree(numpy_formatted, metric=computeDistance)
@@ -394,12 +533,10 @@ class FUSION:
                     # We are the best according to arbitrarily broken tie and can be added
                     if first:
                         added.append(add)
-                        print("new_p")
                         new = Tracked(detections_list_positions[add][0], detections_list_positions[add][1],
                                       detections_list_positions[add][2], detections_list_positions[add][3],
                                       detection_list[add][0], detection_list[add][1], detection_list[add][2],
                                       detection_list[add][3], detection_list[add][4], detection_list[add][5], timestamp, self.id)
-                        print("new")
                         if self.id < 1000000:
                             self.id += 1
                         else:
@@ -408,9 +545,7 @@ class FUSION:
 
             else:
                 for dl, dlp in zip(detection_list, detections_list_positions):
-                    print("add_p")
                     new = Tracked(dlp[0], dlp[1], dlp[2], dlp[3], dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], timestamp, self.id)
-                    print ("add")
                     if self.id < 1000:
                         self.id += 1
                     else:
@@ -432,9 +567,16 @@ def prediction(X_hat_t_1, P_t_1, F_t, B_t, U_t, Q_t):
     return X_hat_t, P_t
 
 def update(X_hat_t, P_t, Z_t, R_t, H_t):
-    K_prime = P_t.dot(H_t.transpose()).dot(np.linalg.inv(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
+    K_prime = P_t.dot(H_t.transpose()).dot(inverse(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
     # print("K:\n",K_prime)
     # print("X_hat:\n",X_hat_t)
     X_t = X_hat_t + K_prime.dot(Z_t - H_t.dot(X_hat_t))
     P_t = P_t - K_prime.dot(H_t).dot(P_t)
     return X_t, P_t
+
+def inverse(m):
+    a, b = m.shape
+    if a != b:
+        raise ValueError("Only square matrices are invertible.")
+    i = np.eye(a, a)
+    return np.linalg.lstsq(m, i, rcond=None)[0]

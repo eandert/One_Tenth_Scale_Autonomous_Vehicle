@@ -135,11 +135,18 @@ class Sensor:
             # Calcuate the actual error if this is a simulation, otherwise just return
             if simulation:
                 # Calculate our expected errors in x,y coordinates
-                errorX_expected = ((object_distance + distal_error) * math.cos(
-                    object_relative_angle + radial_error))
-                errorY_expected = ((object_distance + distal_error) * math.sin(
-                    object_relative_angle + radial_error))
-                actual_sim_error = [errorX_expected, errorY_expected]
+                print("de:", distal_error, " re:", radial_error)
+                actualRadialError = np.random.normal(0, radial_error, 1)[0]
+                actualDistanceError = np.random.normal(0, distal_error, 1)[0]
+                x_error_generated = ((object_distance + actualDistanceError) * math.cos(
+                    object_relative_angle + actualRadialError))
+                y_error_generated = ((object_distance + actualDistanceError) * math.sin(
+                    object_relative_angle + actualRadialError))
+                x_actual = ((object_distance) * math.cos(
+                    object_relative_angle))
+                y_actual = ((object_distance) * math.sin(
+                    object_relative_angle))
+                actual_sim_error = [x_error_generated - x_actual, y_error_generated - y_actual]
                 return True, expected_error_gaussian, actual_sim_error
             else:
                 actual_sim_error = [0.0, 0.0]
@@ -330,8 +337,6 @@ class Tracked:
                      [lidarCov[1][0], lidarCov[1][1], 0, 0],
                      [0, 0, camCov[0][0], camCov[0][1]],
                      [0, 0, camCov[1][0], camCov[1][1]]])
-
-                print ( tempH_t, measure, self.R_t )
 
                 Z_t = (measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)

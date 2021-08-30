@@ -9,7 +9,7 @@ from connected_autonomous_vehicle.src import local_fusion
 
 ''' Helper function to calculate the difference between 2 angles in radians'''
 def angleDifference( angle1, angle2 ):
-    diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi;
+    diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi
     if diff < -math.pi:
         return diff + (2*math.pi)
     else:
@@ -348,7 +348,18 @@ class Planner:
                     # TODO: Do a little better approxamation of percent seen and account for this
                     point = list(final_polygon.centroid.coords)[0]
                     if point not in camera_array:
-                        camera_array.append(point)
+                        # Create the error component of the camera detection
+                        delta_x = point[0] - self.localizationPositionX
+                        delta_y = point[1] - self.localizationPositionY
+                        angle = math.atan2(delta_y, delta_x)
+                        distance = math.hypot(delta_x, delta_y)
+                        #print ( "a:", math.degrees(angle), " d:", distance )
+                        success, expected_error_gaussian, actual_sim_error = self.cameraSensor.calculateErrorGaussian(angle, distance, True)
+                        #print ( success, point, expected_error_gaussian, actual_sim_error )
+                        #print ( self.localizationPositionX, self.localizationPositionY )
+                        if success:
+                            #camera_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1]))
+                            camera_array.append((point[0], point[1]))
 
         return lidar_point_cloud, camera_array
 
