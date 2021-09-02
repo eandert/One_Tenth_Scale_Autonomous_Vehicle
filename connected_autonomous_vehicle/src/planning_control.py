@@ -70,6 +70,7 @@ class Planner:
         self.cameraDetections = []
         self.lidarDetections = []
         self.fusionDetections = []
+        self.fusionDetectionsCovariance = []
         self.rawLidarDetections = []
 
         # Raw LIDAR for gui debug

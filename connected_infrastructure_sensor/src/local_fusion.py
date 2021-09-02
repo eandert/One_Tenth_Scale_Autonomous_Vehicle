@@ -168,6 +168,7 @@ class Tracked:
         self.ymax = ymax
         self.x = x
         self.y = y
+        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
         self.typeArray = [0, 0, 0, 0]
         self.typeArray[type] += 1
         self.type = self.typeArray.index(max(self.typeArray))
@@ -270,6 +271,7 @@ class Tracked:
     def fusion(self, estimate_covariance, vehicle):
         debug = False
 
+        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
         lidarCov = [[0, 0], [0, 0]]
         camCov = [[0, 0], [0, 0]]
         lidarMeasure = [0, 0]
@@ -279,24 +281,7 @@ class Tracked:
 
         # Time to go through the track list and fuse!
         for x, y, theta, sensor_id in zip(self.x_list, self.y_list, self.crossSection_list, self.sensorId_List):
-            if sensor_id == LIDAR:
-                if estimate_covariance:
-                    delta_x = x - vehicle.localizationPositionX
-                    delta_y = y - vehicle.localizationPositionY
-                    angle = math.atan2(delta_y, delta_x)
-                    distance = math.hypot(delta_x, delta_y)
-                            #print ( "a:", math.degrees(angle), " d:", distance )
-                    success, expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(angle, distance, False)
-                    if success:
-                        lidarCov = expected_error_gaussian.covariance
-                    else:
-                        lidarCov = [[1, 0], [0, 1]]
-                else:
-                    lidarCov = [[1, 0], [0, 1]]
-                #print ( "lidarCov:", lidarCov )
-                lidarMeasure = [x, y]
-                lidarMeasureH = [1, 1]
-            elif sensor_id == CAMERA:
+            if sensor_id == CAMERA:
                 if estimate_covariance:
                     delta_x = x - vehicle.localizationPositionX
                     delta_y = y - vehicle.localizationPositionY
@@ -306,8 +291,10 @@ class Tracked:
                     success, expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(angle, distance, False)
                     if success:
                         camCov = expected_error_gaussian.covariance
+                        self.error_covariance = camCov
                     else:
                         camCov = [[1, 0], [0, 1]]
+                        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
                 else:
                     camCov = [[1, 0], [0, 1]]
                 #print ( "camCov:", camCov )
@@ -318,15 +305,10 @@ class Tracked:
         if self.idx == 0:
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
-            if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
-                x_out = (camMeasure[0] + lidarMeasure[0]) / 2.0
-                y_out = (camMeasure[1] + lidarMeasure[1]) / 2.0
-            elif camMeasure[0] != 0:
+            if camMeasure[0] != 0:
                 x_out = camMeasure[0]
                 y_out = camMeasure[1]
-            elif lidarMeasure[0] != 0:
-                x_out = lidarMeasure[0]
-                y_out = lidarMeasure[1]
+
             # Store so that next fusion is better
             self.X_hat_t = np.array(
                 [[x_out], [y_out], [0], [0], [0], [0]])
@@ -464,7 +446,7 @@ class FUSION:
         for track in self.trackedList:
             track.fusion(estimate_covariance, vehicle)
             if track.track_count >= 3:
-                result.append([track.id, track.x, track.y])
+                result.append([track.id, track.x, track.y, track.error_covariance])
             # Clear the previous detection list
             track.clearLastFrame()
 

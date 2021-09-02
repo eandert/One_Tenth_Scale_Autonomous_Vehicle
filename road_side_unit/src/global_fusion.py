@@ -4,6 +4,7 @@ from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 from shapely.geometry import Polygon
+import bisect
 
 
 def binarySearch(a, x):
@@ -15,10 +16,14 @@ def binarySearch(a, x):
 
 
 class ResizableKalman:
-    def __init__(self, time):
+    def __init__(self, time, x, y):
         # This list will take 
         self.localTrackersList = []
         self.localTrackersIDList = []
+
+        # Store our last position
+        self.x = x
+        self.y = y
 
         # Arbitrary to start with, updated each iteration
         self.elapsed = 0.125
@@ -183,7 +188,7 @@ class GlobalTracked:
     # We use this primarily to match objects seen between frames and included in here
     # is a function for kalman filter to smooth the x and y values as well as a
     # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, xmin, ymin, xmax, ymax, type, confidence, x, y, crossSection, sensorId, time, id):
+    def __init__(self, xmin, ymin, xmax, ymax, type, confidence, x, y, crossSection, sensorId, covariance, time, id):
         self.xmin = xmin
         self.ymin = ymin
         self.xmax = xmax
@@ -199,6 +204,7 @@ class GlobalTracked:
         self.trackVelocity = 0.0
         self.min_size = 1.0
         self.track_count = 0
+        self.lastTracked = time
 
         self.xmin_list = []
         self.ymin_list = []
@@ -211,6 +217,7 @@ class GlobalTracked:
         self.lastTracked_list = []
         self.crossSection_list = []
         self.sensorId_List = []
+        self.errorCovarianceList = []
 
         self.xmin_list.append(xmin)
         self.ymin_list.append(ymin)
@@ -223,9 +230,10 @@ class GlobalTracked:
         self.lastTracked_list.append(time)
         self.crossSection_list.append(crossSection)
         self.sensorId_List.append(sensorId)
+        self.errorCovarianceList.append(covariance)
 
         # Kalman stuff
-        self.kalman = ResizableKalman(time)
+        self.kalman = ResizableKalman(time, x, y)
 
     # Update adds another detection to this track
     def update(self, position, other, time, id):
@@ -252,10 +260,13 @@ class GlobalTracked:
         ]
 
     def getPositionPredicted(self, timestamp):
-        x, y = self.getKalmanPred(timestamp)
+        x, y = self.kalman.getKalmanPred(timestamp)
         return [
          x - self.min_size, y + self.min_size, x + self.min_size, y - self.min_size
         ]
+
+    def fusion(self, estimate_covariance, vehicle):
+        self.kalman.fusion(estimate_covariance)
 
     def clearLastFrame(self):
         self.xmin_list = []
@@ -306,7 +317,7 @@ class GlobalFUSION:
         self.min_size = 1.0
 
         # Indicate our success
-        print('Started FUSION successfully...')
+        print('Started Golabl FUSION successfully...')
 
     def dumpDetectionFrame(self):
         # Build the result list
@@ -319,13 +330,13 @@ class GlobalFUSION:
 
         return result
 
-    def fuseDetectionFrame(self, estimate_covariance, vehicle):
+    def fuseDetectionFrame(self, estimate_covariance):
         debug = False
         result = []
 
         # Time to go through each track list and fuse!
         for track in self.trackedList:
-            track.fusion(estimate_covariance, vehicle)
+            track.fusion(estimate_covariance)
             if track.track_count >= 3:
                 result.append([track.id, track.x, track.y])
             # Clear the previous detection list
@@ -333,15 +344,15 @@ class GlobalFUSION:
 
         return result
 
-    def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime):
+    def processDetectionFrame(self, sensor_id, timestamp, observations, covariances, cleanupTime):
         debug = False
 
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
-        for det in observations:
+        for det, cov in zip(observations, covariances):
             detections_position_list.append([det[0] - self.min_size, det[1] + self.min_size, det[0] + self.min_size, det[1] - self.min_size])
-            detections_list.append([0, 90, det[0], det[1], self.min_size * 2, sensor_id])
+            detections_list.append([0, 90, det[0], det[1], self.min_size * 2, sensor_id, cov])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
@@ -439,10 +450,11 @@ class GlobalFUSION:
                     # We are the best according to arbitrarily broken tie and can be added
                     if first:
                         added.append(add)
-                        new = Tracked(detections_list_positions[add][0], detections_list_positions[add][1],
+                        new = GlobalTracked(detections_list_positions[add][0], detections_list_positions[add][1],
                                       detections_list_positions[add][2], detections_list_positions[add][3],
                                       detection_list[add][0], detection_list[add][1], detection_list[add][2],
-                                      detection_list[add][3], detection_list[add][4], detection_list[add][5], timestamp, self.id)
+                                      detection_list[add][3], detection_list[add][4], detection_list[add][5], 
+                                      detection_list[add][6], timestamp, self.id)
                         if self.id < 1000000:
                             self.id += 1
                         else:
@@ -451,7 +463,7 @@ class GlobalFUSION:
 
             else:
                 for dl, dlp in zip(detection_list, detections_list_positions):
-                    new = Tracked(dlp[0], dlp[1], dlp[2], dlp[3], dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], timestamp, self.id)
+                    new = GlobalTracked(dlp[0], dlp[1], dlp[2], dlp[3], dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], dl[6], timestamp, self.id)
                     if self.id < 1000:
                         self.id += 1
                     else:

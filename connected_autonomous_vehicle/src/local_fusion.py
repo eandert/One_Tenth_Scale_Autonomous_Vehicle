@@ -88,6 +88,14 @@ class BivariateGaussian:
         return a, b, phi
 
 
+def intersectionBivariateGaussiansCovariance(covariance_gaussian_a, covariance_gaussian_b):
+    # Now we have both distributions, it is time to do the combination math
+    # Source: http://www.geostatisticslessons.com/lessons/errorellipses
+    covariance_new = np.subtract(covariance_gaussian_a.transpose(), covariance_gaussian_b.transpose()).transpose()
+
+    return covariance_new
+
+
 class Sensor:
     # This object is for storing and calculating expected sensor accuracy for 
     # object. In full simulation we inject error and generate expected error 
@@ -168,6 +176,7 @@ class Tracked:
         self.ymax = ymax
         self.x = x
         self.y = y
+        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
         self.typeArray = [0, 0, 0, 0]
         self.typeArray[type] += 1
         self.type = self.typeArray.index(max(self.typeArray))
@@ -270,12 +279,16 @@ class Tracked:
     def fusion(self, estimate_covariance, vehicle):
         debug = False
 
+        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
         lidarCov = [[0, 0], [0, 0]]
         camCov = [[0, 0], [0, 0]]
         lidarMeasure = [0, 0]
         camMeasure = [0, 0]
         lidarMeasureH = [0, 0]
         camMeasureH = [0, 0]
+
+        lidar_cov_added = False
+        cam_cov_added = False
 
         # Time to go through the track list and fuse!
         for x, y, theta, sensor_id in zip(self.x_list, self.y_list, self.crossSection_list, self.sensorId_List):
@@ -289,6 +302,7 @@ class Tracked:
                     success, expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(angle, distance, False)
                     if success:
                         lidarCov = expected_error_gaussian.covariance
+                        cam_cov_added = True
                     else:
                         lidarCov = [[1, 0], [0, 1]]
                 else:
@@ -306,6 +320,7 @@ class Tracked:
                     success, expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(angle, distance, False)
                     if success:
                         camCov = expected_error_gaussian.covariance
+                        lidar_cov_added = True
                     else:
                         camCov = [[1, 0], [0, 1]]
                 else:
@@ -313,6 +328,20 @@ class Tracked:
                 #print ( "camCov:", camCov )
                 camMeasure = [x, y]
                 camMeasureH = [1, 1]
+
+        # Calculate the covariance to be sent out with the result
+        if lidar_cov_added and cam_cov_added:
+            try:
+                self.error_covariance = intersectionBivariateGaussiansCovariance(camCov, lidarCov)
+                #print (  camCov, lidarCov, self.error_covariance )
+            except Exception as e:
+                print ( " Exception: " + str(e) )
+        elif lidar_cov_added:
+            self.error_covariance = lidarCov
+        elif cam_cov_added:
+            self.error_covariance = camCov
+        else:
+            self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
 
         # Now do the kalman thing!
         if self.idx == 0:
@@ -464,7 +493,7 @@ class FUSION:
         for track in self.trackedList:
             track.fusion(estimate_covariance, vehicle)
             if track.track_count >= 3:
-                result.append([track.id, track.x, track.y])
+                result.append([track.id, track.x, track.y, track.error_covariance])
             # Clear the previous detection list
             track.clearLastFrame()
 
