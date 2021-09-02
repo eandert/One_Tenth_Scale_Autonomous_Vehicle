@@ -8,6 +8,7 @@ from PyQt5.QtGui import *
 
 # For simulation
 from connected_autonomous_vehicle.src import lidar_recognition, local_fusion
+from connected_infrastructure_sensor.src import local_fusion as cis_local_fusion
 
 # Defines the colors for various elements of the GUI
 brush_color = {
@@ -71,7 +72,7 @@ class MainWindow(QMainWindow):
                 self.localFusion.append(local_fusion.FUSION())
             else:
                 self.lidarRecognitionList.append(None)
-                self.localFusion.append(None)
+                self.localFusion.append(cis_local_fusion.FUSION())
 
         # Parameters of test
         self.mapSpecs = mapSpecs
@@ -111,7 +112,7 @@ class MainWindow(QMainWindow):
         self.cameraButton.clicked.connect(self.on_camera_clicked)
         self.camera_debug = False
 
-        self.fusionButton = QPushButton('Fusion Debug Off', self)
+        self.fusionButton = QPushButton('Local Fusion Debug Off', self)
         self.fusionButton.resize(140, 32)
         self.fusionButton.move(1000, 430)
         self.fusionButton.clicked.connect(self.on_fusion_clicked)
@@ -123,38 +124,50 @@ class MainWindow(QMainWindow):
         self.pathButton.clicked.connect(self.on_path_clicked)
         self.path_debug = False
 
+        self.errorButton = QPushButton('Simulate Error Off', self)
+        self.errorButton.resize(140, 32)
+        self.errorButton.move(1000, 510)
+        self.errorButton.clicked.connect(self.on_simulate_error_clicked)
+        self.simulate_error = False
+
+        self.covarianceButton = QPushButton('Estimate Local Covariance Off', self)
+        self.covarianceButton.resize(140, 32)
+        self.covarianceButton.move(1000, 550)
+        self.covarianceButton.clicked.connect(self.on_estimate_covariance_clicked)
+        self.estimate_covariance = False
+
         self.testGroup = QButtonGroup(self)  # Radio button group
 
         self.radioTrafficLight = QRadioButton("Traffic Light", self)
         self.radioTrafficLight.resize(200, 32)
-        self.radioTrafficLight.move(1000, 510)
+        self.radioTrafficLight.move(1000, 590)
         # self.radioTrafficLight.clicked.connect(self.showCustomOptions)
         self.radioTrafficLight.toggle()  # start in traffic test
         self.testGroup.addButton(self.radioTrafficLight)
 
         self.radioAutonomousIntersection = QRadioButton("Autonomous Intersection", self)
         self.radioAutonomousIntersection.resize(200, 32)
-        self.radioAutonomousIntersection.move(1000, 540)
+        self.radioAutonomousIntersection.move(1000, 620)
         # self.radioAutonomousIntersection.clicked.connect(self.showCustomOptions)
         self.testGroup.addButton(self.radioAutonomousIntersection)
 
         self.startButton = QPushButton('Start Test', self)
         self.startButton.resize(140, 32)
-        self.startButton.move(1000, 600)
+        self.startButton.move(1000, 660)
 
         self.startButton.clicked.connect(self.on_start_clicked)
 
         self.pauseButton = QPushButton('Pause Test', self)
         self.pauseButton.setEnabled(False)
         self.pauseButton.resize(140, 32)
-        self.pauseButton.move(1000, 650)
+        self.pauseButton.move(1000, 700)
 
         self.pauseButton.clicked.connect(self.on_pause_clicked)
 
         self.endButton = QPushButton('End Test', self)
         self.endButton.setEnabled(False)
         self.endButton.resize(140, 32)
-        self.endButton.move(1000, 700)
+        self.endButton.move(1000, 740)
 
         self.endButton.clicked.connect(self.on_end_clicked)
 
@@ -245,12 +258,12 @@ class MainWindow(QMainWindow):
             self.cameraButton.setText('Camera Debug Off')
 
     def on_fusion_clicked(self):
-        if self.fusionButton.text() == 'Fusion Debug Off':
+        if self.fusionButton.text() == 'Fusion Local Debug Off':
             self.fusion_debug = True
-            self.fusionButton.setText('Fusion Debug On')
+            self.fusionButton.setText('Fusion Local Debug On')
         else:
             self.fusion_debug = False
-            self.fusionButton.setText('Fusion Debug Off')
+            self.fusionButton.setText('Fusion Local Debug Off')
 
     def on_path_clicked(self):
         if self.pathButton.text() == 'Path Debug Off':
@@ -259,6 +272,22 @@ class MainWindow(QMainWindow):
         else:
             self.path_debug = False
             self.pathButton.setText('Path Debug Off')
+
+    def on_simulate_error_clicked(self):
+        if self.errorButton.text() == 'Simulate Error Off':
+            self.simulate_error = True
+            self.errorButton.setText('Simulate Error On')
+        else:
+            self.simulate_error = False
+            self.errorButton.setText('Simulate Error Off')
+
+    def on_estimate_covariance_clicked(self):
+        if self.covarianceButton.text() == 'Estimate Local Covariance Off':
+            self.estimate_covariance = True
+            self.covarianceButton.setText('Estimate Local Covariance On')
+        else:
+            self.estimate_covariance = False
+            self.covarianceButton.setText('Estimate Local Covariance Off')
 
     def on_end_clicked(self):
         sys.exit()
@@ -340,12 +369,15 @@ class MainWindow(QMainWindow):
                         if self.full_simulation:
                             # Create that fake LIDAR
                             if self.lidarRecognitionList[idx] != None:
-                                point_cloud, camera_array = vehicle.fake_lidar_and_camera(vehicleList, [], 15.0, 0.0, 15.0, 0.0, 0.0, 160.0)
-                                vehicle.cameraDetections = camera_array
-
-                                lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0)
-
-                                vehicle.rawLidarDetections = point_cloud
+                                point_cloud, point_cloud_error, camera_array, camera_error_array = vehicle.fake_lidar_and_camera(vehicleList, [], 15.0, 15.0, 0.0, 160.0)
+                                if self.simulate_error:
+                                    vehicle.cameraDetections = camera_error_array
+                                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0)
+                                    vehicle.rawLidarDetections = point_cloud_error
+                                else:
+                                    vehicle.cameraDetections = camera_array
+                                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0)
+                                    vehicle.rawLidarDetections = point_cloud
 
                                 # Vehicle position can be the map centroid in sim
                                 # because we are generating the detection WRT the centroid
@@ -364,9 +396,9 @@ class MainWindow(QMainWindow):
                                 vehicle.lidarPoints = point_cloud
 
                                 # Do the local fusion like we would on the vehicle
-                                self.localFusion[idx].processDetectionFrame(0, self.time/1000.0, vehicle.cameraDetections, .5)
-                                self.localFusion[idx].processDetectionFrame(1, self.time/1000.0, vehicle.lidarDetections, .5)
-                                results = self.localFusion[idx].fuseDetectionFrame()
+                                self.localFusion[idx].processDetectionFrame(0, self.time/1000.0, vehicle.cameraDetections, .25)
+                                self.localFusion[idx].processDetectionFrame(1, self.time/1000.0, vehicle.lidarDetections, .25)
+                                results = self.localFusion[idx].fuseDetectionFrame(self.estimate_covariance, vehicle)
 
                                 # Add to the GUI
                                 vehicle.fusionDetections = []
@@ -409,26 +441,36 @@ class MainWindow(QMainWindow):
                             if self.full_simulation:
                                 # Create that fake camera
                                 if self.lidarRecognitionList[idx] != None:
-                                    camera_array = cis.fake_camera(vehicleList, [], 15.0,
-                                                                       0.0, 15.0, 0.0, 0.0,
-                                                                       160.0)
-                                    cis.cameraDetections = camera_array
+                                    camera_array, camera_error_array = cis.fake_camera(vehicleList, [], 15.0, 0.0, 160.0)
+                                    if self.simulate_error:
+                                        cis.cameraDetections = camera_error_array
+                                    else:
+                                        cis.cameraDetections = camera_array
 
                                     # CIS position can be the map centroid in sim
                                     # because we are generating the detection WRT the centroid
-                                    # pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
+                                    # pos = [cis.localizationPositionX - cis.positionX_offset, cis.localizationPositionY - cis.positionY_offset, cis.theta - cis.theta_offset]
                                     pos = [0, 0, 0]
 
                                     # Fusion detection frame is the same as single camera (for now)
                                     # Add to the GUI
-                                    cis.fusionDetections = camera_array
+                                    # Do the local fusion like we would on the vehicle
+                                    self.localFusion[idx].processDetectionFrame(0, self.time/1000.0, cis.cameraDetections, .25)
+                                    results = self.localFusion[idx].fuseDetectionFrame(self.estimate_covariance, cis)
+
+                                    # Add to the GUI
+                                    cis.fusionDetections = []
+                                    for each in results:
+                                        sensed_x = each[1]
+                                        sensed_y = each[2]
+                                        cis.fusionDetections.append((sensed_x, sensed_y))
                             else:
                                 # Quick fake of sensor values
                                 cis.fusionDetections = []
                                 for each in vehicleList:
                                     sensed_x = each[0]
                                     sensed_y = each[1]
-                                    vehicle.fusionDetections.append((sensed_x, sensed_y))
+                                    cis.fusionDetections.append((sensed_x, sensed_y))
             self.vehiclesLock.release()
 
             self.drawTrafficLight = True

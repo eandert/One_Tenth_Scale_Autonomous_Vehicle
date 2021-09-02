@@ -5,292 +5,119 @@ import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 from shapely.geometry import Polygon
 
-CAMERA = 0
-LIDAR = 1
+
+def binarySearch(a, x):
+    'Locate the leftmost value exactly equal to x'
+    i = bisect.bisect_left(a, x)
+    if i != len(a) and a[i] == x:
+        return i
+    return -1
 
 
-class BivariateGaussian:
-    # This class is for creating and storing error terms of a sensor using 
-    # mu and covariance so they can be fed into kalman filters and printed
-    def __init__(self, a, b, phi, mu = None, cov = None):
-        if cov is None:
-            # Create the bivariate gaussian matrix
-            self.mu = np.array([0.0,0.0])
-            self.covariance = [[a, 0], [0, b]]
+class ResizableKalman:
+    def __init__(self, time):
+        # This list will take 
+        self.localTrackersList = []
+        self.localTrackersIDList = []
 
-            # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
-            rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
-            self.covariance = np.matmul(rotate, self.covariance)
-            self.covariance = np.matmul(self.covariance, rotate.transpose())
-        else:
-            # Create the bivariate gaussian matrix
-            self.mu = mu
-            self.covariance = cov
+        # Arbitrary to start with, updated each iteration
+        self.elapsed = 0.125
 
-    def ellipsify(self, num = 50, multiplier = 3):
-        # Default multiplier is 2 because that should cover 95% of errors
-        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
-        #print("a (ellipsify) ", str(a))
-        #print("b (ellipsify)", str(b))
-        #print("phi (ellipsify) ", str(math.degrees(phi)))
-        ellipse = []
-        pointEvery = math.radians(360/num)
-        for count in range(num + 1):
-            cur_angle = pointEvery * count
-            range_val = self.calculateRadiusAtAngle(a, b, phi, cur_angle) * multiplier
-            x_val = self.mu[0] + range_val * math.cos(cur_angle)
-            y_val = self.mu[1] + range_val * math.sin(cur_angle)
-            ellipse.append([x_val,y_val])
-
-        return ellipse
-
-    def dot(self):
-
-        ellipse = []
-
-        ellipse.append([self.mu[0], self.mu[1]])
-        ellipse.append([self.mu[0], self.mu[1]+.1])
-        ellipse.append([self.mu[0], self.mu[1]-.1])
-        ellipse.append([self.mu[0], self.mu[1]])
-        ellipse.append([self.mu[0]+.1, self.mu[1]])
-        ellipse.append([self.mu[0]-.1, self.mu[1]])
-        ellipse.append([self.mu[0], self.mu[1]])
-
-        return ellipse
-
-    def calculateRadiusAtAngle(self, a, b, phi, measurementAngle):
-        denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 ) / 2
-        if denominator == 0:
-            print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
-            #print ( a, b, phi, measurementAngle )
-            return 0
-        else:
-            return ( a * b ) / math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 ) / 2
-
-    def calcSelfRadiusAtAnlge(self, angle):
-        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
-        return self.calculateRadiusAtAngle(a, b, phi, angle)
-
-    def extractErrorElipseParamsFromBivariateGaussian(self):
-        # Eigenvalue and eigenvector computations
-        w, v = np.linalg.eig(self.covariance)
-
-        # Use the eigenvalue to figure out which direction is larger
-        if abs(w[0]) > abs(w[1]):
-            a = abs(w[0])
-            b = abs(w[1])
-            phi = math.atan2(v[0, 0], v[1, 0])
-        else:
-            a = abs(w[1])
-            b = abs(w[0])
-            phi = math.atan2(v[0, 1], v[1, 1])
-
-        return a, b, phi
-
-
-class Sensor:
-    # This object is for storing and calculating expected sensor accuracy for 
-    # object. In full simulation we inject error and generate expected error 
-    # gaussians. In real world we only generate expected error gaussians.
-    def __init__(self, sensor_name, center_angle, field_of_view, max_distance, radial_error_x, radial_error_b, distal_error_x, distal_error_b):
-        self.sensor_name = sensor_name
-        self.center_angle = center_angle
-        self.field_of_view = field_of_view
-        self.max_distance = max_distance
-        self.radial_error_x = radial_error_x
-        self.radial_error_b = radial_error_b
-        self.distal_error_x = distal_error_x
-        self.distal_error_b = distal_error_b
-
-    def checkInRangeAndFOV(self, object_angle, object_distance):
-        anglediff = ((self.center_angle - object_angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
-        if abs(anglediff) <= (self.field_of_view) and (object_distance <= self.max_distance):
-            return True
-        return False
-        
-    def getRadialErrorAtDistance(self, object_distance):
-        # This version we are disregarding horizontal crosssection for now
-        return self.radial_error_b + (object_distance * self.radial_error_x)
-        
-    def getDistanceErrorAtDistance(self, object_distance):
-        return self.distal_error_b + (object_distance * self.distal_error_x)
-
-    def calculateErrorGaussian(self, object_relative_angle, object_distance, simulation):
-        if self.checkInRangeAndFOV(object_relative_angle, object_distance):
-            radial_error = self.getRadialErrorAtDistance(object_distance)
-            distal_error = self.getDistanceErrorAtDistance(object_distance)
-            # Calculate our expected elipse error bounds
-            elipse_a_expected = 2 * (object_distance * math.sin(radial_error / 2))
-            elipse_b_expected = distal_error
-            if elipse_a_expected < elipse_b_expected:
-                elipse_temp = elipse_a_expected
-                elipse_a_expected = elipse_b_expected
-                elipse_b_expected = elipse_temp
-                elipse_angle_expected = object_relative_angle
-            else:
-                elipse_angle_expected = object_relative_angle + math.radians(90)
-            expected_error_gaussian = BivariateGaussian(elipse_a_expected,
-                                      elipse_b_expected,
-                                      elipse_angle_expected)
-            # Calcuate the actual error if this is a simulation, otherwise just return
-            if simulation:
-                # Calculate our expected errors in x,y coordinates
-                errorX_expected = ((object_distance + distal_error) * math.cos(
-                    object_relative_angle + radial_error))
-                errorY_expected = ((object_distance + distal_error) * math.sin(
-                    object_relative_angle + radial_error))
-                actual_sim_error = [errorX_expected, errorY_expected]
-                return True, expected_error_gaussian, actual_sim_error
-            else:
-                actual_sim_error = [0.0, 0.0]
-                return True, expected_error_gaussian, actual_sim_error
-        else:
-            # Fallthrough case just in case this is out of the FOV of the sensor
-            return False, None, None
-
-
-class Tracked:
-    # This object tracks a single object that has been detected in a video frame.
-    # We use this primarily to match objects seen between frames and included in here
-    # is a function for kalman filter to smooth the x and y values as well as a
-    # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, xmin, ymin, xmax, ymax, type, confidence, x, y, crossSection, sensorId, time, id):
-        self.xmin = xmin
-        self.ymin = ymin
-        self.xmax = xmax
-        self.ymax = ymax
-        self.x = x
-        self.y = y
-        self.typeArray = [0, 0, 0, 0]
-        self.typeArray[type] += 1
-        self.type = self.typeArray.index(max(self.typeArray))
-        self.confidence = confidence
+        # Track the time of the last track
         self.lastTracked = time
-        self.id = id
-        self.crossSection = crossSection
-        self.trackVelocity = 0.0
+
+        # Track the number of times this Kalman filter has been used
         self.idx = 0
-        self.min_size = .5
-
-        self.xmin_list = []
-        self.ymin_list = []
-        self.xmax_list = []
-        self.ymax_list = []
-        self.x_list = []
-        self.y_list = []
-        self.type_list = []
-        self.confidence_list = []
-        self.lastTracked_list = []
-        self.crossSection_list = []
-        self.sensorId_List = []
-
-        self.xmin_list.append(xmin)
-        self.ymin_list.append(ymin)
-        self.xmax_list.append(xmax)
-        self.ymax_list.append(ymax)
-        self.x_list.append(x)
-        self.y_list.append(y)
-        self.type_list.append(type)
-        self.confidence_list.append(confidence)
-        self.lastTracked_list.append(time)
-        self.crossSection_list.append(crossSection)
-        self.sensorId_List.append(sensorId)
-
-        # Kalman stuff
-        # Set other parameters for the class
-        self.prev_time = -99
 
         # Set up the Kalman filter
         # Initial State cov
-        self.P_t = np.identity(6)
-        self.P_hat_t = np.identity(6)
+        self.P_t = np.identity(4)
+        self.P_hat_t = np.identity(4)
+
         # Process cov
-        self.Q_t = np.identity(6)
-        # End if it not commented
+        self.Q_t = np.identity(4)
+
         # Control matrix
-        self.B_t = np.array([[0], [0], [0], [0], [0], [0]])
+        self.B_t = np.array([[0], [0], [0], [0]])
+
         # Control vector
         self.U_t = 0
-        # Measurment Matrix
-        # Generated on the fly
-        # Measurment cov
+
+        # Measurment Covariance Matrix generated on the fly
         self.R_t = np.identity(4)
 
-    # Update adds another detection to this track
-    def update(self, position, other, time, id):
-        self.xmin_list.append(position[0])
-        self.ymin_list.append(position[1])
-        self.xmax_list.append(position[2])
-        self.ymax_list.append(position[3])
-        self.x_list.append(other[2])
-        self.y_list.append(other[3])
-        self.type_list.append(other[0])
-        self.confidence_list.append(other[1])
-        self.lastTracked_list.append(time)
-        self.crossSection_list.append(other[4])
-        self.sensorId_List.append(other[5])
+        # This is constant other than the elapsed time
+        self.F_t_len = 6
+        self.F_t = np.array([[1, 0, self.elapsed, 0, self.elapsed*self.elapsed, 0],
+                            [0, 1, 0, self.elapsed, 0, self.elapsed*self.elapsed],
+                            [0, 0, 1, 0, self.elapsed, 0],
+                            [0, 0, 0, 1, 0, self.elapsed],
+                            [0, 0, 0, 0, 1, 0],
+                            [0, 0, 0, 0, 0, 1]])
 
-        self.lastTracked = time
+        self.H_t = np.array([[1, 0, 0, 0, 0, 0],
+                            [0, 1, 0, 0, 0, 0]])
 
-    # Gets our position in an array form so we can use it in the BallTree
-    def getPosition(self):
-        return [
-            [self.x - self.min_size, self.y + self.min_size, self.x + self.min_size, self.y - self.min_size]
-        ]
+        self.measure = np.array([0.0, 0.0])
 
-    def getPositionPredicted(self, timestamp):
-        x, y = self.getKalmanPred(timestamp)
-        return [
-         x - self.min_size, y + self.min_size, x + self.min_size, y - self.min_size
-        ]
+    def addFilterFrames(self, measurementList):
+        # Regenerate the measurement array every frame
+        self.H_t = np.zeros([self.F_t_len, len(measurementList)], dtype = float)
 
-    def clearLastFrame(self):
-        self.xmin_list = []
-        self.ymin_list = []
-        self.xmax_list = []
-        self.ymax_list = []
-        self.x_list = []
-        self.y_list = []
-        self.type_list = []
-        self.confidence_list = []
-        self.lastTracked_list = []
-        self.crossSection_list = []
-        self.sensorId_List = []
+        # Check if there are more sensors in the area that have not been added
+        for each in measurementList:
+            measurment_index = binarySearch(self.localTrackersIDList, each[0])
+            if measurment_index < 0:
+                # This is not in the tracked list, needs to be added
+                self.addTracker(each[0])
+                measurment_index = len(self.localTrackersIDList) - 1
+            
+            # All should be in the tracked list now, continue building the tables
+            # Add the current covariance to the R matrix
+            temp_index = 2 * measurment_index
+            self.R_t[temp_index][temp_index] = each[2][0][0]
+            self.R_t[temp_index][temp_index + 1] = each[2][0][1]
+            self.R_t[temp_index + 1][temp_index] = each[2][1][0]
+            self.R_t[temp_index + 1][temp_index + 1] = each[2][1][1]
 
-    def fusion(self):
+            # Add the current measurments to the measurement matrix
+            self.measure[temp_index] = each[1][0]
+            self.measure[temp_index + 1] = each[1][1]
+
+            # Measurement array needs to add 2 ones, always the same two locations
+            self.H_t[measurment_index][0] = 1.0
+            self.H_t[measurment_index + 1][1] = 1.0
+
+    def addTracker(self, id):
+        # Add to the list and list searcher
+        self.localTrackersIDList.append(id)
+
+        # These arrays can be simply rebuilt
+        self.Q_t = np.identity(len(self.localTrackersIDList))
+        self.B_t = np.zeros(len(self.localTrackersIDList))
+
+        # P and P hat need to add a column
+        np.c_[ self.P_t, np.zeros(len(self.localTrackersIDList) - 1) ]
+        np.c_[ self.P_hat_t, np.zeros(len(self.localTrackersIDList) - 1) ]
+
+        # P and P hat need to add a row
+        np.r_[ self.P_t, np.zeros(len(self.localTrackersIDList)) ]
+        np.r_[ self.P_hat_t, np.zeros(len(self.localTrackersIDList)) ]
+
+        # Current measurment array needs 2 extra spaces
+        np.c_[ self.measure, [0.0], [0.0] ]
+
+    def fusion(self, estimate_covariance):
         debug = False
 
-        lidarCov = [[0, 0], [0, 0]]
-        camCov = [[0, 0], [0, 0]]
-        lidarMeasure = [0, 0]
-        camMeasure = [0, 0]
-        lidarMeasureH = [0, 0]
-        camMeasureH = [0, 0]
-
-        # Time to go through the track list and fuse!
-        for x, y, theta, sensor_id in zip(self.x_list, self.y_list, self.crossSection_list, self.sensorId_List):
-            if sensor_id == LIDAR:
-                lidarCov = [[1, 0], [0, 1]]
-                lidarMeasure = [x, y]
-                lidarMeasureH = [1, 1]
-            elif sensor_id == CAMERA:
-                camCov = [[1, 0], [0, 1]]
-                camMeasure = [x, y]
-                camMeasureH = [1, 1]
-
-        # Now do the kalman thing!
+        # Do the kalman thing!
         if self.idx == 0:
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
-            if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
-                x_out = (camMeasure[0] + lidarMeasure[0]) / 2.0
-                y_out = (camMeasure[1] + lidarMeasure[1]) / 2.0
-            elif camMeasure[0] != 0:
-                x_out = camMeasure[0]
-                y_out = camMeasure[1]
-            elif lidarMeasure[0] != 0:
-                x_out = lidarMeasure[0]
-                y_out = lidarMeasure[1]
+            a = np.matmul(self.measure, self.H_t)
+            x_out = ( a[0] / len(self.localTrackersIDList) )
+            y_out = ( a[1] / len(self.localTrackersIDList) )
+
             # Store so that next fusion is better
             self.X_hat_t = np.array(
                 [[x_out], [y_out], [0], [0], [0], [0]])
@@ -317,23 +144,9 @@ class Tracked:
                 
                 X_hat_t, self.P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0, 0, 0],
-                                    [camMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0, 0, 0]])
-
-                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
-                
-                # Measurment cov
-                self.R_t = np.array(
-                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                     [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                     [0, 0, camCov[0][0], camCov[0][1]],
-                     [0, 0, camCov[1][0], camCov[1][1]]])
-
-                Z_t = (measure).transpose()
+                Z_t = (self.measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                X_t, self.P_t = update(X_hat_t, self.P_hat_t, Z_t, self.R_t, tempH_t)
+                X_t, self.P_t = update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.H_t)
                 self.X_hat_t = X_t
                 self.P_hat_t = self.P_t
                 x_out = X_t[0][0]
@@ -365,6 +178,98 @@ class Tracked:
             return self.x, self.y
 
 
+class GlobalTracked:
+    # This object tracks a single object that has been detected in a video frame.
+    # We use this primarily to match objects seen between frames and included in here
+    # is a function for kalman filter to smooth the x and y values as well as a
+    # function for prediction where the next bounding box will be based on prior movement.
+    def __init__(self, xmin, ymin, xmax, ymax, type, confidence, x, y, crossSection, sensorId, time, id):
+        self.xmin = xmin
+        self.ymin = ymin
+        self.xmax = xmax
+        self.ymax = ymax
+        self.x = x
+        self.y = y
+        self.typeArray = [0, 0, 0, 0]
+        self.typeArray[type] += 1
+        self.type = self.typeArray.index(max(self.typeArray))
+        self.confidence = confidence
+        self.id = id
+        self.crossSection = crossSection
+        self.trackVelocity = 0.0
+        self.min_size = 1.0
+        self.track_count = 0
+
+        self.xmin_list = []
+        self.ymin_list = []
+        self.xmax_list = []
+        self.ymax_list = []
+        self.x_list = []
+        self.y_list = []
+        self.type_list = []
+        self.confidence_list = []
+        self.lastTracked_list = []
+        self.crossSection_list = []
+        self.sensorId_List = []
+
+        self.xmin_list.append(xmin)
+        self.ymin_list.append(ymin)
+        self.xmax_list.append(xmax)
+        self.ymax_list.append(ymax)
+        self.x_list.append(x)
+        self.y_list.append(y)
+        self.type_list.append(type)
+        self.confidence_list.append(confidence)
+        self.lastTracked_list.append(time)
+        self.crossSection_list.append(crossSection)
+        self.sensorId_List.append(sensorId)
+
+        # Kalman stuff
+        self.kalman = ResizableKalman(time)
+
+    # Update adds another detection to this track
+    def update(self, position, other, time, id):
+        self.xmin_list.append(position[0])
+        self.ymin_list.append(position[1])
+        self.xmax_list.append(position[2])
+        self.ymax_list.append(position[3])
+        self.x_list.append(other[2])
+        self.y_list.append(other[3])
+        self.type_list.append(other[0])
+        self.confidence_list.append(other[1])
+        self.lastTracked_list.append(time)
+        self.crossSection_list.append(other[4])
+        self.sensorId_List.append(other[5])
+
+        self.lastTracked = time
+
+        self.track_count += 1
+
+    # Gets our position in an array form so we can use it in the BallTree
+    def getPosition(self):
+        return [
+            [self.x - self.min_size, self.y + self.min_size, self.x + self.min_size, self.y - self.min_size]
+        ]
+
+    def getPositionPredicted(self, timestamp):
+        x, y = self.getKalmanPred(timestamp)
+        return [
+         x - self.min_size, y + self.min_size, x + self.min_size, y - self.min_size
+        ]
+
+    def clearLastFrame(self):
+        self.xmin_list = []
+        self.ymin_list = []
+        self.xmax_list = []
+        self.ymax_list = []
+        self.x_list = []
+        self.y_list = []
+        self.type_list = []
+        self.confidence_list = []
+        self.lastTracked_list = []
+        self.crossSection_list = []
+        self.sensorId_List = []
+
 def computeDistance(a, b, epsilon=1e-5):
     x1, y1, x2, y2 = a
     polygonA = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y1)])
@@ -386,7 +291,7 @@ def computeDistance(a, b, epsilon=1e-5):
     return distance
 
 
-class FUSION:
+class GlobalFUSION:
     # Fusion is a special class for matching and fusing detections for a variety of sources.
     # The inpus is scalable and therefore must be generated before being fed into this class.
     # A unique list of detections is required from each individual sensor or pre-fused device
@@ -398,7 +303,7 @@ class FUSION:
         self.trackedList = []
         self.id = 0
         self.prev_time = -99.0
-        self.min_size = .5
+        self.min_size = 1.0
 
         # Indicate our success
         print('Started FUSION successfully...')
@@ -414,14 +319,15 @@ class FUSION:
 
         return result
 
-    def fuseDetectionFrame(self):
+    def fuseDetectionFrame(self, estimate_covariance, vehicle):
         debug = False
         result = []
 
         # Time to go through each track list and fuse!
         for track in self.trackedList:
-            track.fusion()
-            result.append([track.id, track.x, track.y])
+            track.fusion(estimate_covariance, vehicle)
+            if track.track_count >= 3:
+                result.append([track.id, track.x, track.y])
             # Clear the previous detection list
             track.clearLastFrame()
 

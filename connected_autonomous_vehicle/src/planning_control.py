@@ -77,9 +77,9 @@ class Planner:
 
         # Start sensors with standard error model
         self.lidarSensor = local_fusion.Sensor("M1M1", 0.0, 360, 15.0,
-                                               .05, .067, .05, .15)
+                                               .05, .00, .05, .00)
         self.cameraSensor = local_fusion.Sensor("IMX160", 0.0, 160, 10.0,
-                                               .025, .150, .10, .10)
+                                               .025, .15, .10, .10)
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
         self.targetVelocityGeneral = 0
@@ -264,12 +264,14 @@ class Planner:
             return True
         return False
 
-    def fake_lidar_and_camera(self, positions, objects, lidar_range, lidar_error, cam_range, cam_error,
+    def fake_lidar_and_camera(self, positions, objects, lidar_range, cam_range,
                               cam_center_angle, cam_fov):
 
         # print ( "FAKING LIDAR" )
         lidar_point_cloud = []
+        lidar_point_cloud_error = []
         camera_array = []
+        camera_error_array = []
 
         # Get the points the Slamware M1M1 should generate
         lidar_freq = 7000 / 8
@@ -340,10 +342,14 @@ class Planner:
             # Make sure this worked and is not None
             if final_point != None:
                 lidar_point_cloud.append(final_point)
+                # Generate error for the individual points
+                x_error = np.random.normal(0, 0.05, 1)[0]
+                y_error = np.random.normal(0, 0.05, 1)[0]
+                lidar_point_cloud_error.append((final_point[0] + x_error, final_point[1] + y_error))
 
                 # See if we can add a camera point as well
                 if self.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, self.theta + cam_center_angle,
-                                               math.radians(cam_fov) / 2.0, cam_range):
+                                               math.radians(cam_fov), cam_range):
                     # Object checks out and is in range and not blocked
                     # TODO: Do a little better approxamation of percent seen and account for this
                     point = list(final_polygon.centroid.coords)[0]
@@ -358,10 +364,10 @@ class Planner:
                         #print ( success, point, expected_error_gaussian, actual_sim_error )
                         #print ( self.localizationPositionX, self.localizationPositionY )
                         if success:
-                            #camera_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1]))
+                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1]))
                             camera_array.append((point[0], point[1]))
 
-        return lidar_point_cloud, camera_array
+        return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array
 
     def check_positions_of_other_vehicles_adjust_velocity(self, positions):
         self.followDistance = 99
