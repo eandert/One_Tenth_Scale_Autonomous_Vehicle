@@ -16,7 +16,7 @@ class BivariateGaussian:
         if cov is None:
             # Create the bivariate gaussian matrix
             self.mu = np.array([0.0,0.0])
-            self.covariance = [[a, 0], [0, b]]
+            self.covariance = [[a*a, 0], [0, b*b]]
 
             # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
             rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
@@ -164,6 +164,15 @@ class Sensor:
             return False, None, None
 
 
+# In some cases our error is additive. This function adds 2 gaussians together in a rough
+# approxamation of the error.
+def addBivariateGaussians(gaussianA, gaussianB):
+    # Now we have both distributions, it is time to do the combination math
+    covariance_new = np.add(gaussianA.transpose(), gaussianB.transpose()).transpose()
+
+    return covariance_new
+
+
 class Tracked:
     # This object tracks a single object that has been detected in a video frame.
     # We use this primarily to match objects seen between frames and included in here
@@ -233,6 +242,12 @@ class Tracked:
         # Measurment cov
         self.R_t = np.identity(4)
 
+        # Custom things
+        self.lidarMeasurePrevTrue = False
+        self.camMeasurePrevTrue = False
+        self.lidarMeasurePrevCovTrue = False
+        self.camMeasurePrevCovTrue = False
+
     # Update adds another detection to this track
     def update(self, position, other, time, id):
         self.xmin_list.append(position[0])
@@ -280,8 +295,8 @@ class Tracked:
         debug = False
 
         self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
-        lidarCov = [[0, 0], [0, 0]]
-        camCov = [[0, 0], [0, 0]]
+        lidarCov = np.array([[1, 0], [0, 1]])
+        camCov = np.array([[1, 0], [0, 1]])
         lidarMeasure = [0, 0]
         camMeasure = [0, 0]
         lidarMeasureH = [0, 0]
@@ -289,6 +304,10 @@ class Tracked:
 
         lidar_cov_added = False
         cam_cov_added = False
+
+        speed = [0.0, 0.0]
+        speedH = [0, 0]
+        speedCov = np.array([[2, 0], [0, 2]])
 
         # Time to go through the track list and fuse!
         for x, y, theta, sensor_id in zip(self.x_list, self.y_list, self.crossSection_list, self.sensorId_List):
@@ -304,10 +323,10 @@ class Tracked:
                         lidarCov = expected_error_gaussian.covariance
                         cam_cov_added = True
                     else:
-                        lidarCov = [[1, 0], [0, 1]]
-                else:
-                    lidarCov = [[1, 0], [0, 1]]
-                #print ( "lidarCov:", lidarCov )
+                        lidarCov = np.array([[1, 0], [0, 1]])
+                    self.lidarCovLast = lidarCov
+                    self.lidarMeasurePrevCovTrue = True
+                # Set the new measurements
                 lidarMeasure = [x, y]
                 lidarMeasureH = [1, 1]
             elif sensor_id == CAMERA:
@@ -322,10 +341,8 @@ class Tracked:
                         camCov = expected_error_gaussian.covariance
                         lidar_cov_added = True
                     else:
-                        camCov = [[1, 0], [0, 1]]
-                else:
-                    camCov = [[1, 0], [0, 1]]
-                #print ( "camCov:", camCov )
+                        camCov = np.array([[1, 0], [0, 1]])
+                # Set the new measurements
                 camMeasure = [x, y]
                 camMeasureH = [1, 1]
 
@@ -341,7 +358,7 @@ class Tracked:
         elif cam_cov_added:
             self.error_covariance = camCov
         else:
-            self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
+            self.error_covariance = [[1.0, 0.0], [0.0, 1.0]]
 
         # Now do the kalman thing!
         if self.idx == 0:
@@ -373,8 +390,27 @@ class Tracked:
                     # Set to arbitrary time
                     elapsed = 0.125
 
-                self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
-                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
+                # If these 2 kalman iterations are in sequence, calculate speed
+                if elapsed < .20:
+                    # Do a Naive average to get the speed
+                    if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
+                        x_s = (camMeasure[0] + lidarMeasure[0]) / 2.0
+                        y_s = (camMeasure[1] + lidarMeasure[1]) / 2.0
+                    elif camMeasure[0] != 0:
+                        x_s = camMeasure[0]
+                        y_s = camMeasure[1]
+                    elif lidarMeasure[0] != 0:
+                        x_s = lidarMeasure[0]
+                        y_s = lidarMeasure[1]
+                        lidarSpeedCov = self.P_t
+
+                    speed
+
+                    speed = [x_s - self.x, y_s - self.y]
+                    speedH = [1, 1]
+
+                self.F_t = np.array([[1, 0, 1, 0, elapsed*elapsed, 0],
+                                    [0, 1, 0, 1, 0, elapsed*elapsed],
                                     [0, 0, 1, 0, elapsed, 0],
                                     [0, 0, 0, 1, 0, elapsed],
                                     [0, 0, 0, 0, 1, 0],
@@ -382,19 +418,23 @@ class Tracked:
                 
                 X_hat_t, self.P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0, 0, 0],
-                                    [camMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0, 0, 0]])
+                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
+                                    [0, lidarMeasureH[1], 0, 0],
+                                    [camMeasureH[0], 0, 0, 0],
+                                    [0, camMeasureH[1], 0, 0],
+                                    [0, 0, speedH[0], 0],
+                                    [0, 0, 0, speedH[1]]])
 
-                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
+                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1], lidarSpeed[0], lidarSpeed[1]])
                 
                 # Measurment cov
                 self.R_t = np.array(
-                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                     [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                     [0, 0, camCov[0][0], camCov[0][1]],
-                     [0, 0, camCov[1][0], camCov[1][1]]])
+                    [[lidarCov[0][0], lidarCov[0][1], 0, 0, 0, 0],
+                     [lidarCov[1][0], lidarCov[1][1], 0, 0, 0, 0],
+                     [0, 0, camCov[0][0], camCov[0][1], 0, 0],
+                     [0, 0, camCov[1][0], camCov[1][1], 0, 0],
+                     [0, 0, 0, 0, lidarSpeedCov[0][0], lidarSpeedCov[0][1]],
+                     [0, 0, 0, 0, lidarSpeedCov[1][0], lidarSpeedCov[1][1]])
 
                 #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
 
@@ -423,8 +463,8 @@ class Tracked:
                 print("Error time elapsed is incorrect! " + str(elapsed))
                 # Set to arbitrary time
                 elapsed = 0.125
-            self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
-                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
+            self.F_t = np.array([[1, 0, 1, 0, elapsed*elapsed, 0],
+                                    [0, 1, 0, 1, 0, elapsed*elapsed],
                                     [0, 0, 1, 0, elapsed, 0],
                                     [0, 0, 0, 1, 0, elapsed],
                                     [0, 0, 0, 0, 1, 0],
