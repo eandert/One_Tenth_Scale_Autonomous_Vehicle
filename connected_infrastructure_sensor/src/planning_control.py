@@ -44,7 +44,7 @@ class Planner:
         self.fusionDetectionsCovariance = []
 
         self.cameraSensor = local_fusion.Sensor("IMX160", 0.0, 160, 10.0,
-                                               .025, .15, .10, .10)
+                                               .025, .05, .10, .05)
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, id_in, simCIS):
         # This holds the actual position of the vehicle
@@ -200,7 +200,7 @@ class Planner:
                         #print ( success, point, expected_error_gaussian, actual_sim_error )
                         #print ( self.localizationPositionX, self.localizationPositionY )
                         if success:
-                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1]))
+                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian))
                             camera_array.append((point[0], point[1]))
 
         return camera_array, camera_error_array

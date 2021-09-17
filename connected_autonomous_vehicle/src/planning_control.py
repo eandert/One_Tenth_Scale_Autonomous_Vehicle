@@ -78,9 +78,9 @@ class Planner:
 
         # Start sensors with standard error model
         self.lidarSensor = local_fusion.Sensor("M1M1", 0.0, 360, 15.0,
-                                               .05, .00, .05, .00)
+                                               .05, .05, .05, .05)
         self.cameraSensor = local_fusion.Sensor("IMX160", 0.0, 160, 10.0,
-                                               .025, .15, .10, .10)
+                                               .025, .05, .12, .05)
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
         self.targetVelocityGeneral = 0
@@ -365,7 +365,7 @@ class Planner:
                         #print ( success, point, expected_error_gaussian, actual_sim_error )
                         #print ( self.localizationPositionX, self.localizationPositionY )
                         if success:
-                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1]))
+                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian))
                             camera_array.append((point[0], point[1]))
 
         return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array

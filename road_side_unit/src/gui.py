@@ -65,15 +65,23 @@ class MainWindow(QMainWindow):
 
         # Create the simulated LIDARs, planner, etc.
         self.lidarRecognitionList = []
-        self.localFusion = []
+        self.localFusionCAV = []
+        self.localFusionCIS = [] = []
         self.globalFusion = global_fusion.GlobalFUSION()
+        # Add in the arrays for local fusion storage for CAV vehicles
         for idx, veh in self.vehicles.items():
             if veh.simVehicle:
                 self.lidarRecognitionList.append(lidar_recognition.LIDAR(0.0))
-                self.localFusion.append(local_fusion.FUSION())
+                self.localFusionCAV.append(local_fusion.FUSION())
             else:
                 self.lidarRecognitionList.append(None)
-                self.localFusion.append(cis_local_fusion.FUSION())
+                self.localFusionCAV.append(cis_local_fusion.FUSION())
+        # Add in the arrays for local fusion storage for CIS sensors
+        for idx, sens in self.cis.items():
+            if sens.simCIS:
+                self.localFusionCIS.append(local_fusion.FUSION())
+            else:
+                self.localFusionCIS.append(cis_local_fusion.FUSION())
 
         # Parameters of test
         self.mapSpecs = mapSpecs
@@ -113,7 +121,7 @@ class MainWindow(QMainWindow):
         self.cameraButton.clicked.connect(self.on_camera_clicked)
         self.camera_debug = False
 
-        self.fusionButton = QPushButton('Local Fusion Debug Off', self)
+        self.fusionButton = QPushButton('Fusion Local Debug Off', self)
         self.fusionButton.resize(140, 32)
         self.fusionButton.move(1000, 430)
         self.fusionButton.clicked.connect(self.on_fusion_clicked)
@@ -295,19 +303,19 @@ class MainWindow(QMainWindow):
 
     def stepTime(self):
         if self.full_simulation:
-            self.time += 10
+            self.time += 125
         else:
             self.time = round(time.time() * 1000)
 
-        # 100HZ
+        # 8HZ
         if self.full_simulation:
-            if (self.time - self.lastPositionUpdate) >= 10:
+            if (self.time - self.lastPositionUpdate) >= 125:
                 self.lastPositionUpdate = self.time
                 self.vehiclesLock.acquire()
                 for key, vehicle in self.vehicles.items():
                     # Update vehicle position based on physics
                     if vehicle.simVehicle:
-                        vehicle.updatePosition(.01)
+                        vehicle.updatePosition(.125)
                 self.vehiclesLock.release()
                 self.drawTrafficLight = True
 
@@ -337,6 +345,7 @@ class MainWindow(QMainWindow):
             else:
                 self.lightTime += 1
             self.vehiclesLock.acquire()
+
             # Make the vehicle list before we move the vehicles
             # Get the last known location of all other vehicles
             vehicleList = []
@@ -344,6 +353,7 @@ class MainWindow(QMainWindow):
                 vehicleList.append(otherVehicle.get_location())
 
             for idx, vehicle in self.vehicles.items():
+                #print ( " CAV:", idx )
                 # Do this if we are not in a full sim
                 if not self.full_simulation and vehicle.simVehicle:
                     vehicle.updatePosition(.125)
@@ -377,40 +387,44 @@ class MainWindow(QMainWindow):
                                 point_cloud, point_cloud_error, camera_array, camera_error_array = vehicle.fake_lidar_and_camera(tempList, [], 15.0, 15.0, 0.0, 160.0)
                                 if self.simulate_error:
                                     vehicle.cameraDetections = camera_error_array
-                                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0)
+                                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
+                                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.lidarSensor)
                                     vehicle.rawLidarDetections = point_cloud_error
+                                    vehicle.lidarDetections = lidarcoordinates
                                 else:
                                     vehicle.cameraDetections = camera_array
-                                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0)
+                                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0,
+                                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.lidarSensor)
                                     vehicle.rawLidarDetections = point_cloud
+                                    vehicle.lidarDetections = lidarcoordinates
 
                                 # Vehicle position can be the map centroid in sim
                                 # because we are generating the detection WRT the centroid
                                 #pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
-                                pos = [0,0,0]
+                                #pos = [0,0,0]
 
                                 # Lets add the detections to the vehicle class
-                                vehicle.lidarDetections = []
-                                for each in lidarcoordinates:
-                                    new = rotate((0, 0), (float(each[1]), float(each[2])), pos[2])
-                                    sensed_x = new[0] + pos[0]
-                                    sensed_y = new[1] + pos[1]
-                                    vehicle.lidarDetections.append((sensed_x, sensed_y))
+                                # vehicle.lidarDetections = []
+                                # for each in lidarcoordinates:
+                                #     new = rotate((0, 0), (float(each[1]), float(each[2])), pos[2])
+                                #     sensed_x = new[0] + pos[0]
+                                #     sensed_y = new[1] + pos[1]
+                                #     vehicle.lidarDetections.append((sensed_x, sensed_y, each[6]))
 
                                 # Raw LIDAR for debug
                                 vehicle.lidarPoints = point_cloud
 
                                 # Do the local fusion like we would on the vehicle
-                                self.localFusion[idx].processDetectionFrame(0, self.time/1000.0, vehicle.cameraDetections, .25)
-                                self.localFusion[idx].processDetectionFrame(1, self.time/1000.0, vehicle.lidarDetections, .25)
-                                results = self.localFusion[idx].fuseDetectionFrame(self.estimate_covariance, vehicle)
+                                self.localFusionCAV[idx].processDetectionFrame(0, self.time/1000.0, vehicle.cameraDetections, .25, self.estimate_covariance)
+                                self.localFusionCAV[idx].processDetectionFrame(1, self.time/1000.0, vehicle.lidarDetections, .25, self.estimate_covariance)
+                                results = self.localFusionCAV[idx].fuseDetectionFrame(self.estimate_covariance, vehicle)
 
                                 # Add to the GUI
                                 vehicle.fusionDetections = []
                                 for each in results:
                                     sensed_x = each[1]
                                     sensed_y = each[2]
-                                    vehicle.fusionDetections.append((sensed_x, sensed_y))
+                                    vehicle.fusionDetections.append((sensed_x, sensed_y, each[4], each[5]))
                                     vehicle.fusionDetectionsCovariance.append(each[3])
 
                         else:
@@ -419,7 +433,7 @@ class MainWindow(QMainWindow):
                             for each in tempList:
                                 sensed_x = each[0]
                                 sensed_y = each[1]
-                                vehicle.fusionDetections.append((sensed_x, sensed_y))
+                                vehicle.fusionDetections.append((sensed_x, sensed_y, 0.0, 0.0))
                                 vehicle.fusionDetectionsCovariance.append([[1.0, 1.0],[1.0,1.0]])
 
                         # Now update our current PID with respect to other vehicles
@@ -431,56 +445,58 @@ class MainWindow(QMainWindow):
                         # Add to the global sensor fusion
                         self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, vehicle.fusionDetectionsCovariance, .25)
 
-                for idx, cis in self.cis.items():
-                    # Do this if we are not in a full sim
-                    if not self.full_simulation and cis.simCIS:
-                        # CISs should not move but we can do this anyway just in case
-                        cis.updatePosition(.125)
-                    if cis.simCIS:
-                        if self.pause_simulation:
-                            cis.update_localization()
-                        else:
-                            # Update ourself
-                            cis.update_localization()
+            for idx, cis in self.cis.items():
+                #print ( " CIS:", idx )
+                # Do this if we are not in a full sim
+                if not self.full_simulation and cis.simCIS:
+                    # CISs should not move but we can do this anyway just in case
+                    cis.updatePosition(.125)
+                if cis.simCIS:
+                    if self.pause_simulation:
+                        cis.update_localization()
+                    else:
+                        # Update ourself
+                        cis.update_localization()
 
-                            if self.full_simulation:
-                                # Create that fake camera
-                                if self.lidarRecognitionList[idx] != None:
-                                    camera_array, camera_error_array = cis.fake_camera(vehicleList, [], 15.0, 0.0, 160.0)
-                                    if self.simulate_error:
-                                        cis.cameraDetections = camera_error_array
-                                    else:
-                                        cis.cameraDetections = camera_array
+                        if self.full_simulation:
+                            # Create that fake camera
+                            if self.lidarRecognitionList[idx] != None:
+                                camera_array, camera_error_array = cis.fake_camera(vehicleList, [], 15.0, 0.0, 160.0)
+                                if self.simulate_error:
+                                    cis.cameraDetections = camera_error_array
+                                else:
+                                    cis.cameraDetections = camera_array
 
-                                    # CIS position can be the map centroid in sim
-                                    # because we are generating the detection WRT the centroid
-                                    # pos = [cis.localizationPositionX - cis.positionX_offset, cis.localizationPositionY - cis.positionY_offset, cis.theta - cis.theta_offset]
-                                    pos = [0, 0, 0]
+                                # CIS position can be the map centroid in sim
+                                # because we are generating the detection WRT the centroid
+                                # pos = [cis.localizationPositionX - cis.positionX_offset, cis.localizationPositionY - cis.positionY_offset, cis.theta - cis.theta_offset]
+                                pos = [0, 0, 0]
 
-                                    # Fusion detection frame is the same as single camera (for now)
-                                    # Add to the GUI
-                                    # Do the local fusion like we would on the vehicle
-                                    self.localFusion[idx].processDetectionFrame(0, self.time/1000.0, cis.cameraDetections, .25)
-                                    results = self.localFusion[idx].fuseDetectionFrame(self.estimate_covariance, cis)
+                                # Fusion detection frame is the same as single camera (for now)
+                                # Add to the GUI
+                                # Do the local fusion like we would on the vehicle
+                                self.localFusionCIS[idx].processDetectionFrame(0, self.time/1000.0, cis.cameraDetections, .25, self.estimate_covariance)
+                                results = self.localFusionCIS[idx].fuseDetectionFrame(self.estimate_covariance, cis)
 
-                                    # Add to the GUI
-                                    cis.fusionDetections = []
-                                    for each in results:
-                                        sensed_x = each[1]
-                                        sensed_y = each[2]
-                                        cis.fusionDetections.append((sensed_x, sensed_y))
-                                        cis.fusionDetectionsCovariance.append(each[3])
-                            else:
-                                # Quick fake of sensor values
+                                # Add to the GUI
                                 cis.fusionDetections = []
-                                for each in vehicleList:
-                                    sensed_x = each[0]
-                                    sensed_y = each[1]
-                                    cis.fusionDetections.append((sensed_x, sensed_y))
-                                    cis.fusionDetectionsCovariance.append([[1.0, 1.0],[1.0,1.0]])
+                                for each in results:
+                                    sensed_x = each[1]
+                                    sensed_y = each[2]
+                                    cis.fusionDetections.append((sensed_x, sensed_y, each[4], each[5]))
+                                    cis.fusionDetectionsCovariance.append(each[3])
+                        else:
+                            # Quick fake of sensor values
+                            cis.fusionDetections = []
+                            for each in vehicleList:
+                                sensed_x = each[0]
+                                sensed_y = each[1]
+                                cis.fusionDetections.append((sensed_x, sensed_y, 0, 0))
+                                cis.fusionDetectionsCovariance.append([[1.0, 1.0],[1.0,1.0]])
 
-                            # Add to the global sensor fusion
-                            self.globalFusion.processDetectionFrame(1000+idx, self.time/1000.0, cis.fusionDetections, cis.fusionDetectionsCovariance, .25)
+                        # Add to the global sensor fusion
+                        self.globalFusion.processDetectionFrame(1000+idx, self.time/1000.0, cis.fusionDetections, cis.fusionDetectionsCovariance, .25)
+
             self.vehiclesLock.release()
 
             self.drawTrafficLight = True
@@ -908,6 +924,14 @@ class MainWindow(QMainWindow):
                     # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
                     painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                for each in vehicle.fusionDetections:
+                    # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
+                    painter.drawLine(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateX((each[0] + (8.0*each[2])) * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY((each[1] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale))
 
             for idx, cis in self.cis.items():
                 # Now draw the camera fusion detections
@@ -918,6 +942,14 @@ class MainWindow(QMainWindow):
                     # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
                     painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                for each in cis.fusionDetections:
+                    # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
+                    painter.drawLine(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateX((each[0] + (8.0*each[2])) * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY((each[1] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale))
 
         if self.drawTrafficLight:
             pen = QPen()

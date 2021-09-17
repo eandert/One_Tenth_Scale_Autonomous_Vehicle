@@ -16,7 +16,7 @@ class BivariateGaussian:
         if cov is None:
             # Create the bivariate gaussian matrix
             self.mu = np.array([0.0,0.0])
-            self.covariance = [[a, 0], [0, b]]
+            self.covariance = [[a*a, 0], [0, b*b]]
 
             # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
             rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
@@ -88,6 +88,14 @@ class BivariateGaussian:
         return a, b, phi
 
 
+def intersectionBivariateGaussiansCovariance(covariance_gaussian_a, covariance_gaussian_b):
+    # Now we have both distributions, it is time to do the combination math
+    # Source: http://www.geostatisticslessons.com/lessons/errorellipses
+    covariance_new = np.subtract(covariance_gaussian_a.transpose(), covariance_gaussian_b.transpose()).transpose()
+
+    return covariance_new
+
+
 class Sensor:
     # This object is for storing and calculating expected sensor accuracy for 
     # object. In full simulation we inject error and generate expected error 
@@ -156,6 +164,15 @@ class Sensor:
             return False, None, None
 
 
+# In some cases our error is additive. This function adds 2 gaussians together in a rough
+# approxamation of the error.
+def addBivariateGaussians(gaussianA, gaussianB):
+    # Now we have both distributions, it is time to do the combination math
+    covariance_new = np.add(gaussianA.transpose(), gaussianB.transpose()).transpose()
+
+    return covariance_new
+
+
 class Tracked:
     # This object tracks a single object that has been detected in a video frame.
     # We use this primarily to match objects seen between frames and included in here
@@ -168,6 +185,8 @@ class Tracked:
         self.ymax = ymax
         self.x = x
         self.y = y
+        self.dx = 0
+        self.dy = 0
         self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
         self.typeArray = [0, 0, 0, 0]
         self.typeArray[type] += 1
@@ -211,19 +230,39 @@ class Tracked:
 
         # Set up the Kalman filter
         # Initial State cov
-        self.P_t = np.identity(6)
-        self.P_hat_t = np.identity(6)
+        self.P_t = np.identity(4)
+        self.P_hat_t = np.identity(4)
         # Process cov
-        self.Q_t = np.identity(6)
+        self.Q_t = np.identity(4)
+        #self.Q_t = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
+        #print ( self.Q_t )
+        #print ( np.transpose(self.Q_t) )
+        four = (.125*.125*.125*.125)/4
+        three = (.125*.125*.125)/2
+        two = (.125*.125)
+        G = np.array([[.5*(.125*.125), 0], [0, .5*(.125*.125)], [.125, 0], [0, .125]])
+        self.Q_t = G @ np.transpose(G)
+        print ( self.Q_t )
+        # self.Q_t = np.array([[four, 0, three, 0],
+        #                     [0, four, 0, three],
+        #                     [three, 0, two, 0],
+        #                     [0, three, 0, two]])
         # End if it not commented
         # Control matrix
-        self.B_t = np.array([[0], [0], [0], [0], [0], [0]])
+        #transistion = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
+        self.B_t = np.array([[0], [0], [0], [0]])
         # Control vector
         self.U_t = 0
         # Measurment Matrix
         # Generated on the fly
         # Measurment cov
         self.R_t = np.identity(4)
+
+        # Custom things
+        self.lidarMeasurePrevTrue = False
+        self.camMeasurePrevTrue = False
+        self.lidarMeasurePrevCovTrue = False
+        self.camMeasurePrevCovTrue = False
 
     # Update adds another detection to this track
     def update(self, position, other, time, id):
@@ -272,82 +311,123 @@ class Tracked:
         debug = False
 
         self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
-        lidarCov = [[0, 0], [0, 0]]
-        camCov = [[0, 0], [0, 0]]
+        lidarCov = np.array([[1, 0], [0, 1]])
+        camCov = np.array([[1, 0], [0, 1]])
         lidarMeasure = [0, 0]
         camMeasure = [0, 0]
         lidarMeasureH = [0, 0]
         camMeasureH = [0, 0]
 
+        lidar_cov_added = False
+        cam_cov_added = False
+
+        speed = [0.0, 0.0]
+        speedH = [0, 0]
+        speedCov = np.array([[2, 0], [0, 2]])
+
         # Time to go through the track list and fuse!
         for x, y, theta, sensor_id in zip(self.x_list, self.y_list, self.crossSection_list, self.sensorId_List):
-            if sensor_id == CAMERA:
+            if sensor_id == LIDAR:
                 if estimate_covariance:
                     delta_x = x - vehicle.localizationPositionX
                     delta_y = y - vehicle.localizationPositionY
                     angle = math.atan2(delta_y, delta_x)
                     distance = math.hypot(delta_x, delta_y)
                             #print ( "a:", math.degrees(angle), " d:", distance )
-                    success, expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(angle, distance, False)
+                    success, lidar_expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(angle, distance, False)
                     if success:
-                        camCov = expected_error_gaussian.covariance
-                        self.error_covariance = camCov
+                        lidarCov = lidar_expected_error_gaussian.covariance
+                        lidar_cov_added = True
                     else:
-                        camCov = [[1, 0], [0, 1]]
-                        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
-                else:
-                    camCov = [[1, 0], [0, 1]]
-                #print ( "camCov:", camCov )
+                        lidarCov = np.array([[1, 0], [0, 1]])
+                    self.lidarCovLast = lidarCov
+                    self.lidarMeasurePrevCovTrue = True
+                # Set the new measurements
+                lidarMeasure = [x, y]
+                lidarMeasureH = [1, 1]
+            elif sensor_id == CAMERA:
+                if estimate_covariance:
+                    delta_x = x - vehicle.localizationPositionX
+                    delta_y = y - vehicle.localizationPositionY
+                    angle = math.atan2(delta_y, delta_x)
+                    distance = math.hypot(delta_x, delta_y)
+                            #print ( "a:", math.degrees(angle), " d:", distance )
+                    success, camera_expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(angle, distance, False)
+                    if success:
+                        camCov = camera_expected_error_gaussian.covariance
+                        cam_cov_added = True
+                    else:
+                        camCov = np.array([[1, 0], [0, 1]])
+                # Set the new measurements
                 camMeasure = [x, y]
                 camMeasureH = [1, 1]
+
+        # Calculate the covariance to be sent out with the result
+        if lidar_cov_added and cam_cov_added:
+            try:
+                self.error_covariance = intersectionBivariateGaussiansCovariance(camCov, lidarCov)
+                #print (  camCov, lidarCov, self.error_covariance )
+            except Exception as e:
+                print ( " Exception: " + str(e) )
+        elif lidar_cov_added:
+            self.error_covariance = lidarCov
+        elif cam_cov_added:
+            self.error_covariance = camCov
+        else:
+            self.error_covariance = [[1.0, 0.0], [0.0, 1.0]]
 
         # Now do the kalman thing!
         if self.idx == 0:
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
-            if camMeasure[0] != 0:
+            if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
+                x_out = (camMeasure[0] + lidarMeasure[0]) / 2.0
+                y_out = (camMeasure[1] + lidarMeasure[1]) / 2.0
+            elif camMeasure[0] != 0:
                 x_out = camMeasure[0]
                 y_out = camMeasure[1]
-
+            elif lidarMeasure[0] != 0:
+                x_out = lidarMeasure[0]
+                y_out = lidarMeasure[1]
             # Store so that next fusion is better
             self.X_hat_t = np.array(
-                [[x_out], [y_out], [0], [0], [0], [0]])
+                [[x_out], [y_out], [0], [0]])
             self.prev_time = self.lastTracked
             self.x = x_out
             self.y = y_out
+            self.dx = 0.0
+            self.dy = 0.0
             self.idx += 1
         else:
             try:
                 # We have valid data
                 # Transition matrix
                 elapsed = self.lastTracked - self.prev_time
-                if elapsed < 0.0:
+                if elapsed <= 0.0:
                     print( "Error time elapsed is incorrect! " + str(elapsed) )
                     # Set to arbitrary time
                     elapsed = 0.125
 
-                self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
-                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
-                                    [0, 0, 1, 0, elapsed, 0],
-                                    [0, 0, 0, 1, 0, elapsed],
-                                    [0, 0, 0, 0, 1, 0],
-                                    [0, 0, 0, 0, 0, 1]])
+                self.F_t = np.array([[1, 0, elapsed, 0],
+                                    [0, 1, 0, elapsed],
+                                    [0, 0, 1, 0],
+                                    [0, 0, 0, 1]])
                 
                 X_hat_t, self.P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0, 0, 0],
-                                    [camMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0, 0, 0]])
+                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
+                                    [0, lidarMeasureH[1], 0, 0],
+                                    [camMeasureH[0], 0, 0, 0],
+                                    [0, camMeasureH[1], 0, 0]])
 
                 measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
                 
                 # Measurment cov
                 self.R_t = np.array(
                     [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                     [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                     [0, 0, camCov[0][0], camCov[0][1]],
-                     [0, 0, camCov[1][0], camCov[1][1]]])
+                    [lidarCov[1][0], lidarCov[1][1], 0, 0],
+                    [camCov[0][0], camCov[0][1], 0, 0],
+                    [camCov[1][0], camCov[1][1], 0, 0]])
 
                 #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
 
@@ -359,12 +439,14 @@ class Tracked:
                 #print ( "P_hat2: ", self.P_hat_t, " P_t2: ", self.P_t )
 
                 self.P_hat_t = self.P_t
-                x_out = X_t[0][0]
-                y_out = X_t[1][0]
                 self.prev_time = self.lastTracked
-                self.x = x_out
-                self.y = y_out
+                self.x = X_t[0][0]
+                self.y = X_t[1][0]
+                self.dx = X_t[2][0]
+                self.dy = X_t[3][0]
                 self.idx += 1
+
+                print ( elapsed, self.x, self.y, self.dx, self.dy, X_t )
 
             except Exception as e:
                 print ( " Exception: " + str(e) )
@@ -376,12 +458,10 @@ class Tracked:
                 print("Error time elapsed is incorrect! " + str(elapsed))
                 # Set to arbitrary time
                 elapsed = 0.125
-            self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
-                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
-                                    [0, 0, 1, 0, elapsed, 0],
-                                    [0, 0, 0, 1, 0, elapsed],
-                                    [0, 0, 0, 0, 1, 0],
-                                    [0, 0, 0, 0, 0, 1]])
+            self.F_t = np.array([[1, 0, elapsed, 0],
+                                [0, 1, 0, elapsed],
+                                [0, 0, 1, 0],
+                                [0, 0, 0, 1]])
             X_hat_t, P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             return X_hat_t[0][0], X_hat_t[1][0]
@@ -446,7 +526,7 @@ class FUSION:
         for track in self.trackedList:
             track.fusion(estimate_covariance, vehicle)
             if track.track_count >= 3:
-                result.append([track.id, track.x, track.y, track.error_covariance])
+                result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy])
             # Clear the previous detection list
             track.clearLastFrame()
 
