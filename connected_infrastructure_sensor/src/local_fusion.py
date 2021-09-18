@@ -4,6 +4,8 @@ from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 from shapely.geometry import Polygon
+from shapely.geometry import box
+from shapely.affinity import rotate, translate
 
 CAMERA = 0
 LIDAR = 1
@@ -16,7 +18,7 @@ class BivariateGaussian:
         if cov is None:
             # Create the bivariate gaussian matrix
             self.mu = np.array([0.0,0.0])
-            self.covariance = [[a*a, 0], [0, b*b]]
+            self.covariance = np.array([[a*a, 0], [0, b*b]])
 
             # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
             rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
@@ -27,22 +29,24 @@ class BivariateGaussian:
             self.mu = mu
             self.covariance = cov
 
-    def ellipsify(self, num = 50, multiplier = 3):
-        # Default multiplier is 2 because that should cover 95% of errors
-        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
-        #print("a (ellipsify) ", str(a))
-        #print("b (ellipsify)", str(b))
-        #print("phi (ellipsify) ", str(math.degrees(phi)))
-        ellipse = []
-        pointEvery = math.radians(360/num)
-        for count in range(num + 1):
-            cur_angle = pointEvery * count
-            range_val = self.calculateRadiusAtAngle(a, b, phi, cur_angle) * multiplier
-            x_val = self.mu[0] + range_val * math.cos(cur_angle)
-            y_val = self.mu[1] + range_val * math.sin(cur_angle)
-            ellipse.append([x_val,y_val])
+    # def ellipsify(self, meters_to_print_scale, num = 50, multiplier = 3):
+    #     # Default multiplier is 3 because that should cover 99.7% of errors
+    #     a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
+    #     a = math.pow(a, 2)
+    #     b = math.pow(b, 2)
+    #     #print("a (ellipsify) ", str(a))
+    #     #print("b (ellipsify)", str(b))
+    #     #print("phi (ellipsify) ", str(math.degrees(phi)))
+    #     pointEvery = math.radians(360/num)
+    #     ellipse = QtGui.QPolygonF()
+    #     for count in range(num + 1):
+    #         cur_angle = pointEvery * count
+    #         range_val = self.calculateRadiusAtAngle(a, b, phi, cur_angle) * multiplier
+    #         x_val = self.mu[0] + range_val * math.cos(cur_angle)
+    #         y_val = self.mu[1] + range_val * math.sin(cur_angle)
+    #         ellipse.append((x_val * meters_to_print_scale, y_val * meters_to_print_scale))
 
-        return ellipse
+    #     return ellipse
 
     def dot(self):
 
@@ -87,6 +91,11 @@ class BivariateGaussian:
 
         return a, b, phi
 
+    def calcXYComponents(self):
+        x_comp = abs(self.calcSelfRadiusAtAnlge(math.radians(0)))
+        y_comp = abs(self.calcSelfRadiusAtAnlge(math.radians(90)))
+        return x_comp, y_comp
+
 
 def intersectionBivariateGaussiansCovariance(covariance_gaussian_a, covariance_gaussian_b):
     # Now we have both distributions, it is time to do the combination math
@@ -124,6 +133,7 @@ class Sensor:
         return self.distal_error_b + (object_distance * self.distal_error_x)
 
     def calculateErrorGaussian(self, object_relative_angle, object_distance, simulation):
+        # TODO: check ATLAS code and makse sure this is the same
         if self.checkInRangeAndFOV(object_relative_angle, object_distance):
             radial_error = self.getRadialErrorAtDistance(object_distance)
             distal_error = self.getDistanceErrorAtDistance(object_distance)
@@ -145,7 +155,7 @@ class Sensor:
                 # Calculate our expected errors in x,y coordinates
                 #print("de:", distal_error, " re:", radial_error)
                 actualRadialError = np.random.normal(0, radial_error, 1)[0]
-                actualDistanceError = np.random.normal(0, distal_error, 1)[0]
+                actualDistanceError = np.random.normal(0, elipse_b_expected, 1)[0]
                 x_error_generated = ((object_distance + actualDistanceError) * math.cos(
                     object_relative_angle + actualRadialError))
                 y_error_generated = ((object_distance + actualDistanceError) * math.sin(
@@ -232,26 +242,33 @@ class Tracked:
         # Initial State cov
         self.P_t = np.identity(4)
         self.P_hat_t = np.identity(4)
+        self.P_t[2][2] = 100.0
+        self.P_t[3][3] = 100.0
         # Process cov
         self.Q_t = np.identity(4)
         #self.Q_t = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
         #print ( self.Q_t )
         #print ( np.transpose(self.Q_t) )
-        four = (.125*.125*.125*.125)/4
-        three = (.125*.125*.125)/2
-        two = (.125*.125)
-        G = np.array([[.5*(.125*.125), 0], [0, .5*(.125*.125)], [.125, 0], [0, .125]])
-        self.Q_t = G @ np.transpose(G)
-        print ( self.Q_t )
-        # self.Q_t = np.array([[four, 0, three, 0],
+        #four = (.125*.125*.125*.125)/4
+        #three = (.125*.125*.125)/2
+        #two = (.125*.125)
+        #G = np.array([[.5*(.125*.125), 0], [0, .5*(.125*.125)], [.125, 0], [0, .125]])
+        #G = np.array([[.5*(.125*.125), 0, .125, 0], [0, .5*(.125*.125), 0, .125]])
+        #G = np.array([[.5*(.125*.125)], [.5*(.125*.125)], [.125], [.125]])
+        #self.Q_t = G @ np.transpose(G)
+        #self.Q_t = .125 * .125
+        #print ( self.Q_t )
+        # print ( np.array([[four, 0, three, 0],
         #                     [0, four, 0, three],
         #                     [three, 0, two, 0],
-        #                     [0, three, 0, two]])
+        #                     [0, three, 0, two]]) )
         # End if it not commented
         # Control matrix
         #transistion = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
         self.B_t = np.array([[0], [0], [0], [0]])
+        #self.B_t = G
         # Control vector
+        #self.U_t = 0
         self.U_t = 0
         # Measurment Matrix
         # Generated on the fly
@@ -284,15 +301,23 @@ class Tracked:
 
     # Gets our position in an array form so we can use it in the BallTree
     def getPosition(self):
+        # return [
+        #     [self.x - self.min_size, self.y + self.min_size, self.x + self.min_size, self.y - self.min_size]
+        # ]
+
         return [
-            [self.x - self.min_size, self.y + self.min_size, self.x + self.min_size, self.y - self.min_size]
+            [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
         ]
 
     def getPositionPredicted(self, timestamp):
-        x, y = self.getKalmanPred(timestamp)
+        x, y, a, b, phi = self.getKalmanPred(timestamp)
+        #print ( "out", x, y, a, b, phi )
         return [
-         x - self.min_size, y + self.min_size, x + self.min_size, y - self.min_size
+            [x, y, a, b, phi]
         ]
+        # return [
+        #     [x, y, self.min_size, self.min_size, math.radians(0)]
+        # ]
 
     def clearLastFrame(self):
         self.xmin_list = []
@@ -310,9 +335,9 @@ class Tracked:
     def fusion(self, estimate_covariance, vehicle):
         debug = False
 
-        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
-        lidarCov = np.array([[1, 0], [0, 1]])
-        camCov = np.array([[1, 0], [0, 1]])
+        #self.error_covariance = [[1.0, 0.0], [0.0, 1.0]]
+        lidarCov = np.array([[1.0, 0], [0, 1.0]])
+        camCov = np.array([[1.0, 0], [0, 1.0]])
         lidarMeasure = [0, 0]
         camMeasure = [0, 0]
         lidarMeasureH = [0, 0]
@@ -339,7 +364,7 @@ class Tracked:
                         lidarCov = lidar_expected_error_gaussian.covariance
                         lidar_cov_added = True
                     else:
-                        lidarCov = np.array([[1, 0], [0, 1]])
+                        lidarCov = np.array([[1.0, 0], [0, 1.0]])
                     self.lidarCovLast = lidarCov
                     self.lidarMeasurePrevCovTrue = True
                 # Set the new measurements
@@ -357,27 +382,28 @@ class Tracked:
                         camCov = camera_expected_error_gaussian.covariance
                         cam_cov_added = True
                     else:
-                        camCov = np.array([[1, 0], [0, 1]])
+                        camCov = np.array([[1.0, 0], [0, 1.0]])
                 # Set the new measurements
                 camMeasure = [x, y]
                 camMeasureH = [1, 1]
 
-        # Calculate the covariance to be sent out with the result
-        if lidar_cov_added and cam_cov_added:
-            try:
-                self.error_covariance = intersectionBivariateGaussiansCovariance(camCov, lidarCov)
-                #print (  camCov, lidarCov, self.error_covariance )
-            except Exception as e:
-                print ( " Exception: " + str(e) )
-        elif lidar_cov_added:
-            self.error_covariance = lidarCov
-        elif cam_cov_added:
-            self.error_covariance = camCov
-        else:
-            self.error_covariance = [[1.0, 0.0], [0.0, 1.0]]
-
         # Now do the kalman thing!
         if self.idx == 0:
+            # Calculate the covariance to be sent out with the result
+            if lidar_cov_added and cam_cov_added:
+                try:
+                    #self.error_covariance = intersectionBivariateGaussiansCovariance(camCov, lidarCov)
+                    self.error_covariance = np.mean( np.array([ camCov, lidarCov ]), axis=0 )
+                    print (  "combined! ", camCov, lidarCov, self.error_covariance )
+                except Exception as e:
+                    print ( " Exception: " + str(e) )
+            elif lidar_cov_added:
+                self.error_covariance = lidarCov
+            elif cam_cov_added:
+                self.error_covariance = camCov
+            else:
+                self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
+
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
             if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
@@ -392,6 +418,12 @@ class Tracked:
             # Store so that next fusion is better
             self.X_hat_t = np.array(
                 [[x_out], [y_out], [0], [0]])
+            # Seed the covariance values directly from the measurement
+            self.P_t[0][0] = self.error_covariance[0][0]
+            self.P_t[0][1] = self.error_covariance[0][1]
+            self.P_t[1][0] = self.error_covariance[1][0]
+            self.P_t[1][1] = self.error_covariance[1][1]
+            self.P_hat_t = self.P_t
             self.prev_time = self.lastTracked
             self.x = x_out
             self.y = y_out
@@ -445,8 +477,13 @@ class Tracked:
                 self.dx = X_t[2][0]
                 self.dy = X_t[3][0]
                 self.idx += 1
+                if self.P_t[0][0] != 0.0 or self.P_t[0][1] != 0.0:
+                    self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]])
+                else:
+                    #print ( " what the heck: ", self.P_t)
+                    self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
 
-                print ( elapsed, self.x, self.y, self.dx, self.dy, X_t )
+                #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
 
             except Exception as e:
                 print ( " Exception: " + str(e) )
@@ -464,29 +501,75 @@ class Tracked:
                                 [0, 0, 0, 1]])
             X_hat_t, P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-            return X_hat_t[0][0], X_hat_t[1][0]
+            # Now convert the covariance to a rectangle
+            return X_hat_t[0][0], X_hat_t[1][0], P_hat_t[0][0], P_hat_t[1][1], math.radians(0)
         else:
-            return self.x, self.y
+            return self.x, self.y, self.min_size, self.min_size, math.radians(0)
+
+    def extractErrorElipseParamsFromBivariateGaussian(self, covariance):
+        # Eigenvalue and eigenvector computations
+        w, v = np.linalg.eig(covariance)
+
+        # Use the eigenvalue to figure out which direction is larger
+        if abs(w[0]) > abs(w[1]):
+            a = abs(w[0])
+            b = abs(w[1])
+            phi = math.atan2(v[0, 0], v[1, 0])
+        else:
+            a = abs(w[1])
+            b = abs(w[0])
+            phi = math.atan2(v[0, 1], v[1, 1])
+
+        return a, b, phi
 
 
-def computeDistance(a, b, epsilon=1e-5):
-    x1, y1, x2, y2 = a
-    polygonA = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y1)])
-    x1, y1, x2, y2 = b
-    polygonb = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y1)])
+# def computeDistance(a, b, epsilon=1e-5):
+#     x1, y1, x2, y2 = a
+#     polygonA = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y1)])
+#     x1, y1, x2, y2 = b
+#     polygonb = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y1)])
 
-    intersection = polygonA.intersection(polygonb)
+#     intersection = polygonA.intersection(polygonb)
 
-    if intersection.area <= 0.0:
-        return 1
+#     if intersection.area <= 0.0:
+#         return 1
 
-    iou = intersection.area / polygonA.union(polygonb).area
+#     iou = intersection.area / polygonA.union(polygonb).area
 
-    # Modified to invert the IOU so that it works with the BallTree class
+#     # Modified to invert the IOU so that it works with the BallTree class
+#     if iou <= 0:
+#         distance = 1
+#     else:
+#         distance = 1 - iou
+#     return distance
+
+def computeDistanceEllipseBox(a, b):
+    cx = a[0]
+    cy = a[1]
+    w = a[2]
+    h = a[3]
+    angle = a[4]
+    c = box(-w/2.0, -h/2.0, w/2.0, h/2.0)
+    rc = rotate(c, angle)
+    contour_a = translate(rc, cx, cy)
+
+    cx = b[0]
+    cy = b[1]
+    w = b[2]
+    h = b[3]
+    angle = a[4]
+    c = box(-w/2.0, -h/2.0, w/2.0, h/2.0)
+    rc = rotate(c, angle)
+    contour_b = translate(rc, cx, cy)
+
+    iou = contour_a.intersection(contour_b).area / contour_a.union(contour_b).area
+
+    # Modify to invert the IOU so that it works with the BallTree class
     if iou <= 0:
         distance = 1
     else:
         distance = 1 - iou
+
     return distance
 
 
@@ -532,15 +615,35 @@ class FUSION:
 
         return result
 
-    def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime):
+    def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimateCovariance):
         debug = False
 
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
         for det in observations:
-            detections_position_list.append([det[0] - self.min_size, det[1] + self.min_size, det[0] + self.min_size, det[1] - self.min_size])
-            detections_list.append([0, 90, det[0], det[1], self.min_size * 2, sensor_id])
+            # Create a rotated rectangle for IOU of 2 ellipses
+            # [cx, cy, w, h, angle]
+            if estimateCovariance and len(det) >= 3:
+                # Calculate our 3 sigma std deviation to create a bounding box for matching
+                try:
+                    a, b, phi = det[2].extractErrorElipseParamsFromBivariateGaussian()
+                    a = a * 3.0
+                    b = b * 3.0
+                    # Enforce a minimum size so matching doesn't fail
+                    if a < self.min_size:
+                        a = self.min_size
+                    if b < self.min_size:
+                        b = self.min_size
+                    detections_position_list.append([det[0], det[1], a, b, phi])
+                    # print("cov ", [det[0], det[1], a, b, phi])
+                    # print("arb ", [det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+                except Exception as e:
+                    print ( " Failed! ", str(e))
+                    detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            else:
+                detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            detections_list.append([0, 90, det[0], det[1], self.min_size, sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
@@ -549,8 +652,8 @@ class FUSION:
         matches = []
         if len(detections_list_positions) > 0:
             if len(self.trackedList) > 0:
-                numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 4)
-                thisFrameTrackTree = BallTree(numpy_formatted, metric=computeDistance)
+                numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
+                thisFrameTrackTree = BallTree(numpy_formatted, metric=computeDistanceEllipseBox)
 
                 # Need to check the tree size here in order to figure out if we can even do this
                 length = len(numpy_formatted)
@@ -559,7 +662,7 @@ class FUSION:
                         # The only difference between this and our other version is that
                         # the below line is commented out
                         # track.calcEstimatedPos(timestamp - self.prev_time)
-                        tuple = thisFrameTrackTree.query((np.array([track.getPositionPredicted(timestamp)])), k=length,
+                        tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(timestamp)), k=length,
                                                          return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):

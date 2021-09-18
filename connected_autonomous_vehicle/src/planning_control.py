@@ -78,7 +78,7 @@ class Planner:
 
         # Start sensors with standard error model
         self.lidarSensor = local_fusion.Sensor("M1M1", 0.0, 360, 15.0,
-                                               .05, .05, .05, .05)
+                                               .10, .05, .10, .05)
         self.cameraSensor = local_fusion.Sensor("IMX160", 0.0, 160, 10.0,
                                                .025, .05, .12, .05)
         
@@ -220,7 +220,7 @@ class Planner:
             self.v_pid.setpoint = self.targetVelocity
             self.motorAcceleration = self.v_pid(self.velocity)
         # Check for pause and we have no reverse
-        if self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0 and not self.simVehicle):
+        if not self.simVehicle and self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0 and not self.simVehicle):
             self.motorAcceleration = 0.0
         #if self.simVehicle == False:
             #commands[self.id] = [-self.steeringAcceleration, self.motorAcceleration]

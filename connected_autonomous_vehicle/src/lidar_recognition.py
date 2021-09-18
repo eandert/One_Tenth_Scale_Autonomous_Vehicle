@@ -285,7 +285,7 @@ class LIDAR:
         # Indicate our success
         print('Started LIDAR successfully...')
 
-    def processLidarFrame(self, output, timestamp, vehicle_x, vehicle_y, lidar_sensor):
+    def processLidarFrame(self, output, timestamp, vehicle_x, vehicle_y, vehicle_theta, lidar_sensor):
         debug = False
 
         if len(output) < 1:
@@ -385,8 +385,11 @@ class LIDAR:
                 delta_x = track.x - vehicle_x
                 delta_y = track.y - vehicle_y
                 angle = math.atan2(delta_y, delta_x)
+                rel_angle = ((vehicle_theta - angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
                 distance = math.hypot(delta_x, delta_y)
-                success, expected_error_gaussian, actual_sim_error = lidar_sensor.calculateErrorGaussian(angle, distance, True)
+                print( "lidar ", math.degrees(angle), math.degrees(rel_angle), distance)
+                success, expected_error_gaussian, actual_sim_error = lidar_sensor.calculateErrorGaussian(rel_angle, distance, True)
+                print( expected_error_gaussian.extractErrorElipseParamsFromBivariateGaussian() )
                 # track.id, track.x, track.y, track.crossSection, track.velocity, "L", expected_error_gaussian
                 result.append([track.x, track.y, expected_error_gaussian])
 

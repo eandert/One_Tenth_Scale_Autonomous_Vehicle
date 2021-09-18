@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import *
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
+import numpy as np
 
 # For simulation
 from connected_autonomous_vehicle.src import lidar_recognition, local_fusion
@@ -26,7 +27,8 @@ brush_color = {
     "lidar_detection_centroid": Qt.cyan,
     "lidar_detection_raw": Qt.lightGray,
     "camera_detection_centroid": Qt.darkYellow,
-    "sensor_fusion_centroid": Qt.red
+    "sensor_fusion_centroid": Qt.red,
+    "sensor_fusion_error_ellipse": Qt.green
 }
 
 
@@ -49,6 +51,46 @@ def rotate(origin, point, angle):
     qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
     qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
     return qx, qy
+
+def ellipsify(mu, covariance, meters_to_print_scale, num = 50, multiplier = 3.0):
+    # Eigenvalue and eigenvector computations
+    w, v = np.linalg.eig(covariance)
+
+    # Use the eigenvalue to figure out which direction is larger
+    if abs(w[0]) > abs(w[1]):
+        a = abs(w[0])
+        b = abs(w[1])
+        phi = math.atan2(v[0, 0], v[1, 0])
+    else:
+        a = abs(w[1])
+        b = abs(w[0])
+        phi = math.atan2(v[0, 1], v[1, 1])
+
+    # Default multiplier is 3 because that should cover 99.7% of errors
+    print("a (ellipsify) ", str(a))
+    print("b (ellipsify)", str(b))
+    print("phi (ellipsify) ", str(math.degrees(phi)))
+    pointEvery = math.radians(360.0)/num
+    ellipse = QPolygonF()
+    cur_angle = 0
+    for count in range(num + 1):
+        denominator = math.sqrt( a**2 * math.sin(phi-cur_angle)**2 + b**2 * math.cos(phi-cur_angle)**2 )
+        if denominator == 0.0:
+            print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
+            range_val = 0
+        else:
+            range_val = ( a * b ) / denominator
+        print ( " m ", count, math.degrees(cur_angle), range_val )
+        x_val = mu[0] + range_val * math.cos(cur_angle) * meters_to_print_scale
+        y_val = mu[1] + range_val * math.sin(cur_angle) * meters_to_print_scale
+        ellipse.append(QPointF(x_val, y_val))
+        cur_angle += pointEvery
+
+    return ellipse
+
+def calcSelfRadiusAtAnlge(self, angle):
+        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
+        return self.calculateRadiusAtAngle(a, b, phi, angle)
 
 class MainWindow(QMainWindow):
     def __init__(self, mapSpecs, vehiclesLock, cav, cis, trafficLightArray):
@@ -145,38 +187,44 @@ class MainWindow(QMainWindow):
         self.covarianceButton.clicked.connect(self.on_estimate_covariance_clicked)
         self.estimate_covariance = False
 
+        self.covarianceDisplayButton = QPushButton('Display Covariance Off', self)
+        self.covarianceDisplayButton.resize(140, 32)
+        self.covarianceDisplayButton.move(1000, 590)
+        self.covarianceDisplayButton.clicked.connect(self.on_display_covariance_clicked)
+        self.display_covariance = False
+
         self.testGroup = QButtonGroup(self)  # Radio button group
 
         self.radioTrafficLight = QRadioButton("Traffic Light", self)
         self.radioTrafficLight.resize(200, 32)
-        self.radioTrafficLight.move(1000, 590)
+        self.radioTrafficLight.move(1000, 630)
         # self.radioTrafficLight.clicked.connect(self.showCustomOptions)
         self.radioTrafficLight.toggle()  # start in traffic test
         self.testGroup.addButton(self.radioTrafficLight)
 
         self.radioAutonomousIntersection = QRadioButton("Autonomous Intersection", self)
         self.radioAutonomousIntersection.resize(200, 32)
-        self.radioAutonomousIntersection.move(1000, 620)
+        self.radioAutonomousIntersection.move(1000, 660)
         # self.radioAutonomousIntersection.clicked.connect(self.showCustomOptions)
         self.testGroup.addButton(self.radioAutonomousIntersection)
 
         self.startButton = QPushButton('Start Test', self)
         self.startButton.resize(140, 32)
-        self.startButton.move(1000, 660)
+        self.startButton.move(1000, 700)
 
         self.startButton.clicked.connect(self.on_start_clicked)
 
         self.pauseButton = QPushButton('Pause Test', self)
         self.pauseButton.setEnabled(False)
         self.pauseButton.resize(140, 32)
-        self.pauseButton.move(1000, 700)
+        self.pauseButton.move(1000, 740)
 
         self.pauseButton.clicked.connect(self.on_pause_clicked)
 
         self.endButton = QPushButton('End Test', self)
         self.endButton.setEnabled(False)
         self.endButton.resize(140, 32)
-        self.endButton.move(1000, 740)
+        self.endButton.move(1000, 780)
 
         self.endButton.clicked.connect(self.on_end_clicked)
 
@@ -298,6 +346,14 @@ class MainWindow(QMainWindow):
             self.estimate_covariance = False
             self.covarianceButton.setText('Estimate Local Covariance Off')
 
+    def on_display_covariance_clicked(self):
+        if self.covarianceDisplayButton.text() == 'Display Covariance Off':
+            self.display_covariance = True
+            self.covarianceDisplayButton.setText('Display Covariance On')
+        else:
+            self.display_covariance = False
+            self.covarianceDisplayButton.setText('Display Covariance Off')
+
     def on_end_clicked(self):
         sys.exit()
 
@@ -388,13 +444,13 @@ class MainWindow(QMainWindow):
                                 if self.simulate_error:
                                     vehicle.cameraDetections = camera_error_array
                                     lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
-                                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.lidarSensor)
+                                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
                                     vehicle.rawLidarDetections = point_cloud_error
                                     vehicle.lidarDetections = lidarcoordinates
                                 else:
                                     vehicle.cameraDetections = camera_array
                                     lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0,
-                                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.lidarSensor)
+                                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
                                     vehicle.rawLidarDetections = point_cloud
                                     vehicle.lidarDetections = lidarcoordinates
 
@@ -434,7 +490,7 @@ class MainWindow(QMainWindow):
                                 sensed_x = each[0]
                                 sensed_y = each[1]
                                 vehicle.fusionDetections.append((sensed_x, sensed_y, 0.0, 0.0))
-                                vehicle.fusionDetectionsCovariance.append([[1.0, 1.0],[1.0,1.0]])
+                                vehicle.fusionDetectionsCovariance.append(np.array([[1.0, 0],[0, 1.0]]))
 
                         # Now update our current PID with respect to other vehicles
                         vehicle.check_positions_of_other_vehicles_adjust_velocity(tempList)
@@ -466,6 +522,13 @@ class MainWindow(QMainWindow):
                                     cis.cameraDetections = camera_error_array
                                 else:
                                     cis.cameraDetections = camera_array
+                                
+                                # f = open("data_" + str(idx) + ".txt", "a")
+                                # f.write(str(idx) + "," + str(self.time))
+                                # for each in cis.cameraDetections:
+                                #     f.write("," + str(each[0]) + "," + str(each[1]))
+                                # f.write("\n")
+                                # f.close()
 
                                 # CIS position can be the map centroid in sim
                                 # because we are generating the detection WRT the centroid
@@ -492,7 +555,7 @@ class MainWindow(QMainWindow):
                                 sensed_x = each[0]
                                 sensed_y = each[1]
                                 cis.fusionDetections.append((sensed_x, sensed_y, 0, 0))
-                                cis.fusionDetectionsCovariance.append([[1.0, 1.0],[1.0,1.0]])
+                                cis.fusionDetectionsCovariance.append(np.array([[1.0, 0.0],[0.0, 1.0]]))
 
                         # Add to the global sensor fusion
                         self.globalFusion.processDetectionFrame(1000+idx, self.time/1000.0, cis.fusionDetections, cis.fusionDetectionsCovariance, .25)
@@ -880,6 +943,18 @@ class MainWindow(QMainWindow):
                     painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
+            # if self.display_covariance:
+            #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+            #     pen.setWidth(.5)
+            #     painter.setPen(pen)
+            #     for each in cis.cameraDetections:
+            #         # Make sure covariance parameters have been added
+            #         if len(each) >= 3:
+            #             pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+            #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+            #             ellipse = ellipsify(pos, each[2], self.mapSpecs.meters_to_print_scale, 50, 3.0)
+            #             painter.drawPolygon(ellipse)
+
             # Now draw the camera detections
             for idx, cis in self.cis.items():
                 pen.setBrush(brush_color['camera_detection_centroid'])
@@ -894,6 +969,18 @@ class MainWindow(QMainWindow):
                     #                  self.translateY(transY * self.mapSpecs.meters_to_print_scale))
                     painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+
+            # if self.display_covariance:
+            #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+            #     pen.setWidth(.5)
+            #     painter.setPen(pen)
+            #     for each in cis.cameraDetections:
+            #         # Make sure covariance parameters have been added
+            #         if len(each) >= 3:
+            #             pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+            #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+            #             ellipse = ellipsify(pos, each[2], self.mapSpecs.meters_to_print_scale, 50, 3.0)
+            #             painter.drawPolygon(ellipse)
 
         if self.lidar_debug:
             for idx, vehicle in self.vehicles.items():
@@ -914,6 +1001,19 @@ class MainWindow(QMainWindow):
                     painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
+            if self.display_covariance:
+                pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                for each in vehicle.lidarDetections:
+                    # Make sure covariance parameters have been added
+                    if len(each) >= 3:
+                        print(each[2].covariance)
+                        pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                        ellipse = ellipsify(pos, each[2].covariance, self.mapSpecs.meters_to_print_scale, 50, 3.0)
+                        painter.drawPolygon(ellipse)
+
         if self.fusion_debug:
             for idx, vehicle in self.vehicles.items():
                 # Now draw the vehicle fusion detections
@@ -933,6 +1033,17 @@ class MainWindow(QMainWindow):
                                     self.translateX((each[0] + (8.0*each[2])) * self.mapSpecs.meters_to_print_scale),
                                     self.translateY((each[1] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale))
 
+                if self.display_covariance:
+                    pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                    pen.setWidth(.5)
+                    painter.setPen(pen)
+                    for covariance, each in zip(vehicle.fusionDetectionsCovariance, vehicle.fusionDetections):
+                        print ( covariance )
+                        pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                        ellipse = ellipsify(pos, covariance, self.mapSpecs.meters_to_print_scale, 50, 3.0)
+                        painter.drawPolygon(ellipse)
+
             for idx, cis in self.cis.items():
                 # Now draw the camera fusion detections
                 pen.setBrush(brush_color['sensor_fusion_centroid'])
@@ -950,6 +1061,16 @@ class MainWindow(QMainWindow):
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
                                     self.translateX((each[0] + (8.0*each[2])) * self.mapSpecs.meters_to_print_scale),
                                     self.translateY((each[1] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale))
+
+                if self.display_covariance:
+                    pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                    pen.setWidth(.5)
+                    painter.setPen(pen)
+                    for covariance, each in zip(cis.fusionDetectionsCovariance, cis.fusionDetections):
+                        pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                        ellipse = ellipsify(pos, covariance, self.mapSpecs.meters_to_print_scale, 50, 3.0)
+                        painter.drawPolygon(ellipse)
 
         if self.drawTrafficLight:
             pen = QPen()

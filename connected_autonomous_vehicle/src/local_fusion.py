@@ -18,7 +18,7 @@ class BivariateGaussian:
         if cov is None:
             # Create the bivariate gaussian matrix
             self.mu = np.array([0.0,0.0])
-            self.covariance = [[a*a, 0], [0, b*b]]
+            self.covariance = np.array([[a*a, 0], [0, b*b]])
 
             # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
             rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
@@ -29,22 +29,24 @@ class BivariateGaussian:
             self.mu = mu
             self.covariance = cov
 
-    def ellipsify(self, num = 50, multiplier = 3):
-        # Default multiplier is 2 because that should cover 95% of errors
-        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
-        #print("a (ellipsify) ", str(a))
-        #print("b (ellipsify)", str(b))
-        #print("phi (ellipsify) ", str(math.degrees(phi)))
-        ellipse = []
-        pointEvery = math.radians(360/num)
-        for count in range(num + 1):
-            cur_angle = pointEvery * count
-            range_val = self.calculateRadiusAtAngle(a, b, phi, cur_angle) * multiplier
-            x_val = self.mu[0] + range_val * math.cos(cur_angle)
-            y_val = self.mu[1] + range_val * math.sin(cur_angle)
-            ellipse.append([x_val,y_val])
+    # def ellipsify(self, meters_to_print_scale, num = 50, multiplier = 3):
+    #     # Default multiplier is 3 because that should cover 99.7% of errors
+    #     a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
+    #     a = math.pow(a, 2)
+    #     b = math.pow(b, 2)
+    #     #print("a (ellipsify) ", str(a))
+    #     #print("b (ellipsify)", str(b))
+    #     #print("phi (ellipsify) ", str(math.degrees(phi)))
+    #     pointEvery = math.radians(360/num)
+    #     ellipse = QtGui.QPolygonF()
+    #     for count in range(num + 1):
+    #         cur_angle = pointEvery * count
+    #         range_val = self.calculateRadiusAtAngle(a, b, phi, cur_angle) * multiplier
+    #         x_val = self.mu[0] + range_val * math.cos(cur_angle)
+    #         y_val = self.mu[1] + range_val * math.sin(cur_angle)
+    #         ellipse.append((x_val * meters_to_print_scale, y_val * meters_to_print_scale))
 
-        return ellipse
+    #     return ellipse
 
     def dot(self):
 
@@ -61,19 +63,21 @@ class BivariateGaussian:
         return ellipse
 
     def calculateRadiusAtAngle(self, a, b, phi, measurementAngle):
-        denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 ) / 2
+        denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
         if denominator == 0:
             print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
             #print ( a, b, phi, measurementAngle )
             return 0
         else:
-            return ( a * b ) / math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 ) / 2
+            return ( a * b ) / math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
 
     def calcSelfRadiusAtAnlge(self, angle):
         a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
+        print ( a, b, phi)
         return self.calculateRadiusAtAngle(a, b, phi, angle)
 
     def extractErrorElipseParamsFromBivariateGaussian(self):
+        # TODO: Change this to https://stats.stackexchange.com/questions/361017/proper-way-of-estimating-the-covariance-error-ellipse-in-2d
         # Eigenvalue and eigenvector computations
         w, v = np.linalg.eig(self.covariance)
 
@@ -131,6 +135,7 @@ class Sensor:
         return self.distal_error_b + (object_distance * self.distal_error_x)
 
     def calculateErrorGaussian(self, object_relative_angle, object_distance, simulation):
+        # TODO: check ATLAS code and makse sure this is the same
         if self.checkInRangeAndFOV(object_relative_angle, object_distance):
             radial_error = self.getRadialErrorAtDistance(object_distance)
             distal_error = self.getDistanceErrorAtDistance(object_distance)
@@ -147,12 +152,14 @@ class Sensor:
             expected_error_gaussian = BivariateGaussian(elipse_a_expected,
                                       elipse_b_expected,
                                       elipse_angle_expected)
+            print("ae: ", elipse_a_expected, elipse_b_expected, elipse_angle_expected)
+            print("ae2: ", expected_error_gaussian.calcSelfRadiusAtAnlge(elipse_angle_expected))
             # Calcuate the actual error if this is a simulation, otherwise just return
             if simulation:
                 # Calculate our expected errors in x,y coordinates
-                #print("de:", distal_error, " re:", radial_error)
+                print("de:", distal_error, " re:", 2 * (object_distance * math.sin(radial_error / 2)))
                 actualRadialError = np.random.normal(0, radial_error, 1)[0]
-                actualDistanceError = np.random.normal(0, distal_error, 1)[0]
+                actualDistanceError = np.random.normal(0, elipse_b_expected, 1)[0]
                 x_error_generated = ((object_distance + actualDistanceError) * math.cos(
                     object_relative_angle + actualRadialError))
                 y_error_generated = ((object_distance + actualDistanceError) * math.sin(
@@ -239,6 +246,8 @@ class Tracked:
         # Initial State cov
         self.P_t = np.identity(4)
         self.P_hat_t = np.identity(4)
+        self.P_t[2][2] = 100.0
+        self.P_t[3][3] = 100.0
         # Process cov
         self.Q_t = np.identity(4)
         #self.Q_t = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
@@ -330,9 +339,9 @@ class Tracked:
     def fusion(self, estimate_covariance, vehicle):
         debug = False
 
-        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
-        lidarCov = np.array([[1, 0], [0, 1]])
-        camCov = np.array([[1, 0], [0, 1]])
+        #self.error_covariance = [[1.0, 0.0], [0.0, 1.0]]
+        lidarCov = np.array([[1.0, 0], [0, 1.0]])
+        camCov = np.array([[1.0, 0], [0, 1.0]])
         lidarMeasure = [0, 0]
         camMeasure = [0, 0]
         lidarMeasureH = [0, 0]
@@ -359,7 +368,7 @@ class Tracked:
                         lidarCov = lidar_expected_error_gaussian.covariance
                         lidar_cov_added = True
                     else:
-                        lidarCov = np.array([[1, 0], [0, 1]])
+                        lidarCov = np.array([[1.0, 0], [0, 1.0]])
                     self.lidarCovLast = lidarCov
                     self.lidarMeasurePrevCovTrue = True
                 # Set the new measurements
@@ -377,27 +386,28 @@ class Tracked:
                         camCov = camera_expected_error_gaussian.covariance
                         cam_cov_added = True
                     else:
-                        camCov = np.array([[1, 0], [0, 1]])
+                        camCov = np.array([[1.0, 0], [0, 1.0]])
                 # Set the new measurements
                 camMeasure = [x, y]
                 camMeasureH = [1, 1]
 
-        # Calculate the covariance to be sent out with the result
-        if lidar_cov_added and cam_cov_added:
-            try:
-                self.error_covariance = intersectionBivariateGaussiansCovariance(camCov, lidarCov)
-                #print (  camCov, lidarCov, self.error_covariance )
-            except Exception as e:
-                print ( " Exception: " + str(e) )
-        elif lidar_cov_added:
-            self.error_covariance = lidarCov
-        elif cam_cov_added:
-            self.error_covariance = camCov
-        else:
-            self.error_covariance = [[1.0, 0.0], [0.0, 1.0]]
-
         # Now do the kalman thing!
         if self.idx == 0:
+            # Calculate the covariance to be sent out with the result
+            if lidar_cov_added and cam_cov_added:
+                try:
+                    #self.error_covariance = intersectionBivariateGaussiansCovariance(camCov, lidarCov)
+                    self.error_covariance = np.mean( np.array([ camCov, lidarCov ]), axis=0 )
+                    print (  "combined! ", camCov, lidarCov, self.error_covariance )
+                except Exception as e:
+                    print ( " Exception: " + str(e) )
+            elif lidar_cov_added:
+                self.error_covariance = lidarCov
+            elif cam_cov_added:
+                self.error_covariance = camCov
+            else:
+                self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
+
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
             if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
@@ -412,6 +422,12 @@ class Tracked:
             # Store so that next fusion is better
             self.X_hat_t = np.array(
                 [[x_out], [y_out], [0], [0]])
+            # Seed the covariance values directly from the measurement
+            self.P_t[0][0] = self.error_covariance[0][0]
+            self.P_t[0][1] = self.error_covariance[0][1]
+            self.P_t[1][0] = self.error_covariance[1][0]
+            self.P_t[1][1] = self.error_covariance[1][1]
+            self.P_hat_t = self.P_t
             self.prev_time = self.lastTracked
             self.x = x_out
             self.y = y_out
@@ -465,8 +481,13 @@ class Tracked:
                 self.dx = X_t[2][0]
                 self.dy = X_t[3][0]
                 self.idx += 1
+                if self.P_t[0][0] != 0.0 or self.P_t[0][1] != 0.0:
+                    self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]])
+                else:
+                    #print ( " what the heck: ", self.P_t)
+                    self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
 
-                print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
+                #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
 
             except Exception as e:
                 print ( " Exception: " + str(e) )
@@ -613,15 +634,20 @@ class FUSION:
                     a, b, phi = det[2].extractErrorElipseParamsFromBivariateGaussian()
                     a = a * 3.0
                     b = b * 3.0
+                    # Enforce a minimum size so matching doesn't fail
+                    if a < self.min_size:
+                        a = self.min_size
+                    if b < self.min_size:
+                        b = self.min_size
                     detections_position_list.append([det[0], det[1], a, b, phi])
-                    print([det[0], det[1], a, b, phi])
-                    #print([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+                    # print("cov ", [det[0], det[1], a, b, phi])
+                    # print("arb ", [det[0], det[1], self.min_size, self.min_size, math.radians(0)])
                 except Exception as e:
                     print ( " Failed! ", str(e))
                     detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             else:
                 detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([0, 90, det[0], det[1], self.min_size * 2, sensor_id])
+            detections_list.append([0, 90, det[0], det[1], self.min_size, sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
