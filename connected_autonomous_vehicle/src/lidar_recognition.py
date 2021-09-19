@@ -4,6 +4,8 @@ from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 
+import shared_math
+
 
 '''This object tracks a single object that has been detected in a LIDAR frame.
 We use this primarily to match objects seen between frames and included in here
@@ -382,14 +384,10 @@ class LIDAR:
         for track in self.trackedList:
             if track.lastHistory >= 5:
                 # Create the error component of the lidar detection
-                delta_x = track.x - vehicle_x
-                delta_y = track.y - vehicle_y
-                angle = math.atan2(delta_y, delta_x)
-                rel_angle = ((vehicle_theta - angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
-                distance = math.hypot(delta_x, delta_y)
-                print( "lidar ", math.degrees(angle), math.degrees(rel_angle), distance)
-                success, expected_error_gaussian, actual_sim_error = lidar_sensor.calculateErrorGaussian(rel_angle, distance, True)
-                print( expected_error_gaussian.extractErrorElipseParamsFromBivariateGaussian() )
+                relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
+                    vehicle_x, vehicle_y, vehicle_theta, track.x, track.y)
+                success, expected_error_gaussian, actual_sim_error = lidar_sensor.calculateErrorGaussian(
+                    relative_angle_to_detector, target_line_angle, relative_distance, True)
                 # track.id, track.x, track.y, track.crossSection, track.velocity, "L", expected_error_gaussian
                 result.append([track.x, track.y, expected_error_gaussian])
 

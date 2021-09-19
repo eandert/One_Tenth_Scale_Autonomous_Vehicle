@@ -1,19 +1,9 @@
 import math
 import numpy as np
-from simple_pid import PID
-from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon
-from shapely.geometry.linestring import LineString
-from connected_autonomous_vehicle.src import local_fusion
 
-
-''' Helper function to calculate the difference between 2 angles in radians'''
-def angleDifference( angle1, angle2 ):
-    diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi
-    if diff < -math.pi:
-        return diff + (2*math.pi)
-    else:
-        return diff
+import local_fusion
+import shared_math
+import sensor
 
 
 ''' This class contains the parameters of a RC car platform like wheelbase, etc. as
@@ -43,8 +33,8 @@ class Planner:
         self.fusionDetections = []
         self.fusionDetectionsCovariance = []
 
-        self.cameraSensor = local_fusion.Sensor("IMX160", 0.0, 160, 10.0,
-                                               .025, .05, .10, .05)
+        self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
+                                               0, .025, .10, .10)
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, id_in, simCIS):
         # This holds the actual position of the vehicle
@@ -101,107 +91,4 @@ class Planner:
             if (y > y1) and (y < y2):
                 return True
         return False
-
-    def check_in_range_and_fov(self, target_angle, distance, center_angle, horizontal_fov, max_range):
-        angle_diff = ((center_angle - target_angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
-        if abs(angle_diff) <= (horizontal_fov/2.0) and (distance <= max_range):
-            return True
-        return False
-
-    def fake_camera(self, positions, objects, cam_range, cam_center_angle, cam_fov):
-
-        # print ( "FAKING LIDAR" )
-        camera_array = []
-        camera_error_array = []
-
-        # Get the points the Slamware M1M1 should generate
-        lidar_freq = 7000 / 8
-        angle_change = (2 * math.pi) / lidar_freq
-
-        # Create all the vehicle polygons and combine them into one big list
-        polygons = []
-        for idx, vehicle in enumerate(positions):
-            # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
-            x1 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
-                        (vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
-            y1 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
-                        (vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
-            x2 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
-                        (vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
-            y2 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
-                        (vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
-            x3 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
-                        (self.wheelbaseLength + vehicle[4]) * math.cos(vehicle[2])))
-            y3 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
-                        (self.wheelbaseLength + vehicle[4]) * math.sin(vehicle[2])))
-            x4 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
-                        (self.wheelbaseLength + vehicle[4]) * math.cos(vehicle[2])))
-            y4 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
-                        (self.wheelbaseLength + vehicle[4]) * math.sin(vehicle[2])))
-            polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
-            polygons.append(polygon)
-
-        # Generate fake lidar data from the points
-        for angle_idx in range(int(lidar_freq)):
-            intersections = []
-            intersections_origin_point = []
-            intersections_count = 0
-            intersect_dist = 9999999999
-            final_point = None
-            final_polygon = None
-
-            # Go through all the polygons that the line intersects with and add them
-            for poly in polygons:
-                line = [(self.localizationPositionX, self.localizationPositionY), (
-                self.localizationPositionX + (cam_range * math.cos(angle_idx * angle_change)),
-                self.localizationPositionY + (cam_range * math.sin(angle_idx * angle_change)))]
-                shapely_line = LineString(line)
-                intersections += list(poly.intersection(shapely_line).coords)
-                for idx in range(len(intersections) - intersections_count):
-                    intersections_origin_point.append(poly)
-                intersections_count = len(intersections)
-
-            # Don't forget the other objects as well (already should be a list of polygons)
-            for poly in objects:
-                line = [(self.localizationPositionX, self.localizationPositionY), (
-                self.localizationPositionX + (cam_range * math.cos(angle_idx * angle_change)),
-                self.localizationPositionY + (cam_range * math.sin(angle_idx * angle_change)))]
-                shapely_line = LineString(line)
-                print ( poly )
-                intersections += list(poly.intersection(shapely_line).coords)
-                for idx in range(len(intersections) - intersections_count):
-                    intersections_origin_point.append(poly)
-                intersections_count = len(intersections)
-
-            # Get the closest intersection with a polygon as that will be where our lidar beam stops
-            for point, polygon in zip(intersections, intersections_origin_point):
-                dist = math.hypot(point[0] - self.localizationPositionX, point[1] - self.localizationPositionY)
-                if dist < intersect_dist:
-                    final_point = point
-                    intersect_dist = dist
-                    final_polygon = polygon
-
-            # Make sure this worked and is not None
-            if final_point != None:
-                # See if we can add a camera point
-                if self.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, self.theta + cam_center_angle,
-                                               math.radians(cam_fov), cam_range):
-                    # Object checks out and is in range and not blocked
-                    # TODO: Do a little better approxamation of percent seen and account for this
-                    point = list(final_polygon.centroid.coords)[0]
-                    if point not in camera_array:
-                        # Create the error component of the camera detection
-                        delta_x = point[0] - self.localizationPositionX
-                        delta_y = point[1] - self.localizationPositionY
-                        angle = math.atan2(delta_y, delta_x)
-                        distance = math.hypot(delta_x, delta_y)
-                        #print ( "a:", math.degrees(angle), " d:", distance )
-                        success, expected_error_gaussian, actual_sim_error = self.cameraSensor.calculateErrorGaussian(angle, distance, True)
-                        #print ( success, point, expected_error_gaussian, actual_sim_error )
-                        #print ( self.localizationPositionX, self.localizationPositionY )
-                        if success:
-                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian))
-                            camera_array.append((point[0], point[1]))
-
-        return camera_array, camera_error_array
 

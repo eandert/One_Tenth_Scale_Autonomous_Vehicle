@@ -4,16 +4,11 @@ from simple_pid import PID
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from shapely.geometry.linestring import LineString
-from connected_autonomous_vehicle.src import local_fusion
 
 
-''' Helper function to calculate the difference between 2 angles in radians'''
-def angleDifference( angle1, angle2 ):
-    diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi
-    if diff < -math.pi:
-        return diff + (2*math.pi)
-    else:
-        return diff
+# Global imports
+import sensor
+import shared_math
 
 
 ''' This class contains the parameters of a RC car platform like wheelbase, etc. as
@@ -28,9 +23,9 @@ class Planner:
         # Static Vehicle Params
         self.width = .3
         self.length = .57
-        self.wheelbaseLengthFromRear = .1
         self.wheelbaseLength = .35
         self.wheelbaseWidth = .245
+        self.axleFromCenter = self.wheelbaseLength/2.0
         self.steeringAngleMax = 30.0
         self.velocityMax = 1.0
         
@@ -45,8 +40,8 @@ class Planner:
         self.seeringAngle = 0
         self.positionX_sim = 0
         self.positionY_sim = 0
-        self.localizationPositionX = 0
-        self.localizationPositionY = 0
+        self.rearAxlePositionX = 0
+        self.rearAxlePositionY = 0
         self.lastPointIndex = 0
         self.targetIndexX = 0
         self.targetIndexY = 0
@@ -55,8 +50,8 @@ class Planner:
         self.steeringAcceleration = 0
         self.motorAcceleration = 0
         self.pursuit_index = 0
-        self.centerPointX = 0
-        self.centerPointY = 0
+        self.localizationPositionX = 0
+        self.localizationPositionY = 0
         self.lastTargetWithinTL = 0
         self.distance_pid_control_en = False
         self.distance_pid_control_overide = False
@@ -66,6 +61,9 @@ class Planner:
         self.id = None
         self.simVehicle = True
         self.key = None
+
+        # Buffer to be added around vehicles to do follow distance math
+        self.arbitrary_buffer = 0.1
 
         self.cameraDetections = []
         self.lidarDetections = []
@@ -77,10 +75,10 @@ class Planner:
         self.lidarPoints = []
 
         # Start sensors with standard error model
-        self.lidarSensor = local_fusion.Sensor("M1M1", 0.0, 360, 15.0,
-                                               .10, .05, .10, .05)
-        self.cameraSensor = local_fusion.Sensor("IMX160", 0.0, 160, 10.0,
-                                               .025, .05, .12, .05)
+        self.lidarSensor = sensor.Sensor("M1M1", 0.0, 360, 15.0,
+                                               0, .05, .05, .05)
+        self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
+                                               0, .025, .10, .10)
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
         self.targetVelocityGeneral = 0
@@ -93,16 +91,20 @@ class Planner:
         self.theta_offset = math.radians(theta_offset)
         # This is the known localization position
         if simVehicle:
+            reverse_theta = self.theta_offset-math.radians(180)
+            self.rearAxlePositionX = self.positionX_offset + (self.axleFromCenter * math.cos(reverse_theta))
+            self.rearAxlePositionY = self.positionY_offset + (self.axleFromCenter * math.sin(reverse_theta))
             self.localizationPositionX = self.positionX_offset
             self.localizationPositionY = self.positionY_offset
-            self.positionX_sim = self.localizationPositionX
-            self.positionY_sim = self.localizationPositionY
+            self.positionX_sim = self.rearAxlePositionX
+            self.positionY_sim = self.rearAxlePositionY
             self.velocity = 0
             self.theta = self.theta_offset
+            print( self.localizationPositionX, self.localizationPositionY, self.rearAxlePositionX, self.rearAxlePositionY )
         else:
             # Since this is a real world test we will start the vehicle somewhere random until it connects
-            self.localizationPositionX = 5 + self.positionX_offset
-            self.localizationPositionY = 5 + self.positionY_offset
+            self.rearAxlePositionX = 5 + self.positionX_offset
+            self.rearAxlePositionY = 5 + self.positionY_offset
             self.theta = self.theta_offset
             self.velocity = 0
         self.lastPointIndex = None
@@ -127,15 +129,19 @@ class Planner:
     def update_localization(self, localization = None):
         if self.simVehicle:
             # Update the localization, we could inject errors here if we want
+            reverse_theta = self.theta-math.radians(180)
+            self.rearAxlePositionX = self.positionX_sim + (self.axleFromCenter * math.cos(reverse_theta))
+            self.rearAxlePositionY = self.positionY_sim + (self.axleFromCenter * math.sin(reverse_theta))
             self.localizationPositionX = self.positionX_sim
             self.localizationPositionY = self.positionY_sim
         else:
             # Update the localization from real data
             # Calculate velocity before we update, the localization positions are from last frame
-            #  - .175 is to adjust for lidar position vs rear axle
-            self.velocity = self.calc_velocity(localization[0], localization[1], self.localizationPositionX, self.localizationPositionY, localization[2])
-            self.localizationPositionX = (((localization[0] - .175) * math.cos(self.theta_offset)) - (localization[1] * math.sin(self.theta_offset))) + self.positionX_offset
-            self.localizationPositionY = ((localization[1] * math.cos(self.theta_offset)) + (localization[0] * math.sin(self.theta_offset))) + self.positionY_offset
+            # self.axleFromCenter is to adjust for lidar position vs rear axle
+            # TODO: Check this!
+            self.velocity = self.calc_velocity(localization[0], localization[1], self.rearAxlePositionX, self.rearAxlePositionY, localization[2])
+            self.rearAxlePositionX = (((localization[0] - self.axleFromCenter) * math.cos(self.theta_offset)) - (localization[1] * math.sin(self.theta_offset))) + self.positionX_offset
+            self.rearAxlePositionY = ((localization[1] * math.cos(self.theta_offset)) + (localization[0] * math.sin(self.theta_offset))) + self.positionY_offset
             self.theta = localization[2] + self.theta_offset
 
     def calc_velocity(self, x1, y1, x2, y2, theta):
@@ -153,7 +159,7 @@ class Planner:
         tx = self.xCoordinates[ind]
         ty = self.yCoordinates[ind]
 
-        alpha = math.atan2(ty - self.localizationPositionY, tx - self.localizationPositionX) - self.theta
+        alpha = math.atan2(ty - self.rearAxlePositionY, tx - self.rearAxlePositionX) - self.theta
 
         Lf = self.k * self.velocity + self.Lfc
 
@@ -206,8 +212,6 @@ class Planner:
                 turningRadius = -10
         else:
             turningRadius = 10
-        self.centerPointX = self.localizationPositionX + turningRadius * math.cos(self.theta + math.radians(90))
-        self.centerPointY = self.localizationPositionY + turningRadius * math.sin(self.theta + math.radians(90))
 
     def update_pid(self):
         if self.distance_pid_control_en and not self.distance_pid_control_overide:
@@ -226,15 +230,15 @@ class Planner:
             #commands[self.id] = [-self.steeringAcceleration, self.motorAcceleration]
 
     def calc_distance(self, point_x, point_y):
-        dx = self.localizationPositionX - point_x
-        dy = self.localizationPositionY - point_y
+        dx = self.rearAxlePositionX - point_x
+        dy = self.rearAxlePositionY - point_y
         return math.hypot(dx, dy)
 
     def recieve_coordinate_group_commands(self, commands):
         self.coordinateGroupVelocities = commands
 
     def get_location(self):
-        return [self.localizationPositionX, self.localizationPositionY, self.theta, self.targetVelocity, 0, self.width, self.length]
+        return [self.localizationPositionX, self.localizationPositionY, self.theta, self.targetVelocity, self.width, self.length]
 
     def get_route(self):
         messageString = ""
@@ -265,125 +269,20 @@ class Planner:
             return True
         return False
 
-    def fake_lidar_and_camera(self, positions, objects, lidar_range, cam_range,
-                              cam_center_angle, cam_fov):
-
-        # print ( "FAKING LIDAR" )
-        lidar_point_cloud = []
-        lidar_point_cloud_error = []
-        camera_array = []
-        camera_error_array = []
-
-        # Get the points the Slamware M1M1 should generate
-        lidar_freq = 7000 / 8
-        angle_change = (2 * math.pi) / lidar_freq
-
-        # Create all the vehicle polygons and combine them into one big list
-        polygons = []
-        for idx, vehicle in enumerate(positions):
-            # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
-            x1 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
-                        (vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
-            y1 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
-                        (vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
-            x2 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
-                        (vehicle[4]) * math.cos(vehicle[2] - math.radians(180))))
-            y2 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
-                        (vehicle[4]) * math.sin(vehicle[2] - math.radians(180))))
-            x3 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] - math.radians(90)) + (
-                        (self.wheelbaseLength + vehicle[4]) * math.cos(vehicle[2])))
-            y3 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] - math.radians(90)) + (
-                        (self.wheelbaseLength + vehicle[4]) * math.sin(vehicle[2])))
-            x4 = vehicle[0] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.cos(vehicle[2] + math.radians(90)) + (
-                        (self.wheelbaseLength + vehicle[4]) * math.cos(vehicle[2])))
-            y4 = vehicle[1] + ((self.wheelbaseWidth / 2 + vehicle[4]) * math.sin(vehicle[2] + math.radians(90)) + (
-                        (self.wheelbaseLength + vehicle[4]) * math.sin(vehicle[2])))
-            polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
-            polygons.append(polygon)
-
-        # Generate fake lidar data from the points
-        for angle_idx in range(int(lidar_freq)):
-            intersections = []
-            intersections_origin_point = []
-            intersections_count = 0
-            intersect_dist = 9999999999
-            final_point = None
-            final_polygon = None
-
-            # Go through all the polygons that the line intersects with and add them
-            for poly in polygons:
-                line = [(self.localizationPositionX, self.localizationPositionY), (
-                self.localizationPositionX + (lidar_range * math.cos(angle_idx * angle_change)),
-                self.localizationPositionY + (lidar_range * math.sin(angle_idx * angle_change)))]
-                shapely_line = LineString(line)
-                intersections += list(poly.intersection(shapely_line).coords)
-                for idx in range(len(intersections) - intersections_count):
-                    intersections_origin_point.append(poly)
-                intersections_count = len(intersections)
-
-            # Don't forget the other objects as well (already should be a list of polygons)
-            for poly in objects:
-                line = [(self.localizationPositionX, self.localizationPositionY), (
-                self.localizationPositionX + (lidar_range * math.cos(angle_idx * angle_change)),
-                self.localizationPositionY + (lidar_range * math.sin(angle_idx * angle_change)))]
-                shapely_line = LineString(line)
-                intersections += list(poly.intersection(shapely_line).coords)
-                for idx in range(len(intersections) - intersections_count):
-                    intersections_origin_point.append(poly)
-                intersections_count = len(intersections)
-
-            # Get the closest intersection with a polygon as that will be where our lidar beam stops
-            for point, polygon in zip(intersections, intersections_origin_point):
-                dist = math.hypot(point[0] - self.localizationPositionX, point[1] - self.localizationPositionY)
-                if dist < intersect_dist:
-                    final_point = point
-                    intersect_dist = dist
-                    final_polygon = polygon
-
-            # Make sure this worked and is not None
-            if final_point != None:
-                lidar_point_cloud.append(final_point)
-                # Generate error for the individual points
-                x_error = np.random.normal(0, 0.05, 1)[0]
-                y_error = np.random.normal(0, 0.05, 1)[0]
-                lidar_point_cloud_error.append((final_point[0] + x_error, final_point[1] + y_error))
-
-                # See if we can add a camera point as well
-                if self.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, self.theta + cam_center_angle,
-                                               math.radians(cam_fov), cam_range):
-                    # Object checks out and is in range and not blocked
-                    # TODO: Do a little better approxamation of percent seen and account for this
-                    point = list(final_polygon.centroid.coords)[0]
-                    if point not in camera_array:
-                        # Create the error component of the camera detection
-                        delta_x = point[0] - self.localizationPositionX
-                        delta_y = point[1] - self.localizationPositionY
-                        angle = math.atan2(delta_y, delta_x)
-                        distance = math.hypot(delta_x, delta_y)
-                        #print ( "a:", math.degrees(angle), " d:", distance )
-                        success, expected_error_gaussian, actual_sim_error = self.cameraSensor.calculateErrorGaussian(angle, distance, True)
-                        #print ( success, point, expected_error_gaussian, actual_sim_error )
-                        #print ( self.localizationPositionX, self.localizationPositionY )
-                        if success:
-                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian))
-                            camera_array.append((point[0], point[1]))
-
-        return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array
-
     def check_positions_of_other_vehicles_adjust_velocity(self, positions):
         self.followDistance = 99
         self.distance_pid_control_en = False
         point = Point(self.targetIndexX, self.targetIndexY)
         for idx, each in enumerate(positions):
             # Create a bounding box for each vehicle that is length + 2*buffer long and width + 2*buffer wide
-            x1 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]+math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]-math.radians(180))))
-            y1 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]+math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]-math.radians(180))))
-            x2 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]-math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]-math.radians(180))))
-            y2 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]-math.radians(90)) + ((self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]-math.radians(180))))
-            x3 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]-math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.cos(each[2])))
-            y3 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]-math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.sin(each[2])))
-            x4 = each[0] + ((self.width/2 + each[4])*math.cos(each[2]+math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.cos(each[2])))
-            y4 = each[1] + ((self.width/2 + each[4])*math.sin(each[2]+math.radians(90)) + ((self.length - self.wheelbaseLengthFromRear + each[4])*math.sin(each[2])))
+            x1 = each[0] + ((each[4]/2.0+self.arbitrary_buffer)*math.cos(each[2]+math.radians(90)) + ((each[5]/2.0+self.arbitrary_buffer)*math.cos(each[2]-math.radians(180))))
+            y1 = each[1] + ((each[4]/2.0+self.arbitrary_buffer)*math.sin(each[2]+math.radians(90)) + ((each[5]/2.0+self.arbitrary_buffer)*math.sin(each[2]-math.radians(180))))
+            x2 = each[0] + ((each[4]/2.0+self.arbitrary_buffer)*math.cos(each[2]-math.radians(90)) + ((each[5]/2.0+self.arbitrary_buffer)*math.cos(each[2]-math.radians(180))))
+            y2 = each[1] + ((each[4]/2.0+self.arbitrary_buffer)*math.sin(each[2]-math.radians(90)) + ((each[5]/2.0+self.arbitrary_buffer)*math.sin(each[2]-math.radians(180))))
+            x3 = each[0] + ((each[4]/2.0+self.arbitrary_buffer)*math.cos(each[2]-math.radians(90)) + ((each[5]/2.0+self.arbitrary_buffer)*math.cos(each[2])))
+            y3 = each[1] + ((each[4]/2.0+self.arbitrary_buffer)*math.sin(each[2]-math.radians(90)) + ((each[5]/2.0+self.arbitrary_buffer)*math.sin(each[2])))
+            x4 = each[0] + ((each[4]/2.0+self.arbitrary_buffer)*math.cos(each[2]+math.radians(90)) + ((each[5]/2.0+self.arbitrary_buffer)*math.cos(each[2])))
+            y4 = each[1] + ((each[4]/2.0+self.arbitrary_buffer)*math.sin(each[2]+math.radians(90)) + ((each[5]/2.0+self.arbitrary_buffer)*math.sin(each[2])))
 
             polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
             #print(polygon.contains(point))
@@ -394,8 +293,9 @@ class Planner:
                 #if self.targetVelocity > each[3]:
                 #    self.targetVelocity = each[3]
                 # For distance control
-                targetFollowDistance = self.length - self.wheelbaseLengthFromRear + self.Lfc
-                followDistance = math.hypot(each[0]+((2*self.length - 2*self.wheelbaseLengthFromRear + each[4])*math.cos(each[2]))-self.localizationPositionX,each[1]+((2*self.length - 2*self.wheelbaseLengthFromRear + each[4])*math.sin(each[2]))-self.localizationPositionY)
+                targetFollowDistance = self.Lfc
+                #followDistance = math.hypot(each[0]+((each[5]/2.0+self.arbitrary_buffer)*math.cos(each[2]))-self.rearAxlePositionX, each[1]+((each[5]/2.0+self.arbitrary_buffer)*math.sin(each[2]))-self.rearAxlePositionY)
+                followDistance = math.hypot(self.localizationPositionX - (x3+x4)/2.0, self.localizationPositionY - (y3+y4)/2.0)
                 if self.followDistance > followDistance:
                     self.followDistance = followDistance
                     self.targetFollowDistance = targetFollowDistance
@@ -404,15 +304,15 @@ class Planner:
     def check_steering_angle_possible(self, x, y):
         # This equation is a quick check for if it is possible to get to the current point based on geometry
         # Essentually 2 circles that we cant go to
-        dx = self.localizationPositionX + self.maxTurningRadius*math.cos(angleDifference(self.theta + math.radians(90),x))
-        dy = self.localizationPositionY + self.maxTurningRadius*math.cos(angleDifference(self.theta + math.radians(90),y))
+        dx = self.rearAxlePositionX + self.maxTurningRadius*math.cos(shared_math.angleDifference(self.theta + math.radians(90),x))
+        dy = self.rearAxlePositionY + self.maxTurningRadius*math.cos(shared_math.angleDifference(self.theta + math.radians(90),y))
         d = math.hypot(dx, dy)
 
-        dx2 = self.localizationPositionX + self.maxTurningRadius*math.cos(angleDifference(self.theta - math.radians(90), x))
-        dy2 = self.localizationPositionY + self.maxTurningRadius*math.cos(angleDifference(self.theta - math.radians(90), y))
+        dx2 = self.rearAxlePositionX + self.maxTurningRadius*math.cos(shared_math.angleDifference(self.theta - math.radians(90), x))
+        dy2 = self.rearAxlePositionY + self.maxTurningRadius*math.cos(shared_math.angleDifference(self.theta - math.radians(90), y))
         d2 = math.hypot(dx2, dy2)
 
-        a = angleDifference(math.atan2(self.localizationPositionY - y, self.localizationPositionX - x), self.theta)
+        a = shared_math.angleDifference(math.atan2(self.rearAxlePositionY - y, self.rearAxlePositionX - x), self.theta)
         
         # Check if the target point is within either no go circle
         if d < self.maxTurningRadius or d2 < self.maxTurningRadius and a > math.radians(-90) and a < math.radians(90):
@@ -423,8 +323,8 @@ class Planner:
     def search_target_index(self):
         if self.lastPointIndex is None:
             # Search for the initial point, not reverse
-            dx = [self.localizationPositionX - icx for icx in self.xCoordinates]
-            dy = [self.localizationPositionY - icy for icy in self.yCoordinates]
+            dx = [self.rearAxlePositionX - icx for icx in self.xCoordinates]
+            dy = [self.rearAxlePositionY - icy for icy in self.yCoordinates]
             d = np.hypot(dx, dy)
             for index in range(len(dx)):
                 if not self.check_steering_angle_possible(dx[index],dy[index]):

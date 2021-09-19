@@ -6,10 +6,11 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 import numpy as np
+from sklearn.neighbors import NearestNeighbors
 
 # For simulation
-from connected_autonomous_vehicle.src import lidar_recognition, local_fusion
-from connected_infrastructure_sensor.src import local_fusion as cis_local_fusion
+from connected_autonomous_vehicle.src import lidar_recognition
+import local_fusion, sensor, shared_math
 from road_side_unit.src import global_fusion
 
 # Defines the colors for various elements of the GUI
@@ -30,67 +31,6 @@ brush_color = {
     "sensor_fusion_centroid": Qt.red,
     "sensor_fusion_error_ellipse": Qt.green
 }
-
-
-def angleDifference( angle1, angle2 ):
-    diff = ( angle2 - angle1 + math.pi ) % (2*math.pi) - math.pi
-    if diff < -math.pi:
-        return diff + (2*math.pi)
-    else:
-        return diff
-
-def rotate(origin, point, angle):
-    """
-    Rotate a point counterclockwise by a given angle around a given origin.
-
-    The angle should be given in radians.
-    """
-    ox, oy = origin
-    px, py = point
-
-    qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
-    qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
-    return qx, qy
-
-def ellipsify(mu, covariance, meters_to_print_scale, num = 50, multiplier = 3.0):
-    # Eigenvalue and eigenvector computations
-    w, v = np.linalg.eig(covariance)
-
-    # Use the eigenvalue to figure out which direction is larger
-    if abs(w[0]) > abs(w[1]):
-        a = abs(w[0])
-        b = abs(w[1])
-        phi = math.atan2(v[0, 0], v[1, 0])
-    else:
-        a = abs(w[1])
-        b = abs(w[0])
-        phi = math.atan2(v[0, 1], v[1, 1])
-
-    # Default multiplier is 3 because that should cover 99.7% of errors
-    print("a (ellipsify) ", str(a))
-    print("b (ellipsify)", str(b))
-    print("phi (ellipsify) ", str(math.degrees(phi)))
-    pointEvery = math.radians(360.0)/num
-    ellipse = QPolygonF()
-    cur_angle = 0
-    for count in range(num + 1):
-        denominator = math.sqrt( a**2 * math.sin(phi-cur_angle)**2 + b**2 * math.cos(phi-cur_angle)**2 )
-        if denominator == 0.0:
-            print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
-            range_val = 0
-        else:
-            range_val = ( a * b ) / denominator
-        print ( " m ", count, math.degrees(cur_angle), range_val )
-        x_val = mu[0] + range_val * math.cos(cur_angle) * meters_to_print_scale
-        y_val = mu[1] + range_val * math.sin(cur_angle) * meters_to_print_scale
-        ellipse.append(QPointF(x_val, y_val))
-        cur_angle += pointEvery
-
-    return ellipse
-
-def calcSelfRadiusAtAnlge(self, angle):
-        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
-        return self.calculateRadiusAtAngle(a, b, phi, angle)
 
 class MainWindow(QMainWindow):
     def __init__(self, mapSpecs, vehiclesLock, cav, cis, trafficLightArray):
@@ -117,13 +57,20 @@ class MainWindow(QMainWindow):
                 self.localFusionCAV.append(local_fusion.FUSION())
             else:
                 self.lidarRecognitionList.append(None)
-                self.localFusionCAV.append(cis_local_fusion.FUSION())
+                self.localFusionCAV.append(None)
         # Add in the arrays for local fusion storage for CIS sensors
         for idx, sens in self.cis.items():
             if sens.simCIS:
                 self.localFusionCIS.append(local_fusion.FUSION())
             else:
-                self.localFusionCIS.append(cis_local_fusion.FUSION())
+                self.localFusionCIS.append(None)
+
+        # Keep track of stats if this is a simulation
+        self.unit_test_state = 0
+        self.unit_test_local_detection_miss_results = []
+        self.unit_test_local_rmse_results = []
+        self.local_detection_miss = 0
+        self.local_differences = []
 
         # Parameters of test
         self.mapSpecs = mapSpecs
@@ -228,6 +175,14 @@ class MainWindow(QMainWindow):
 
         self.endButton.clicked.connect(self.on_end_clicked)
 
+        self.unitTestButton = QPushButton('Unit Test Off', self)
+        self.unitTestButton.setEnabled(True)
+        self.unitTestButton.resize(140, 32)
+        self.unitTestButton.move(1000, 820)
+
+        self.unitTestButton.clicked.connect(self.on_unit_test_clicked)
+        self.unit_test = False
+
         self.drawIntersection = True
 
         # Set this to true after we have set the coordinates set
@@ -291,12 +246,13 @@ class MainWindow(QMainWindow):
         self.pause_simulation = True
 
     def on_sensors_clicked(self):
-        if self.sensorsButton.text() == 'Full Sensor Sim':
-            self.full_simulation = False
-            self.sensorsButton.setText('Quick Sensor Sim')
-        else:
-            self.full_simulation = True
-            self.sensorsButton.setText('Full Sensor Sim')
+        if not self.unit_test:
+            if self.sensorsButton.text() == 'Full Sensor Sim':
+                self.full_simulation = False
+                self.sensorsButton.setText('Quick Sensor Sim')
+            else:
+                self.full_simulation = True
+                self.sensorsButton.setText('Full Sensor Sim')
 
     def on_lidar_clicked(self):
         if self.lidarButton.text() == 'LIDAR Debug Off':
@@ -331,20 +287,22 @@ class MainWindow(QMainWindow):
             self.pathButton.setText('Path Debug Off')
 
     def on_simulate_error_clicked(self):
-        if self.errorButton.text() == 'Simulate Error Off':
-            self.simulate_error = True
-            self.errorButton.setText('Simulate Error On')
-        else:
-            self.simulate_error = False
-            self.errorButton.setText('Simulate Error Off')
+        if not self.unit_test:
+            if self.errorButton.text() == 'Simulate Error Off':
+                self.simulate_error = True
+                self.errorButton.setText('Simulate Error On')
+            else:
+                self.simulate_error = False
+                self.errorButton.setText('Simulate Error Off')
 
     def on_estimate_covariance_clicked(self):
-        if self.covarianceButton.text() == 'Estimate Local Covariance Off':
-            self.estimate_covariance = True
-            self.covarianceButton.setText('Estimate Local Covariance On')
-        else:
-            self.estimate_covariance = False
-            self.covarianceButton.setText('Estimate Local Covariance Off')
+        if not self.unit_test:
+            if self.covarianceButton.text() == 'Estimate Local Covariance Off':
+                self.estimate_covariance = True
+                self.covarianceButton.setText('Estimate Local Covariance On')
+            else:
+                self.estimate_covariance = False
+                self.covarianceButton.setText('Estimate Local Covariance Off')
 
     def on_display_covariance_clicked(self):
         if self.covarianceDisplayButton.text() == 'Display Covariance Off':
@@ -354,14 +312,118 @@ class MainWindow(QMainWindow):
             self.display_covariance = False
             self.covarianceDisplayButton.setText('Display Covariance Off')
 
+    def on_unit_test_clicked(self):
+        if self.unitTestButton.text() == 'Unit Test Off':
+            if self.time == 0.0:
+                self.unit_test = True
+                self.unitTestButton.setText('Unit Test On')
+
     def on_end_clicked(self):
         sys.exit()
 
     def stepTime(self):
-        if self.full_simulation:
-            self.time += 125
-        else:
-            self.time = round(time.time() * 1000)
+        if self.unit_test:
+            test_time = 60000
+            if self.time % test_time == 0:
+                if self.unit_test_state == 0:
+                    for idx, vehicle in self.vehicles.items():
+                        self.lineVehicleSpeed[idx].setText("0.5")
+                        self.lineVehicleSpeed[idx].setReadOnly(True)
+                    self.sensorsButton.setEnabled(False)
+                    self.errorButton.setEnabled(False)
+                    self.covarianceButton.setEnabled(False)
+                    self.endButton.setEnabled(True)
+                    self.pauseButton.setEnabled(False)
+                    self.startButton.setEnabled(False)
+                    self.unitTestButton.setEnabled(False)
+                    self.full_simulation = True
+                    self.simulate_error = True
+                    self.estimate_covariance = False
+                    self.pause_simulation = False
+                    self.unit_test_state = 1
+
+                    # Reset the stats
+                    self.local_detection_miss = 0
+                    self.local_differences = []
+                elif self.unit_test_state == 1:
+                    # Calculate the prior results
+                    differences_squared = np.array(self.local_differences) ** 2
+                    mean_of_differences_squared = differences_squared.mean()
+                    rmse_val = np.sqrt(mean_of_differences_squared)
+
+                    self.unit_test_local_detection_miss_results.append(rmse_val)
+                    self.unit_test_local_rmse_results.append(self.local_detection_miss)
+
+                    print(" state 0 local_rmse_val ", rmse_val, " misses: ", self.local_detection_miss)
+
+                    # Reset the stats
+                    self.local_detection_miss = 0
+                    self.local_differences = []
+
+                    for idx, vehicle in self.vehicles.items():
+                        self.lineVehicleSpeed[idx].setText("0.5")
+                    self.full_simulation = True
+                    self.simulate_error = True
+                    self.estimate_covariance = True
+                    self.pause_simulation = False
+                    self.unit_test_state = 2
+                else:
+                                        # Calculate the prior results
+                    differences_squared = np.array(self.local_differences) ** 2
+                    mean_of_differences_squared = differences_squared.mean()
+                    rmse_val = np.sqrt(mean_of_differences_squared)
+
+                    self.unit_test_local_detection_miss_results.append(rmse_val)
+                    self.unit_test_local_rmse_results.append(self.local_detection_miss)
+
+                    print(" state 1 local_rmse_val ", rmse_val, " misses: ", self.local_detection_miss)
+
+                    # Reset the stats
+                    self.local_detection_miss = 0
+                    self.local_differences = []
+
+                    for idx, vehicle in self.vehicles.items():
+                        self.lineVehicleSpeed[idx].setText("0.0")
+                        self.lineVehicleSpeed[idx].setReadOnly(False)
+
+                    idx = 0
+                    fails = 0
+                    for rmse, miss in zip(self.unit_test_local_detection_miss_results, self.unit_test_local_rmse_results):
+                        print(" Test: ", idx, " local_rmse_val: ", rmse, " misses: ", miss)
+                        if idx == 0:
+                            if rmse < .18 or rmse > 20 or miss > (50 * test_time):
+                                fails += 1
+                        elif idx == 0:
+                            if rmse < .18 or rmse > 20 or miss > (50 * test_time):
+                                fails += 1
+                        idx += 1
+
+                    if fails:
+                        print( " One or more unit tests has failed! Failures: ", fails)
+
+                    # Test over
+                    self.sensorsButton.setEnabled(True)
+                    self.errorButton.setEnabled(True)
+                    self.covarianceButton.setEnabled(True)
+                    self.endButton.setEnabled(True)
+                    self.pauseButton.setEnabled(False)
+                    self.startButton.setEnabled(True)
+                    self.unit_test_state = 0
+                    self.full_simulation = False
+                    self.simulate_error = False
+                    self.estimate_covariance = False
+                    self.pause_simulation = True
+                    self.unitTestButton.setEnabled(True)
+                    self.unit_test = False
+                    self.unitTestButton.setText('Unit Test Off')
+                    self.unitTestButton.setEnabled(True)
+
+
+        if not self.pause_simulation:
+            if self.full_simulation:
+                    self.time += 125
+            else:
+                self.time = round(time.time() * 1000)
 
         # 8HZ
         if self.full_simulation:
@@ -440,7 +502,7 @@ class MainWindow(QMainWindow):
                         if self.full_simulation:
                             # Create that fake LIDAR
                             if self.lidarRecognitionList[idx] != None:
-                                point_cloud, point_cloud_error, camera_array, camera_error_array = vehicle.fake_lidar_and_camera(tempList, [], 15.0, 15.0, 0.0, 160.0)
+                                point_cloud, point_cloud_error, camera_array, camera_error_array = sensor.fake_lidar_and_camera(vehicle, tempList, [], 15.0, 15.0, 0.0, 160.0)
                                 if self.simulate_error:
                                     vehicle.cameraDetections = camera_error_array
                                     lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
@@ -471,8 +533,8 @@ class MainWindow(QMainWindow):
                                 vehicle.lidarPoints = point_cloud
 
                                 # Do the local fusion like we would on the vehicle
-                                self.localFusionCAV[idx].processDetectionFrame(0, self.time/1000.0, vehicle.cameraDetections, .25, self.estimate_covariance)
-                                self.localFusionCAV[idx].processDetectionFrame(1, self.time/1000.0, vehicle.lidarDetections, .25, self.estimate_covariance)
+                                self.localFusionCAV[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, vehicle.cameraDetections, .25, self.estimate_covariance)
+                                self.localFusionCAV[idx].processDetectionFrame(local_fusion.LIDAR, self.time/1000.0, vehicle.lidarDetections, .25, self.estimate_covariance)
                                 results = self.localFusionCAV[idx].fuseDetectionFrame(self.estimate_covariance, vehicle)
 
                                 # Add to the GUI
@@ -480,8 +542,7 @@ class MainWindow(QMainWindow):
                                 for each in results:
                                     sensed_x = each[1]
                                     sensed_y = each[2]
-                                    vehicle.fusionDetections.append((sensed_x, sensed_y, each[4], each[5]))
-                                    vehicle.fusionDetectionsCovariance.append(each[3])
+                                    vehicle.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5]))
 
                         else:
                             # Quick fake of sensor values
@@ -489,8 +550,7 @@ class MainWindow(QMainWindow):
                             for each in tempList:
                                 sensed_x = each[0]
                                 sensed_y = each[1]
-                                vehicle.fusionDetections.append((sensed_x, sensed_y, 0.0, 0.0))
-                                vehicle.fusionDetectionsCovariance.append(np.array([[1.0, 0],[0, 1.0]]))
+                                vehicle.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), each[4], each[5]))
 
                         # Now update our current PID with respect to other vehicles
                         vehicle.check_positions_of_other_vehicles_adjust_velocity(tempList)
@@ -498,8 +558,31 @@ class MainWindow(QMainWindow):
                         # We can't update the PID controls until after all positions are known
                         vehicle.update_pid()
 
+                        # Ground truth to the original dataset
+                        testSet = []
+                        groundTruth = []
+                        for each in vehicle.fusionDetections:
+                            sensed_x = each[0]
+                            sensed_y = each[1]
+                            testSet.append([sensed_x, sensed_y])
+                        for each in tempList:
+                            sensed_x = each[0]
+                            sensed_y = each[1]
+                            groundTruth.append([sensed_x, sensed_y])
+
+                        if len(testSet) >= 1 and len(groundTruth) >= 1:
+                            nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
+                            distances, indices = nbrs.kneighbors(np.array(groundTruth))
+
+                            # Now calculate the score
+                            for dist in distances:
+                                if dist > .5:
+                                    self.local_detection_miss += 1
+                                else:
+                                    self.local_differences.append(dist)
+
                         # Add to the global sensor fusion
-                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, vehicle.fusionDetectionsCovariance, .25)
+                        #self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, vehicle.fusionDetectionsCovariance, .25)
 
             for idx, cis in self.cis.items():
                 #print ( " CIS:", idx )
@@ -517,7 +600,7 @@ class MainWindow(QMainWindow):
                         if self.full_simulation:
                             # Create that fake camera
                             if self.lidarRecognitionList[idx] != None:
-                                camera_array, camera_error_array = cis.fake_camera(vehicleList, [], 15.0, 0.0, 160.0)
+                                point_cloud, point_cloud_error, camera_array, camera_error_array = sensor.fake_lidar_and_camera(cis, tempList, [], 15.0, 15.0, 0.0, 160.0)
                                 if self.simulate_error:
                                     cis.cameraDetections = camera_error_array
                                 else:
@@ -538,7 +621,7 @@ class MainWindow(QMainWindow):
                                 # Fusion detection frame is the same as single camera (for now)
                                 # Add to the GUI
                                 # Do the local fusion like we would on the vehicle
-                                self.localFusionCIS[idx].processDetectionFrame(0, self.time/1000.0, cis.cameraDetections, .25, self.estimate_covariance)
+                                self.localFusionCIS[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, cis.cameraDetections, .25, self.estimate_covariance)
                                 results = self.localFusionCIS[idx].fuseDetectionFrame(self.estimate_covariance, cis)
 
                                 # Add to the GUI
@@ -546,19 +629,40 @@ class MainWindow(QMainWindow):
                                 for each in results:
                                     sensed_x = each[1]
                                     sensed_y = each[2]
-                                    cis.fusionDetections.append((sensed_x, sensed_y, each[4], each[5]))
-                                    cis.fusionDetectionsCovariance.append(each[3])
+                                    cis.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5]))
                         else:
                             # Quick fake of sensor values
                             cis.fusionDetections = []
                             for each in vehicleList:
                                 sensed_x = each[0]
                                 sensed_y = each[1]
-                                cis.fusionDetections.append((sensed_x, sensed_y, 0, 0))
-                                cis.fusionDetectionsCovariance.append(np.array([[1.0, 0.0],[0.0, 1.0]]))
+                                cis.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
+
+                        # Ground truth to the original dataset
+                        testSet = []
+                        groundTruth = []
+                        for each in vehicle.fusionDetections:
+                            sensed_x = each[0]
+                            sensed_y = each[1]
+                            testSet.append([sensed_x, sensed_y])
+                        for each in tempList:
+                            sensed_x = each[0]
+                            sensed_y = each[1]
+                            groundTruth.append([sensed_x, sensed_y])
+
+                        if len(testSet) >= 1 and len(groundTruth) >= 1:
+                            nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
+                            distances, indices = nbrs.kneighbors(np.array(groundTruth))
+
+                            # Now calculate the score
+                            for dist in distances:
+                                if dist > .25:
+                                    self.local_detection_miss += 1
+                                else:
+                                    self.local_differences.append(dist)
 
                         # Add to the global sensor fusion
-                        self.globalFusion.processDetectionFrame(1000+idx, self.time/1000.0, cis.fusionDetections, cis.fusionDetectionsCovariance, .25)
+                        #self.globalFusion.processDetectionFrame(1000+idx, self.time/1000.0, cis.fusionDetections, cis.fusionDetectionsCovariance, .25)
 
             self.vehiclesLock.release()
 
@@ -586,7 +690,7 @@ class MainWindow(QMainWindow):
         height = 2 * r
         startAngle = math.atan2(y1 - y0, x1 - x0)
         endAngle = math.atan2(y2 - y0, x2 - x0)
-        angleLen = math.degrees(angleDifference(startAngle, endAngle))
+        angleLen = math.degrees(shared_math.angleDifference(startAngle, endAngle))
         startAngle = math.degrees(startAngle)
         painter.drawArc(self.translateX(x * self.mapSpecs.meters_to_print_scale),
                         self.translateY(y * self.mapSpecs.meters_to_print_scale), width * self.mapSpecs.meters_to_print_scale,
@@ -710,44 +814,53 @@ class MainWindow(QMainWindow):
 
                 # Draw the vehicle position
                 # Front
-                front_axle_offset_x = (vehicle.wheelbaseLength * self.mapSpecs.meters_to_print_scale) * math.cos(
+                front_axle_offset_x = (vehicle.wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
                                      vehicle.theta)
-                front_axle_offset_y = (vehicle.wheelbaseLength * self.mapSpecs.meters_to_print_scale) * math.sin(
+                front_axle_offset_y = (vehicle.wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
                                      vehicle.theta)
+                rear_axle_offset_x = (vehicle.wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                     vehicle.theta + math.radians(180))
+                rear_axle_offset_y = (vehicle.wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     vehicle.theta + math.radians(180))
                 painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(90)) + front_axle_offset_x),
+                                     vehicle.theta + math.radians(90))) + front_axle_offset_x,
                                  self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
                                      vehicle.theta + math.radians(90)) + front_axle_offset_y),
                                  self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(90)) + front_axle_offset_x),
+                                     vehicle.theta + math.radians(90))) + front_axle_offset_x,
                                  self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
                                      vehicle.theta + math.radians(90)) + front_axle_offset_y))
                 # Middle
-                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
-                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                             vehicle.wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                     vehicle.theta + math.radians(180))),
+                                 self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                             vehicle.wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                     vehicle.theta + math.radians(180))),
                                  self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                                             vehicle.wheelbaseLength * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                             vehicle.wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
                                      vehicle.theta)),
                                  self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             vehicle.wheelbaseLength * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                             vehicle.wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
                                      vehicle.theta)))
                 # Back
                 painter.drawLine(self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(90))),
+                                     vehicle.theta + math.radians(90))) + rear_axle_offset_x,
                                  self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta + math.radians(90))),
+                                     vehicle.theta + math.radians(90)) + rear_axle_offset_y),
                                  self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(90))),
+                                     vehicle.theta + math.radians(90))) + rear_axle_offset_x,
                                  self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta + math.radians(90))))
+                                     vehicle.theta + math.radians(90)) + rear_axle_offset_y))
+
                 # Wheels
                 driver_front_center_x = vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
@@ -763,16 +876,17 @@ class MainWindow(QMainWindow):
                                      vehicle.theta + math.radians(90)) + front_axle_offset_y
                 driver_rear_center_x = vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(90))
+                                     vehicle.theta + math.radians(90)) + rear_axle_offset_x
                 driver_rear_center_y =  vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta + math.radians(90))
+                                     vehicle.theta + math.radians(90)) + rear_axle_offset_y
                 passenger_rear_center_x = vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     vehicle.theta + math.radians(90))
+                                     vehicle.theta + math.radians(90)) + rear_axle_offset_x
                 passenger_rear_center_y =  vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
                                              (vehicle.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     vehicle.theta + math.radians(90))
+                                     vehicle.theta + math.radians(90)) + rear_axle_offset_y
+
                 # Driver side front
                 painter.drawLine(self.translateX(driver_front_center_x + 5 * math.cos(vehicle.theta + vehicle.steeringAcceleration)),
                                  self.translateY(driver_front_center_y + 5 * math.sin(vehicle.theta + vehicle.steeringAcceleration)),
@@ -803,8 +917,7 @@ class MainWindow(QMainWindow):
                     pen.setBrush(brush_color['wheel_angle'])
                     pen.setWidth(1)
                     painter.setPen(pen)
-                    self.drawTargetArc(vehicle.centerPointX, vehicle.centerPointY, vehicle.localizationPositionX,
-                                    vehicle.localizationPositionY, vehicle.targetIndexX, vehicle.targetIndexY, painter)
+                    self.drawTargetArc(vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.rearAxlePositionX, vehicle.rearAxlePositionY, vehicle.targetIndexX, vehicle.targetIndexY, painter)
 
                 self.labelVehicleSpeedActual[idx].setText('VA=' + str(round(vehicle.velocity, 2)))
                 self.labelVehicleSpeedTarget[idx].setText('VT=' + str(round(vehicle.targetVelocity, 2)))
@@ -817,33 +930,29 @@ class MainWindow(QMainWindow):
                     painter.setPen(pen)
                     buffer = 0.1
                     x1 = vehicle.localizationPositionX + (
-                                (vehicle.width / 2 + buffer) * math.cos(vehicle.theta + math.radians(90)) + (
-                                    (vehicle.wheelbaseLengthFromRear + buffer) * math.cos(
-                                vehicle.theta - math.radians(180))))
+                                (vehicle.width/2.0 + buffer) * math.cos(vehicle.theta + math.radians(90)) + (
+                                    (vehicle.length/2.0 + buffer) * math.cos(vehicle.theta - math.radians(180))))
                     y1 = vehicle.localizationPositionY + (
-                                (vehicle.width / 2 + buffer) * math.sin(vehicle.theta + math.radians(90)) + (
-                                    (vehicle.wheelbaseLengthFromRear + buffer) * math.sin(
-                                vehicle.theta - math.radians(180))))
+                                (vehicle.width/2.0 + buffer) * math.sin(vehicle.theta + math.radians(90)) + (
+                                    (vehicle.length/2.0 + buffer) * math.sin(vehicle.theta - math.radians(180))))
                     x2 = vehicle.localizationPositionX + (
-                                (vehicle.width / 2 + buffer) * math.cos(vehicle.theta - math.radians(90)) + (
-                                    (vehicle.wheelbaseLengthFromRear + buffer) * math.cos(
-                                vehicle.theta - math.radians(180))))
+                                (vehicle.width/2.0 + buffer) * math.cos(vehicle.theta - math.radians(90)) + (
+                                    (vehicle.length/2.0 + buffer) * math.cos(vehicle.theta - math.radians(180))))
                     y2 = vehicle.localizationPositionY + (
-                                (vehicle.width / 2 + buffer) * math.sin(vehicle.theta - math.radians(90)) + (
-                                    (vehicle.wheelbaseLengthFromRear + buffer) * math.sin(
-                                vehicle.theta - math.radians(180))))
+                                (vehicle.width/2.0 + buffer) * math.sin(vehicle.theta - math.radians(90)) + (
+                                    (vehicle.length/2.0 + buffer) * math.sin(vehicle.theta - math.radians(180))))
                     x3 = vehicle.localizationPositionX + (
-                                (vehicle.width / 2 + buffer) * math.cos(vehicle.theta - math.radians(90)) + (
-                                    (vehicle.length - vehicle.wheelbaseLengthFromRear + buffer) * math.cos(vehicle.theta)))
+                                (vehicle.width/2.0 + buffer) * math.cos(vehicle.theta - math.radians(90)) + (
+                                    (vehicle.length/2.0 + buffer) * math.cos(vehicle.theta)))
                     y3 = vehicle.localizationPositionY + (
-                                (vehicle.width / 2 + buffer) * math.sin(vehicle.theta - math.radians(90)) + (
-                                    (vehicle.length - vehicle.wheelbaseLengthFromRear + buffer) * math.sin(vehicle.theta)))
+                                (vehicle.width/2.0 + buffer) * math.sin(vehicle.theta - math.radians(90)) + (
+                                    (vehicle.length/2.0 + buffer) * math.sin(vehicle.theta)))
                     x4 = vehicle.localizationPositionX + (
-                                (vehicle.width / 2 + buffer) * math.cos(vehicle.theta + math.radians(90)) + (
-                                    (vehicle.length - vehicle.wheelbaseLengthFromRear + buffer) * math.cos(vehicle.theta)))
+                                (vehicle.width/2.0 + buffer) * math.cos(vehicle.theta + math.radians(90)) + (
+                                    (vehicle.length/2.0 + buffer) * math.cos(vehicle.theta)))
                     y4 = vehicle.localizationPositionY + (
-                                (vehicle.width / 2 + buffer) * math.sin(vehicle.theta + math.radians(90)) + (
-                                    (vehicle.length - vehicle.wheelbaseLengthFromRear + buffer) * math.sin(vehicle.theta)))
+                                (vehicle.width/2.0 + buffer) * math.sin(vehicle.theta + math.radians(90)) + (
+                                    (vehicle.length/2.0 + buffer) * math.sin(vehicle.theta)))
 
                     # print (vehicle.localizationPositionX, vehicle.localizationPositionY, x1, y1, x2, y2)
                     painter.drawPoint(self.translateX(x1 * self.mapSpecs.meters_to_print_scale),
@@ -943,17 +1052,32 @@ class MainWindow(QMainWindow):
                     painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
-            # if self.display_covariance:
-            #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-            #     pen.setWidth(.5)
-            #     painter.setPen(pen)
-            #     for each in cis.cameraDetections:
-            #         # Make sure covariance parameters have been added
-            #         if len(each) >= 3:
-            #             pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-            #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-            #             ellipse = ellipsify(pos, each[2], self.mapSpecs.meters_to_print_scale, 50, 3.0)
-            #             painter.drawPolygon(ellipse)
+                # Time for displaying the covaraince
+                if self.display_covariance:
+                    pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                    pen.setWidth(.5)
+                    painter.setPen(pen)
+                    for each in vehicle.cameraDetections:
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[2].covariance, 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
+                            # Save the previous painter envinronment so we don't mess up the other things
+                            painter.save()
+                            # get the x and y components of the ellipse position
+                            ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                            ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                            # translate the center to where our ellipse should be
+                            painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                            # Rotate by phi to turn the ellipse the correct way
+                            painter.rotate(math.degrees(phi))
+                            # Draw the ellipse at 0.0
+                            painter.drawEllipse(0, 0, a, b)
+                            # Restore the environment to what it was before
+                            painter.restore()
 
             # Now draw the camera detections
             for idx, cis in self.cis.items():
@@ -970,17 +1094,31 @@ class MainWindow(QMainWindow):
                     painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
-            # if self.display_covariance:
-            #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-            #     pen.setWidth(.5)
-            #     painter.setPen(pen)
-            #     for each in cis.cameraDetections:
-            #         # Make sure covariance parameters have been added
-            #         if len(each) >= 3:
-            #             pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-            #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-            #             ellipse = ellipsify(pos, each[2], self.mapSpecs.meters_to_print_scale, 50, 3.0)
-            #             painter.drawPolygon(ellipse)
+            if self.display_covariance:
+                pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                for each in cis.cameraDetections:
+                    # Make sure covariance parameters have been added
+                    if len(each) >= 3:
+                        pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                        a, b, phi = shared_math.ellipsify(each[2].covariance, 3.0)
+                        a = a * self.mapSpecs.meters_to_print_scale
+                        b = b * self.mapSpecs.meters_to_print_scale
+                        # Save the previous painter envinronment so we don't mess up the other things
+                        painter.save()
+                        # get the x and y components of the ellipse position
+                        ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                        ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                        # translate the center to where our ellipse should be
+                        painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                        # Rotate by phi to tunr the ellipse the correct way
+                        painter.rotate(math.degrees(phi))
+                        # Draw the ellipse at 0.0
+                        painter.drawEllipse(0, 0, a, b)
+                        # Restore the environment to what it was before
+                        painter.restore()
 
         if self.lidar_debug:
             for idx, vehicle in self.vehicles.items():
@@ -1001,18 +1139,31 @@ class MainWindow(QMainWindow):
                     painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
-            if self.display_covariance:
-                pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-                pen.setWidth(.5)
-                painter.setPen(pen)
-                for each in vehicle.lidarDetections:
-                    # Make sure covariance parameters have been added
-                    if len(each) >= 3:
-                        print(each[2].covariance)
-                        pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                        ellipse = ellipsify(pos, each[2].covariance, self.mapSpecs.meters_to_print_scale, 50, 3.0)
-                        painter.drawPolygon(ellipse)
+                if self.display_covariance:
+                    pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                    pen.setWidth(.5)
+                    painter.setPen(pen)
+                    for each in vehicle.lidarDetections:
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[2].covariance, 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
+                            # Save the previous painter envinronment so we don't mess up the other things
+                            painter.save()
+                            # get the x and y components of the ellipse position
+                            ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                            ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                            # translate the center to where our ellipse should be
+                            painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                            # Rotate by phi to tunr the ellipse the correct way
+                            painter.rotate(math.degrees(phi))
+                            # Draw the ellipse at 0.0
+                            painter.drawEllipse(0, 0, a, b)
+                            # Restore the environment to what it was before
+                            painter.restore()
 
         if self.fusion_debug:
             for idx, vehicle in self.vehicles.items():
@@ -1030,19 +1181,36 @@ class MainWindow(QMainWindow):
                     # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
                     painter.drawLine(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
-                                    self.translateX((each[0] + (8.0*each[2])) * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY((each[1] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale))
+                                    self.translateX((each[0] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY((each[1] + (8.0*each[4])) * self.mapSpecs.meters_to_print_scale))
 
                 if self.display_covariance:
                     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
                     pen.setWidth(.5)
                     painter.setPen(pen)
-                    for covariance, each in zip(vehicle.fusionDetectionsCovariance, vehicle.fusionDetections):
-                        print ( covariance )
-                        pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                        ellipse = ellipsify(pos, covariance, self.mapSpecs.meters_to_print_scale, 50, 3.0)
-                        painter.drawPolygon(ellipse)
+                    for each in vehicle.fusionDetections:
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
+
+                            if not math.isnan(a) and not math.isnan(b):
+                                # Save the previous painter envinronment so we don't mess up the other things
+                                painter.save()
+                                # get the x and y components of the ellipse position
+                                ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                                ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                                # translate the center to where our ellipse should be
+                                painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                                # Rotate by phi to tunr the ellipse the correct way
+                                painter.rotate(math.degrees(phi))
+                                # Draw the ellipse at 0.0
+                                painter.drawEllipse(0, 0, a, b)
+                                # Restore the environment to what it was before
+                                painter.restore()
 
             for idx, cis in self.cis.items():
                 # Now draw the camera fusion detections
@@ -1059,18 +1227,35 @@ class MainWindow(QMainWindow):
                     # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta)
                     painter.drawLine(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
-                                    self.translateX((each[0] + (8.0*each[2])) * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY((each[1] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale))
+                                    self.translateX((each[0] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY((each[1] + (8.0*each[4])) * self.mapSpecs.meters_to_print_scale))
 
                 if self.display_covariance:
                     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
                     pen.setWidth(.5)
                     painter.setPen(pen)
-                    for covariance, each in zip(cis.fusionDetectionsCovariance, cis.fusionDetections):
-                        pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                        ellipse = ellipsify(pos, covariance, self.mapSpecs.meters_to_print_scale, 50, 3.0)
-                        painter.drawPolygon(ellipse)
+                    for each in cis.fusionDetections:
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
+                            if not math.isnan(a) and not math.isnan(b):
+                                # Save the previous painter envinronment so we don't mess up the other things
+                                painter.save()
+                                # get the x and y components of the ellipse position
+                                ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                                ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                                # translate the center to where our ellipse should be
+                                painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                                # Rotate by phi to tunr the ellipse the correct way
+                                painter.rotate(math.degrees(phi))
+                                # Draw the ellipse at 0.0
+                                painter.drawEllipse(0, 0, a, b)
+                                # Restore the environment to what it was before
+                                painter.restore()
 
         if self.drawTrafficLight:
             pen = QPen()
