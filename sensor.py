@@ -178,7 +178,7 @@ class Sensor:
                 # Calculate our expected errors in x,y coordinates
                 #print("de:", distal_error, " re:", 2 * (object_distance * math.sin(radial_error / 2)))
                 actualRadialError = np.random.normal(0, radial_error, 1)[0]
-                actualDistanceError = np.random.normal(0, elipse_b_expected, 1)[0]
+                actualDistanceError = np.random.normal(0, distal_error, 1)[0]
                 x_error_generated = ((object_distance + actualDistanceError) * math.cos(
                     target_line_angle + actualRadialError))
                 y_error_generated = ((object_distance + actualDistanceError) * math.sin(
