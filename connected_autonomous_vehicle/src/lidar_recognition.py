@@ -339,7 +339,7 @@ class LIDAR:
         smallX = []
         smallY = []
         for clusterRange, x, y in zip(clusterMaxRange, centerPointsX, centerPointsY):
-            if clusterRange > 1.0:
+            if clusterRange > 1.5:
                 bigX.append(x)
                 bigY.append(y)
             else:
@@ -351,7 +351,11 @@ class LIDAR:
         detections_position_list = []
         detections_list = []
 
+        # For the small detections we should add .25 to offset for the center of the vehicle from teh edge
         for x, y in zip(smallX, smallY):
+            det_dir = math.atan2(vehicle_y - y, vehicle_x - x) - math.radians(180)
+            x = x + (.25 * math.cos(det_dir))
+            y = y + (.25 * math.sin(det_dir))
             detections_position_list.append(
                 [x - self.min_size, y - self.min_size, x + self.min_size, y + self.min_size])
             detections_list.append([0, 90, x, y, self.min_size * 2])

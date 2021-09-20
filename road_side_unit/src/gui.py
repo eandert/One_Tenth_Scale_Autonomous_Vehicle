@@ -67,10 +67,13 @@ class MainWindow(QMainWindow):
 
         # Keep track of stats if this is a simulation
         self.unit_test_state = 0
-        self.unit_test_local_detection_miss_results = []
+        self.unit_test_local_over_detection_miss_results = []
+        self.unit_test_local_under_detection_miss_results = []
         self.unit_test_local_rmse_results = []
-        self.local_detection_miss = 0
+        self.local_over_detection_miss = 0
+        self.local_under_detection_miss = 0
         self.local_differences = []
+        
 
         # Parameters of test
         self.mapSpecs = mapSpecs
@@ -323,7 +326,7 @@ class MainWindow(QMainWindow):
 
     def stepTime(self):
         if self.unit_test:
-            test_time = 60000
+            test_time = 600000
             if self.time % test_time == 0:
                 if self.unit_test_state == 0:
                     for idx, vehicle in self.vehicles.items():
@@ -343,7 +346,8 @@ class MainWindow(QMainWindow):
                     self.unit_test_state = 1
 
                     # Reset the stats
-                    self.local_detection_miss = 0
+                    self.local_over_detection_miss = 0
+                    self.local_under_detection_miss = 0
                     self.local_differences = []
                 elif self.unit_test_state == 1:
                     # Calculate the prior results
@@ -351,13 +355,16 @@ class MainWindow(QMainWindow):
                     mean_of_differences_squared = differences_squared.mean()
                     rmse_val = np.sqrt(mean_of_differences_squared)
 
-                    self.unit_test_local_detection_miss_results.append(rmse_val)
-                    self.unit_test_local_rmse_results.append(self.local_detection_miss)
+                    self.unit_test_local_rmse_results.append(rmse_val)
+                    self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
+                    self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
 
-                    print(" state 0 local_rmse_val ", rmse_val, " misses: ", self.local_detection_miss)
+                    print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
+
 
                     # Reset the stats
-                    self.local_detection_miss = 0
+                    self.local_over_detection_miss = 0
+                    self.local_under_detection_miss = 0
                     self.local_differences = []
 
                     for idx, vehicle in self.vehicles.items():
@@ -373,13 +380,15 @@ class MainWindow(QMainWindow):
                     mean_of_differences_squared = differences_squared.mean()
                     rmse_val = np.sqrt(mean_of_differences_squared)
 
-                    self.unit_test_local_detection_miss_results.append(rmse_val)
-                    self.unit_test_local_rmse_results.append(self.local_detection_miss)
+                    self.unit_test_local_rmse_results.append(rmse_val)
+                    self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
+                    self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
 
-                    print(" state 1 local_rmse_val ", rmse_val, " misses: ", self.local_detection_miss)
+                    print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
 
                     # Reset the stats
-                    self.local_detection_miss = 0
+                    self.local_over_detection_miss = 0
+                    self.local_under_detection_miss = 0
                     self.local_differences = []
 
                     for idx, vehicle in self.vehicles.items():
@@ -388,13 +397,13 @@ class MainWindow(QMainWindow):
 
                     idx = 0
                     fails = 0
-                    for rmse, miss in zip(self.unit_test_local_detection_miss_results, self.unit_test_local_rmse_results):
-                        print(" Test: ", idx, " local_rmse_val: ", rmse, " misses: ", miss)
+                    for rmse, O_miss, u_miss in zip(self.unit_test_local_rmse_results, self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results):
+                        print(" Test: ", idx, " local_rmse_val: ", rmse, " over misses: ", O_miss, " under misses: ", u_miss)
                         if idx == 0:
-                            if rmse < .18 or rmse > 20 or miss > (50 * test_time):
+                            if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
                                 fails += 1
-                        elif idx == 0:
-                            if rmse < .18 or rmse > 20 or miss > (50 * test_time):
+                        elif idx == 1:
+                            if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
                                 fails += 1
                         idx += 1
 
@@ -515,6 +524,7 @@ class MainWindow(QMainWindow):
                                         vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
                                     vehicle.rawLidarDetections = point_cloud
                                     vehicle.lidarDetections = lidarcoordinates
+                                vehicle.groundTruth = camera_array
 
                                 # Vehicle position can be the map centroid in sim
                                 # because we are generating the detection WRT the centroid
@@ -551,6 +561,7 @@ class MainWindow(QMainWindow):
                                 sensed_x = each[0]
                                 sensed_y = each[1]
                                 vehicle.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), each[4], each[5]))
+                            vehicle.groundTruth.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
 
                         # Now update our current PID with respect to other vehicles
                         vehicle.check_positions_of_other_vehicles_adjust_velocity(tempList)
@@ -565,7 +576,7 @@ class MainWindow(QMainWindow):
                             sensed_x = each[0]
                             sensed_y = each[1]
                             testSet.append([sensed_x, sensed_y])
-                        for each in tempList:
+                        for each in vehicle.groundTruth:
                             sensed_x = each[0]
                             sensed_y = each[1]
                             groundTruth.append([sensed_x, sensed_y])
@@ -576,10 +587,15 @@ class MainWindow(QMainWindow):
 
                             # Now calculate the score
                             for dist in distances:
-                                if dist > .5:
-                                    self.local_detection_miss += 1
-                                else:
-                                    self.local_differences.append(dist)
+                                self.local_differences.append(dist)
+
+                            # Check how much large the test set is from the ground truth and add that as well
+                            if len(testSet) > len(groundTruth):
+                                # Overdetection case
+                                self.local_over_detection_miss += len(testSet) - len(groundTruth)
+                            elif len(testSet) < len(groundTruth):
+                                # Underdetection case, we count this differently because it may be from obstacle blocking
+                                self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
                         #self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, vehicle.fusionDetectionsCovariance, .25)
@@ -597,6 +613,9 @@ class MainWindow(QMainWindow):
                         # Update ourself
                         cis.update_localization()
 
+                        # Don't filter the list at all
+                        tempList = vehicleList.copy()
+
                         if self.full_simulation:
                             # Create that fake camera
                             if self.lidarRecognitionList[idx] != None:
@@ -605,6 +624,7 @@ class MainWindow(QMainWindow):
                                     cis.cameraDetections = camera_error_array
                                 else:
                                     cis.cameraDetections = camera_array
+                                cis.groundTruth = camera_array
                                 
                                 # f = open("data_" + str(idx) + ".txt", "a")
                                 # f.write(str(idx) + "," + str(self.time))
@@ -633,22 +653,24 @@ class MainWindow(QMainWindow):
                         else:
                             # Quick fake of sensor values
                             cis.fusionDetections = []
+                            cis.groundTruth = []
                             for each in vehicleList:
                                 sensed_x = each[0]
                                 sensed_y = each[1]
                                 cis.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
+                                cis.groundTruth.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
 
                         # Ground truth to the original dataset
                         testSet = []
                         groundTruth = []
-                        for each in vehicle.fusionDetections:
+                        for each in cis.fusionDetections:
                             sensed_x = each[0]
                             sensed_y = each[1]
                             testSet.append([sensed_x, sensed_y])
                         for each in tempList:
                             sensed_x = each[0]
                             sensed_y = each[1]
-                            groundTruth.append([sensed_x, sensed_y])
+                            cis.groundTruth.append([sensed_x, sensed_y])
 
                         if len(testSet) >= 1 and len(groundTruth) >= 1:
                             nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
@@ -656,13 +678,20 @@ class MainWindow(QMainWindow):
 
                             # Now calculate the score
                             for dist in distances:
-                                if dist > .25:
-                                    self.local_detection_miss += 1
-                                else:
-                                    self.local_differences.append(dist)
+                                self.local_differences.append(dist)
+
+                            # Check how much large the test set is from the ground truth and add that as well
+                            if len(testSet) > len(groundTruth):
+                                # Overdetection case
+                                self.local_over_detection_miss += len(testSet) - len(groundTruth)
+                            elif len(testSet) < len(groundTruth):
+                                # Underdetection case, we count this differently because it may be from obstacle blocking
+                                self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
                         #self.globalFusion.processDetectionFrame(1000+idx, self.time/1000.0, cis.fusionDetections, cis.fusionDetectionsCovariance, .25)
+
+            print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
 
             self.vehiclesLock.release()
 

@@ -28,18 +28,18 @@ class RSU():
                 0,
                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 0, True)
 
-            # newvehicle2 = vehicle.Vehicle()
-            # newvehicle2.initialVehicleAtPosition(0, (
-            #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-            #                                      270,
-            #                                      mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
-            #                                      False)
-
             newvehicle2 = vehicle_planning.Planner()
             newvehicle2.initialVehicleAtPosition(
                 2.0 * (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
                 0,
                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, True)
+
+            # newvehicle3 = vehicle_planning.Planner()
+            newvehicle2.initialVehicleAtPosition(0, (
+                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+                                                 270,
+                                                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
+                                                 True)
 
             newSensor = cam_planning.Planner()
             newSensor.initialVehicleAtPosition(
@@ -55,18 +55,19 @@ class RSU():
 
             self.vehicles[0] = newvehicle1
             self.vehicles[1] = newvehicle2
+            #self.vehicles[2] = newvehicle3
             self.sensors[0] = newSensor
-            # self.sensors[1] = newSensor2
+            #self.sensors[1] = newSensor2
 
-            print("Pos veh 0: ", (- (
-                        mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
-                  0, 0)
-            print("Pos veh 1: ", 2*(- (
-                        mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
-                  0, 0)
-            print("Pos sens 0: ", (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-                -45)
+            # print("Pos veh 0: ", (- (
+            #             mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
+            #       0, 0)
+            # print("Pos veh 1: ", 2*(- (
+            #             mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
+            #       0, 0)
+            # print("Pos sens 0: ", (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
+            #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+            #     -45)
 
         self.vehiclesLock.release()
 

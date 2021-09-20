@@ -32,6 +32,7 @@ class Planner:
         self.cameraDetections = []
         self.fusionDetections = []
         self.fusionDetectionsCovariance = []
+        self.groundTruth = []
 
         self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
                                                0, .025, .10, .10)

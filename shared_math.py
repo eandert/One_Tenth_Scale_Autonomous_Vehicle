@@ -28,12 +28,16 @@ def get_relative_detection_params(detector_x, detector_y, detector_theta, observ
     relative_angle_to_detector = angleDifference(target_line_angle, detector_theta)
     # Calc distance
     relative_distance = math.hypot(delta_x, delta_y)
-    return relative_angle_to_detector, -target_line_angle, relative_distance
+    return relative_angle_to_detector, target_line_angle, relative_distance
 
 ''' Kalman filter prediction equasion '''
 def kalman_prediction(X_hat_t_1, P_t_1, F_t, B_t, U_t, Q_t):
+    # X_hat_t = F_t.dot(X_hat_t_1) + (B_t.dot(U_t).reshape(B_t.shape[0], -1))
+    # P_t = np.diag(np.diag(F_t.dot(P_t_1).dot(F_t.transpose()))) + Q_t
+    # return X_hat_t, P_t
+
     X_hat_t = F_t.dot(X_hat_t_1) + (B_t.dot(U_t).reshape(B_t.shape[0], -1))
-    P_t = np.diag(np.diag(F_t.dot(P_t_1).dot(F_t.transpose()))) + Q_t
+    P_t = F_t.dot(P_t_1).dot(F_t.transpose()) + Q_t
     return X_hat_t, P_t
 
 ''' Kalman filter update equasion '''
@@ -80,28 +84,4 @@ def ellipsify(covariance, num_std_deviations = 3.0):
     # A and B are radii
     a, b = num_std_deviations * np.sqrt(vals)
 
-    # Default multiplier is 3 because that should cover 99.7% of errors
-    # print("a (ellipsify) ", str(a))
-    # print("b (ellipsify)", str(b))
-    # print("phi (ellipsify) ", str(math.degrees(phi)))
-    # pointEvery = math.radians(360.0)/num
-    # ellipse = QPolygonF()
-    # cur_angle = 0
-    # for count in range(num + 1):
-    #     denominator = math.sqrt( a**2 * math.sin(phi-cur_angle)**2 + b**2 * math.cos(phi-cur_angle)**2 )
-    #     if denominator == 0.0:
-    #         print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
-    #         range_val = 0
-    #     else:
-    #         range_val = ( a * b ) / denominator
-    #     print ( " m ", count, math.degrees(cur_angle), range_val )
-    #     x_val = mu[0] + range_val * math.cos(cur_angle) * meters_to_print_scale
-    #     y_val = mu[1] + range_val * math.sin(cur_angle) * meters_to_print_scale
-    #     ellipse.append(QPointF(x_val, y_val))
-    #     cur_angle += pointEvery
-
     return a, b, phi
-
-def calcSelfRadiusAtAnlge(self, angle):
-        a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
-        return self.calculateRadiusAtAngle(a, b, phi, angle)

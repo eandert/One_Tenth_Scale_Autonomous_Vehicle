@@ -13,50 +13,17 @@ class BivariateGaussian:
     def __init__(self, a, b, phi, mu = None, cov = None):
         if cov is None:
             # Create the bivariate gaussian matrix
-            self.mu = np.array([0.0,0.0])
+            self.mu = np.array([0.0, 0.0])
             self.covariance = np.array([[a*a, 0], [0, b*b]])
 
             # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
-            rotate = np.array([[math.cos(phi), -math.sin(phi)], [math.sin(phi), math.cos(phi)]])
+            rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
             self.covariance = np.matmul(rotate, self.covariance)
             self.covariance = np.matmul(self.covariance, rotate.transpose())
         else:
             # Create the bivariate gaussian matrix
             self.mu = mu
             self.covariance = cov
-
-    # def ellipsify(self, meters_to_print_scale, num = 50, multiplier = 3):
-    #     # Default multiplier is 3 because that should cover 99.7% of errors
-    #     a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian()
-    #     a = math.pow(a, 2)
-    #     b = math.pow(b, 2)
-    #     #print("a (ellipsify) ", str(a))
-    #     #print("b (ellipsify)", str(b))
-    #     #print("phi (ellipsify) ", str(math.degrees(phi)))
-    #     pointEvery = math.radians(360/num)
-    #     ellipse = QtGui.QPolygonF()
-    #     for count in range(num + 1):
-    #         cur_angle = pointEvery * count
-    #         range_val = self.calculateRadiusAtAngle(a, b, phi, cur_angle) * multiplier
-    #         x_val = self.mu[0] + range_val * math.cos(cur_angle)
-    #         y_val = self.mu[1] + range_val * math.sin(cur_angle)
-    #         ellipse.append((x_val * meters_to_print_scale, y_val * meters_to_print_scale))
-
-    #     return ellipse
-
-    def dot(self):
-
-        ellipse = []
-
-        ellipse.append([self.mu[0], self.mu[1]])
-        ellipse.append([self.mu[0], self.mu[1]+.1])
-        ellipse.append([self.mu[0], self.mu[1]-.1])
-        ellipse.append([self.mu[0], self.mu[1]])
-        ellipse.append([self.mu[0]+.1, self.mu[1]])
-        ellipse.append([self.mu[0]-.1, self.mu[1]])
-        ellipse.append([self.mu[0], self.mu[1]])
-
-        return ellipse
 
     def calculateRadiusAtAngle(self, a, b, phi, measurementAngle):
         denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
@@ -71,24 +38,6 @@ class BivariateGaussian:
         a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian(num_std_deviations)
         #print ( a, b, phi)
         return self.calculateRadiusAtAngle(a, b, phi, angle)
-
-    # Deprecaited (and wrong!)
-    # def extractErrorElipseParamsFromBivariateGaussian(self):
-    #     # TODO: Change this to https://stats.stackexchange.com/questions/361017/proper-way-of-estimating-the-covariance-error-ellipse-in-2d
-    #     # Eigenvalue and eigenvector computations
-    #     w, v = np.linalg.eig(self.covariance)
-
-    #     # Use the eigenvalue to figure out which direction is larger
-    #     if abs(w[0]) > abs(w[1]):
-    #         a = abs(w[0])
-    #         b = abs(w[1])
-    #         phi = math.atan2(v[0, 0], v[1, 0])
-    #     else:
-    #         a = abs(w[1])
-    #         b = abs(w[0])
-    #         phi = math.atan2(v[0, 1], v[1, 1])
-
-    #     return a, b, phi
 
     def eigsorted(self):
         '''
@@ -159,35 +108,35 @@ class Sensor:
             radial_error = self.getRadialErrorAtDistance(object_distance)
             distal_error = self.getDistanceErrorAtDistance(object_distance)
             # Calculate our expected elipse error bounds
-            elipse_a_expected = 2 * (object_distance * math.sin(radial_error / 2))
-            elipse_b_expected = distal_error
-            if elipse_a_expected < elipse_b_expected:
+            elipse_a_expected = distal_error
+            elipse_b_expected = object_distance * math.sin(radial_error)
+            if elipse_a_expected > elipse_b_expected:
+                elipse_angle_expected = target_line_angle
+            else:                
                 elipse_temp = elipse_a_expected
                 elipse_a_expected = elipse_b_expected
                 elipse_b_expected = elipse_temp
-                elipse_angle_expected = target_line_angle
-            else:
                 elipse_angle_expected = target_line_angle + math.radians(90)
             expected_error_gaussian = BivariateGaussian(elipse_a_expected,
                                       elipse_b_expected,
                                       elipse_angle_expected)
-            #print("ae: ", elipse_a_expected, elipse_b_expected, elipse_angle_expected)
+            #print("ae: ", elipse_a_expected, elipse_b_expected, math.degrees(target_line_angle), math.degrees(elipse_angle_expected))
             #print("ae2: ", expected_error_gaussian.calcSelfRadiusAtAnlge(elipse_angle_expected, 1))
             # Calcuate the actual error if this is a simulation, otherwise just return
             if simulation:
                 # Calculate our expected errors in x,y coordinates
-                #print("de:", distal_error, " re:", 2 * (object_distance * math.sin(radial_error / 2)))
-                actualRadialError = np.random.normal(0, radial_error, 1)[0]
+                #print("de:", distal_error, " re:", object_distance * math.sin(radial_error))
+                actualRadialError = 0.0#np.random.normal(0, radial_error, 1)[0]
                 actualDistanceError = np.random.normal(0, distal_error, 1)[0]
-                x_error_generated = ((object_distance + actualDistanceError) * math.cos(
-                    target_line_angle + actualRadialError))
-                y_error_generated = ((object_distance + actualDistanceError) * math.sin(
-                    target_line_angle + actualRadialError))
                 x_actual = ((object_distance) * math.cos(
                     target_line_angle))
                 y_actual = ((object_distance) * math.sin(
                     target_line_angle))
+                # add the inline component distal error
+                x_error_generated = ((object_distance + actualDistanceError) * math.cos(elipse_angle_expected + actualRadialError))
+                y_error_generated = ((object_distance + actualDistanceError) * math.sin(elipse_angle_expected + actualRadialError))
                 actual_sim_error = [x_error_generated - x_actual, y_error_generated - y_actual]
+                #print( actual_sim_error )
                 return True, expected_error_gaussian, actual_sim_error
             else:
                 actual_sim_error = [0.0, 0.0]

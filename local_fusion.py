@@ -64,43 +64,66 @@ class Tracked:
         self.sensorId_List.append(sensorId)
 
         # Kalman stuff
+        self.fusion_mode = 1
+
         # Set other parameters for the class
         self.prev_time = -99
 
-        # Set up the Kalman filter
-        # Initial State cov
-        self.P_t = np.identity(4)
-        self.P_hat_t = np.identity(4)
-        # Process cov
-        self.Q_t = np.identity(4)
-        #self.Q_t = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
-        #print ( self.Q_t )
-        #print ( np.transpose(self.Q_t) )
-        #four = (.125*.125*.125*.125)/4
-        #three = (.125*.125*.125)/2
-        #two = (.125*.125)
-        #G = np.array([[.5*(.125*.125), 0], [0, .5*(.125*.125)], [.125, 0], [0, .125]])
-        #G = np.array([[.5*(.125*.125), 0, .125, 0], [0, .5*(.125*.125), 0, .125]])
-        #G = np.array([[.5*(.125*.125)], [.5*(.125*.125)], [.125], [.125]])
-        #self.Q_t = G @ np.transpose(G)
-        #self.Q_t = .125 * .125
-        #print ( self.Q_t )
-        # print ( np.array([[four, 0, three, 0],
-        #                     [0, four, 0, three],
-        #                     [three, 0, two, 0],
-        #                     [0, three, 0, two]]) )
-        # End if it not commented
-        # Control matrix
-        #transistion = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
-        self.B_t = np.array([[0], [0], [0], [0]])
-        #self.B_t = G
-        # Control vector
-        #self.U_t = 0
-        self.U_t = 0
-        # Measurment Matrix
-        # Generated on the fly
-        # Measurment cov
-        self.R_t = np.identity(4)
+        if self.fusion_mode == 0:
+            # Set up the Kalman filter
+            # Initial State cov
+            self.P_t = np.identity(4)
+            self.P_hat_t = np.identity(4)
+            # Process cov
+            self.Q_t = np.identity(4)
+            #self.Q_t = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
+            #print ( self.Q_t )
+            #print ( np.transpose(self.Q_t) )
+            # four = (.125*.125*.125*.125)/4.0
+            # three = (.125*.125*.125)/2.0
+            # two = (.125*.125)
+            # four = 9.765625 * 10**(-8)
+            # three = 1.5625 * 10**(-6)
+            # two = 2.5 * 10**(-5)
+            #G = np.array([[.5*(.125*.125), 0], [0, .5*(.125*.125)], [.125, 0], [0, .125]]) * .001
+            #G = np.array([[.5*(.125*.125), 0, .125, 0], [0, .5*(.125*.125), 0, .125]])
+            # G = np.array([[.5*(.125*.125)], [.5*(.125*.125)], [.125], [.125]])
+            #self.Q_t = G @ np.transpose(G)
+            # self.Q_t = np.array([[four, 0, three, 0],
+            #                     [0, four, 0, three],
+            #                     [three, 0, two, 0],
+            #                     [0, three, 0, two]])
+            # print ( self.Q_t )
+            # print ( np.array([[four, 0, three, 0],
+            #                     [0, four, 0, three],
+            #                     [three, 0, two, 0],
+            #                     [0, three, 0, two]]) )
+            # End if it not commented
+            # Control matrix
+            #transistion = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
+            self.B_t = np.array([[0], [0], [0], [0]])
+            #self.B_t = G
+            # Control vector
+            #self.U_t = 0
+            self.U_t = 0
+            # Measurment Matrix
+            # Generated on the fly
+            # Measurment cov
+            self.R_t = np.identity(4)
+        else:
+            # Setup for x, dx, dxdx
+            # Set up the Kalman filter
+            # Initial State cov
+            self.P_t = np.identity(6)
+            self.P_hat_t = np.identity(6)
+            # Process cov
+            self.Q_t = np.identity(6)
+            # Control matrix
+            self.B_t = np.array([[0], [0], [0], [0], [0], [0]])
+            # Control vector
+            self.U_t = 0
+            # Measurment cov
+            self.R_t = np.identity(6)
 
         # Custom things
         self.lidarMeasurePrevTrue = False
@@ -189,11 +212,11 @@ class Tracked:
                         lidarCov = lidar_expected_error_gaussian.covariance
                     else:
                         print ( " Error: cov est failed!")
-                        lidarCov = np.array([[1.0, 0], [0, 1.0]])
+                        lidarCov = np.array([[.10, 0], [0, .10]])
                     self.lidarCovLast = lidarCov
                     self.lidarMeasurePrevCovTrue = True
                 else:
-                    lidarCov = np.array([[1.0, 0.0], [0.0, 1.0]])
+                    lidarCov = np.array([[.10, 0.0], [0.0, .10]])
                 # Set the new measurements
                 lidarMeasure = [x, y]
                 lidarMeasureH = [1, 1]
@@ -208,9 +231,9 @@ class Tracked:
                         camCov = camera_expected_error_gaussian.covariance
                     else:
                         print ( " Error: cov est failed!")
-                        camCov = np.array([[1.0, 0], [0, 1.0]])
+                        camCov = np.array([[.25, 0], [0, .25]])
                 else:
-                    camCov = np.array([[1.0, 0.0], [0.0, 1.0]])
+                    camCov = np.array([[.25, 0.0], [0.0, .25]])
                 # Set the new measurements
                 camMeasure = [x, y]
                 camMeasureH = [1, 1]
@@ -244,9 +267,15 @@ class Tracked:
             elif lidarMeasure[0] != 0:
                 x_out = lidarMeasure[0]
                 y_out = lidarMeasure[1]
-            # Store so that next fusion is better
-            self.X_hat_t = np.array(
-                [[x_out], [y_out], [0], [0]])
+
+            if self.fusion_mode == 0:
+                # Store so that next fusion is better
+                self.X_hat_t = np.array(
+                    [[x_out], [y_out], [0], [0]])
+            else:
+                # setup for x, dx, dxdx
+                self.X_hat_t = np.array(
+                    [[x_out], [y_out], [0], [0], [0], [0]])
             # Seed the covariance values directly from the measurement
             # self.P_t[0][0] = self.error_covariance[0][0]
             # self.P_t[0][1] = self.error_covariance[0][1]
@@ -269,26 +298,49 @@ class Tracked:
                     # Set to arbitrary time
                     elapsed = 0.125
 
-                self.F_t = np.array([[1, 0, elapsed, 0],
-                                    [0, 1, 0, elapsed],
-                                    [0, 0, 1, 0],
-                                    [0, 0, 0, 1]])
-                
-                X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+                if self.fusion_mode == 0:
+                    self.F_t = np.array([[1, 0, elapsed, 0],
+                                        [0, 1, 0, elapsed],
+                                        [0, 0, 1, 0],
+                                        [0, 0, 0, 1]])
 
-                tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
+                    tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
                                     [0, lidarMeasureH[1], 0, 0],
                                     [camMeasureH[0], 0, 0, 0],
                                     [0, camMeasureH[1], 0, 0]])
 
-                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
+                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
                 
-                # Measurment cov
-                self.R_t = np.array(
-                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                    [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                    [camCov[0][0], camCov[0][1], 0, 0],
-                    [camCov[1][0], camCov[1][1], 0, 0]])
+                    # Measurment cov
+                    self.R_t = np.array(
+                        [[lidarCov[0][0], lidarCov[0][1], 0, 0],
+                        [lidarCov[1][0], lidarCov[1][1], 0, 0],
+                        [0, 0, camCov[0][0], camCov[0][1]],
+                        [0, 0, camCov[1][0], camCov[1][1]]])
+                else:
+                    # setup for x, dx, dxdx
+                    self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
+                                        [0, 1, 0, elapsed, 0, elapsed*elapsed],
+                                        [0, 0, 1, 0, elapsed, 0],
+                                        [0, 0, 0, 1, 0, elapsed],
+                                        [0, 0, 0, 0, 1, 0],
+                                        [0, 0, 0, 0, 0, 1]])
+
+                    tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
+                                       [0, lidarMeasureH[1], 0, 0, 0, 0],
+                                       [camMeasureH[0], 0, 0, 0, 0, 0],
+                                       [0, camMeasureH[1], 0, 0, 0, 0]])
+
+                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
+                    
+                    # Measurment cov
+                    self.R_t = np.array(
+                        [[lidarCov[0][0], lidarCov[0][1], 0, 0],
+                        [lidarCov[1][0], lidarCov[1][1], 0, 0],
+                        [0, 0, camCov[0][0], camCov[0][1]],
+                        [0, 0, camCov[1][0], camCov[1][1]]])
+                
+                X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 # print ( "m ", measure )
                 # print ( tempH_t )
@@ -328,10 +380,21 @@ class Tracked:
                 print("Error time elapsed is incorrect! " + str(elapsed))
                 # Set to arbitrary time
                 elapsed = 0.125
-            self.F_t = np.array([[1, 0, elapsed, 0],
-                                [0, 1, 0, elapsed],
-                                [0, 0, 1, 0],
-                                [0, 0, 0, 1]])
+            if self.fusion_mode == 0:
+                self.F_t = np.array([[1, 0, elapsed, 0],
+                                    [0, 1, 0, elapsed],
+                                    [0, 0, 1, 0],
+                                    [0, 0, 0, 1]])
+            else:
+                # setup for x, dx, dxdx
+                self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
+                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
+                                    [0, 0, 1, 0, elapsed, 0],
+                                    [0, 0, 0, 1, 0, elapsed],
+                                    [0, 0, 0, 0, 1, 0],
+                                    [0, 0, 0, 0, 0, 1]])
+
+
             X_hat_t, P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             # Now convert the covariance to a rectangle
