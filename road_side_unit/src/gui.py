@@ -397,7 +397,7 @@ class MainWindow(QMainWindow):
 
                     idx = 0
                     fails = 0
-                    for rmse, O_miss, u_miss in zip(self.unit_test_local_rmse_results, self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results):
+                    for rmse, u_miss, O_miss  in zip(self.unit_test_local_rmse_results, self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results):
                         print(" Test: ", idx, " local_rmse_val: ", rmse, " over misses: ", O_miss, " under misses: ", u_miss)
                         if idx == 0:
                             if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
