@@ -11,7 +11,7 @@ from sklearn.neighbors import NearestNeighbors
 # For simulation
 from connected_autonomous_vehicle.src import lidar_recognition
 import local_fusion, sensor, shared_math
-from road_side_unit.src import global_fusion
+import global_fusion
 
 # Defines the colors for various elements of the GUI
 brush_color = {
@@ -33,7 +33,7 @@ brush_color = {
 }
 
 class MainWindow(QMainWindow):
-    def __init__(self, mapSpecs, vehiclesLock, cav, cis, trafficLightArray):
+    def __init__(self, mapSpecs, vehiclesLock, cav, cis, trafficLightArray, unitTest):
         print ( " GUI Started ")
 
         self.vehicles = cav
@@ -45,23 +45,32 @@ class MainWindow(QMainWindow):
         # Set to engage a full simulation world w/ no real vehicles and fake time
         self.full_simulation = False
 
+        # Check the fusion mode from unit tests
+        if unitTest[0]:
+            self.local_fusion_mode = unitTest[1]
+        else:
+            # Default to 1
+            # TODO: add a button for this
+            self.local_fusion_mode = 1
+        self.global_fusion_mode = 0
+
         # Create the simulated LIDARs, planner, etc.
         self.lidarRecognitionList = []
         self.localFusionCAV = []
         self.localFusionCIS = [] = []
-        self.globalFusion = global_fusion.GlobalFUSION()
+        self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
         # Add in the arrays for local fusion storage for CAV vehicles
         for idx, veh in self.vehicles.items():
             if veh.simVehicle:
                 self.lidarRecognitionList.append(lidar_recognition.LIDAR(0.0))
-                self.localFusionCAV.append(local_fusion.FUSION())
+                self.localFusionCAV.append(local_fusion.FUSION(self.local_fusion_mode))
             else:
                 self.lidarRecognitionList.append(None)
                 self.localFusionCAV.append(None)
         # Add in the arrays for local fusion storage for CIS sensors
         for idx, sens in self.cis.items():
             if sens.simCIS:
-                self.localFusionCIS.append(local_fusion.FUSION())
+                self.localFusionCIS.append(local_fusion.FUSION(self.local_fusion_mode))
             else:
                 self.localFusionCIS.append(None)
 
@@ -184,7 +193,7 @@ class MainWindow(QMainWindow):
         self.unitTestButton.move(1000, 820)
 
         self.unitTestButton.clicked.connect(self.on_unit_test_clicked)
-        self.unit_test = False
+        self.unit_test = unitTest[0]
 
         self.drawIntersection = True
 
@@ -359,7 +368,7 @@ class MainWindow(QMainWindow):
                     self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
                     self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
 
-                    print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
+                    #print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
 
 
                     # Reset the stats
@@ -384,7 +393,7 @@ class MainWindow(QMainWindow):
                     self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
                     self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
 
-                    print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
+                    #print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
 
                     # Reset the stats
                     self.local_over_detection_miss = 0
@@ -552,7 +561,7 @@ class MainWindow(QMainWindow):
                                 for each in results:
                                     sensed_x = each[1]
                                     sensed_y = each[2]
-                                    vehicle.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5]))
+                                    vehicle.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
 
                         else:
                             # Quick fake of sensor values
@@ -560,7 +569,7 @@ class MainWindow(QMainWindow):
                             for each in tempList:
                                 sensed_x = each[0]
                                 sensed_y = each[1]
-                                vehicle.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), each[4], each[5]))
+                                vehicle.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
                             vehicle.groundTruth.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
 
                         # Now update our current PID with respect to other vehicles
@@ -598,7 +607,7 @@ class MainWindow(QMainWindow):
                                 self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
-                        #self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, vehicle.fusionDetectionsCovariance, .25)
+                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
 
             for idx, cis in self.cis.items():
                 #print ( " CIS:", idx )
@@ -649,7 +658,7 @@ class MainWindow(QMainWindow):
                                 for each in results:
                                     sensed_x = each[1]
                                     sensed_y = each[2]
-                                    cis.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5]))
+                                    cis.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
                         else:
                             # Quick fake of sensor values
                             cis.fusionDetections = []
@@ -657,7 +666,7 @@ class MainWindow(QMainWindow):
                             for each in vehicleList:
                                 sensed_x = each[0]
                                 sensed_y = each[1]
-                                cis.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
+                                cis.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
                                 cis.groundTruth.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
 
                         # Ground truth to the original dataset
@@ -689,9 +698,9 @@ class MainWindow(QMainWindow):
                                 self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
-                        #self.globalFusion.processDetectionFrame(1000+idx, self.time/1000.0, cis.fusionDetections, cis.fusionDetectionsCovariance, .25)
+                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
 
-            print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
+            #print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
 
             self.vehiclesLock.release()
 

@@ -1,5 +1,8 @@
 import math
 import numpy as np
+from shapely.geometry import Polygon
+from shapely.geometry import box
+from shapely.affinity import rotate, translate
 
 
 ''' Helper function to calculate the difference between 2 angles in radians '''
@@ -57,18 +60,18 @@ def kalman_inverse(m):
     i = np.eye(a, a)
     return np.linalg.lstsq(m, i, rcond=None)[0]
 
-def rotate(origin, point, angle):
-    """
-    Rotate a point counterclockwise by a given angle around a given origin.
+# def rotate(origin, point, angle):
+#     """
+#     Rotate a point counterclockwise by a given angle around a given origin.
 
-    The angle should be given in radians.
-    """
-    ox, oy = origin
-    px, py = point
+#     The angle should be given in radians.
+#     """
+#     ox, oy = origin
+#     px, py = point
 
-    qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
-    qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
-    return qx, qy
+#     qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
+#     qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+#     return qx, qy
 
 def ellipsify(covariance, num_std_deviations = 3.0):
     # Eigenvalue and eigenvector computations
@@ -82,6 +85,49 @@ def ellipsify(covariance, num_std_deviations = 3.0):
     phi = np.arctan2(*vecs[:, 0][::-1])
 
     # A and B are radii
-    a, b = num_std_deviations * np.sqrt(vals)
+    #a, b = num_std_deviations * np.sqrt(vals)
+
+    if not np.any(np.isnan(vals)) and np.all(np.isfinite(vals)):
+        a, b = num_std_deviations * np.sqrt(vals)
+    elif not np.isnan(vals[0]) and np.isfinite(vals[0]):
+        a = num_std_deviations * np.sqrt(vals[0])
+        b = 0.0
+    elif not np.isnan(vals[1]) and np.isfinite(vals[1]):
+        b = num_std_deviations * np.sqrt(vals[1])
+        a = 0.0
+    else:
+        a = 0.0
+        b = 0.0
 
     return a, b, phi
+
+# This function turns elipses into rectanges so that an IO calculation can be done for 
+# ball tree matching
+def computeDistanceEllipseBox(a, b):
+    cx = a[0]
+    cy = a[1]
+    w = a[2]
+    h = a[3]
+    angle = a[4]
+    c = box(-w/2.0, -h/2.0, w/2.0, h/2.0)
+    rc = rotate(c, angle)
+    contour_a = translate(rc, cx, cy)
+
+    cx = b[0]
+    cy = b[1]
+    w = b[2]
+    h = b[3]
+    angle = a[4]
+    c = box(-w/2.0, -h/2.0, w/2.0, h/2.0)
+    rc = rotate(c, angle)
+    contour_b = translate(rc, cx, cy)
+
+    iou = contour_a.intersection(contour_b).area / contour_a.union(contour_b).area
+
+    # Modify to invert the IOU so that it works with the BallTree class
+    if iou <= 0:
+        distance = 1
+    else:
+        distance = 1 - iou
+
+    return distance

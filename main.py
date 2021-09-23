@@ -274,40 +274,45 @@ def BackendProcessor(q, vehicles, sensors, trafficLightArray):
                                +"\n")
 
 
-def main(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray):
+def main(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test):
     # Initialize a simulator with the GUI set to on, cm map, .1s timestep, and vehicle spawn scale of 1 (default)
     QTapp = gui.QtWidgets.QApplication(sys.argv)
-    mainWin = gui.MainWindow(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray)
+    mainWin = gui.MainWindow(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test)
     mainWin.show()
 
     sys.exit(QTapp.exec_())
 
-# Setup the thread lock
-vehiclesLock = Lock()
+for each in range(3):
+    # Unit test stuff
+    simulation = True
+    unit_test = [True, 1, each]
 
-# Setup the shared variables
-vehicles = {}
-sensors = {}
-pose = {}
-trafficLightArray = [0, 2, 0]
+    # Setup the thread lock
+    vehiclesLock = Lock()
 
-# Setup the mapspecs
-mapSpecs = mapGenerator.MapSpecs(0)
-sim = RSU(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, True)
+    # Setup the shared variables
+    vehicles = {}
+    sensors = {}
+    pose = {}
+    trafficLightArray = [0, 2, 0]
 
-# Start up the GUI as it's own thread
-t = Thread(target=main, args=(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray))
-t.daemon = True
-t.start()
+    # Setup the mapspecs
+    mapSpecs = mapGenerator.MapSpecs(0)
+    sim = RSU(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, simulation)
 
-# Queue to talk with threads
-q = Queue()
-# Start up the Flask back end processor as it's own thread
-t2 = Thread(target=BackendProcessor, args=(q, vehicles, sensors, trafficLightArray))
-t2.daemon = True
-t2.start()
+    # Start up the GUI as it's own thread
+    t = Thread(target=main, args=(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test))
+    t.daemon = True
+    t.start()
 
-# Startup the web service
-communication.flask_app.config['RSUClass'] = sim
-communication.flask_app.config['RSUQueue'] = q
-communication.flask_app.run(host="localhost") #host='192.168.0.103')
+    # Queue to talk with threads
+    q = Queue()
+    # Start up the Flask back end processor as it's own thread
+    t2 = Thread(target=BackendProcessor, args=(q, vehicles, sensors, trafficLightArray))
+    t2.daemon = True
+    t2.start()
+
+    # Startup the web service
+    communication.flask_app.config['RSUClass'] = sim
+    communication.flask_app.config['RSUQueue'] = q
+    communication.flask_app.run(host="localhost") #host='192.168.0.103')

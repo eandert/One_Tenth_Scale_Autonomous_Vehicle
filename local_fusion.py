@@ -3,9 +3,6 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
-from shapely.geometry import Polygon
-from shapely.geometry import box
-from shapely.affinity import rotate, translate
 
 import shared_math
 
@@ -17,7 +14,7 @@ class Tracked:
     # We use this primarily to match objects seen between frames and included in here
     # is a function for kalman filter to smooth the x and y values as well as a
     # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, type, confidence, x, y, crossSection, sensorId, time, id):
+    def __init__(self, type, confidence, x, y, crossSection, sensorId, time, id, fusion_mode):
         self.x = x
         self.y = y
         self.dx = 0
@@ -52,7 +49,7 @@ class Tracked:
         self.sensorId_List.append(sensorId)
 
         # Kalman stuff
-        self.fusion_mode = 0
+        self.fusion_mode = fusion_mode
 
         # Set other parameters for the class
         self.prev_time = -99
@@ -62,26 +59,28 @@ class Tracked:
             # Setup for x_hat = x + dx,  y_hat = y + dy
             # Initial State cov
             self.P_t = np.identity(4)
-            self.P_hat_t = np.identity(4)
+            self.P_t[2][2] = 0.0
+            self.P_t[3][3] = 0.0
+            self.P_hat_t = self.P_t
             # Process cov
             self.Q_t = np.identity(4)
             #self.Q_t = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
             #print ( self.Q_t )
             #print ( np.transpose(self.Q_t) )
-            # four = (.125*.125*.125*.125)/4.0
-            # three = (.125*.125*.125)/2.0
-            # two = (.125*.125)
+            four = (.125*.125*.125*.125)/4.0
+            three = (.125*.125*.125)/2.0
+            two = (.125*.125)
             # four = 9.765625 * 10**(-8)
             # three = 1.5625 * 10**(-6)
             # two = 2.5 * 10**(-5)
-            G = np.array([[.5*(.125*.125), 0], [0, .5*(.125*.125)], [.125, 0], [0, .125]])
+            #G = np.array([[.5*(.125*.125), 0], [0, .5*(.125*.125)], [.125, 0], [0, .125]])
             #G = np.array([[.5*(.125*.125), 0, .125, 0], [0, .5*(.125*.125), 0, .125]])
             # G = np.array([[.5*(.125*.125)], [.5*(.125*.125)], [.125], [.125]])
-            self.Q_t = G @ np.transpose(G)
-            # self.Q_t = np.array([[four, 0, three, 0],
-            #                     [0, four, 0, three],
-            #                     [three, 0, two, 0],
-            #                     [0, three, 0, two]])
+            #self.Q_t = G @ np.transpose(G)
+            self.Q_t = np.array([[four, 0, three, 0],
+                                [0, four, 0, three],
+                                [three, 0, two, 0],
+                                [0, three, 0, two]], dtype = 'float')
             # print ( self.Q_t )
             # print ( np.array([[four, 0, three, 0],
             #                     [0, four, 0, three],
@@ -90,7 +89,7 @@ class Tracked:
             # End if it not commented
             # Control matrix
             #transistion = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
-            self.B_t = np.array([[0], [0], [0], [0]])
+            self.B_t = np.array([[0], [0], [0], [0]], dtype = 'float')
             #self.B_t = G
             # Control vector
             #self.U_t = 0
@@ -104,11 +103,25 @@ class Tracked:
             # Set up the Kalman filter
             # Initial State cov
             self.P_t = np.identity(6)
-            self.P_hat_t = np.identity(6)
+            self.P_t[2][2] = 0.0
+            self.P_t[3][3] = 0.0
+            self.P_t[4][4] = 0.0
+            self.P_t[5][5] = 0.0
+            self.P_hat_t = self.P_t
             # Process cov
-            self.Q_t = np.identity(6)
+            #self.Q_t = np.identity(6)
+            five = (.125*.125*.125*.125*.125)/8.0
+            four = (.125*.125*.125*.125)/4.0
+            three = (.125*.125*.125)/2.0
+            two = (.125*.125)
+            self.Q_t = np.array([[five, 0, four, 0, 0, 0],
+                                [0, five, 0, four, 0, 0],
+                                [four, 0, three, 0, three, 0],
+                                [0, four, 0, three, 0, three],
+                                [0, 0, three, 0, two, 0],
+                                [0, 0, 0, three, 0, two]], dtype = 'float')
             # Control matrix
-            self.B_t = np.array([[0], [0], [0], [0], [0], [0]])
+            self.B_t = np.array([[0], [0], [0], [0], [0], [0]], dtype = 'float')
             # Control vector
             self.U_t = 0
             # Measurment cov
@@ -118,11 +131,22 @@ class Tracked:
             # Set up the Kalman filter
             # Initial State cov
             self.P_t = np.identity(5)
-            self.P_hat_t = np.identity(5)
+            self.P_t[2][2] = 0.0
+            self.P_t[3][3] = 0.0
+            self.P_t[4][4] = 0.0
+            self.P_hat_t = self.P_t
             # Process cov
-            self.Q_t = np.identity(5)
+            #self.Q_t = np.identity(5)
+            four = (.125*.125*.125*.125)/4.0
+            three = (.125*.125*.125)/2.0
+            two = (.125*.125)
+            self.Q_t = np.array([[four, 0, three, 0, 0],
+                                [0, four, 0, three, 0],
+                                [three, three, two, 0, 0],
+                                [0, 0, 0, two, 0],
+                                [0, 0, 0, 0, two]], dtype = 'float')
             # Control matrix
-            self.B_t = np.array([[0], [0], [0], [0], [0]])
+            self.B_t = np.array([[0], [0], [0], [0], [0]], dtype = 'float')
             # Control vector
             self.U_t = 0
             # Measurment cov
@@ -151,23 +175,15 @@ class Tracked:
 
     # Gets our position in an array form so we can use it in the BallTree
     def getPosition(self):
-        # return [
-        #     [self.x - self.min_size, self.y + self.min_size, self.x + self.min_size, self.y - self.min_size]
-        # ]
-
         return [
             [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
         ]
 
     def getPositionPredicted(self, timestamp):
         x, y, a, b, phi = self.getKalmanPred(timestamp)
-        #print ( "out", x, y, a, b, phi )
         return [
             [x, y, a, b, phi]
         ]
-        # return [
-        #     [x, y, self.min_size, self.min_size, math.radians(0)]
-        # ]
 
     def clearLastFrame(self):
         self.x_list = []
@@ -267,21 +283,21 @@ class Tracked:
             if self.fusion_mode == 0:
                 # Store so that next fusion is better
                 self.X_hat_t = np.array(
-                    [[x_out], [y_out], [0], [0]])
+                    [[x_out], [y_out], [0], [0]], dtype = 'float')
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
                 self.X_hat_t = np.array(
-                    [[x_out], [y_out], [0], [0], [0], [0]])
+                    [[x_out], [y_out], [0], [0], [0], [0]], dtype = 'float')
             else:
                 # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
                 self.X_hat_t = np.array(
-                    [[x_out], [y_out], [0], [0], [0]])
+                    [[x_out], [y_out], [0], [0], [0]], dtype = 'float')
             
             # Seed the covariance values directly from the measurement
-            # self.P_t[0][0] = self.error_covariance[0][0]
-            # self.P_t[0][1] = self.error_covariance[0][1]
-            # self.P_t[1][0] = self.error_covariance[1][0]
-            # self.P_t[1][1] = self.error_covariance[1][1]
+            self.P_t[0][0] = self.error_covariance[0][0]
+            self.P_t[0][1] = self.error_covariance[0][1]
+            self.P_t[1][0] = self.error_covariance[1][0]
+            self.P_t[1][1] = self.error_covariance[1][1]
             self.P_hat_t = self.P_t
             self.prev_time = self.lastTracked
             self.x = x_out
@@ -295,7 +311,7 @@ class Tracked:
                 # Transition matrix
                 elapsed = self.lastTracked - self.prev_time
                 if elapsed <= 0.0:
-                    print( "Error time elapsed is incorrect! " + str(elapsed) )
+                    #print( "Error time elapsed is incorrect! " + str(elapsed) )
                     # Set to arbitrary time
                     elapsed = 0.125
 
@@ -303,21 +319,21 @@ class Tracked:
                     self.F_t = np.array([[1, 0, elapsed, 0],
                                         [0, 1, 0, elapsed],
                                         [0, 0, 1, 0],
-                                        [0, 0, 0, 1]])
+                                        [0, 0, 0, 1]], dtype = 'float')
 
                     tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
                                     [0, lidarMeasureH[1], 0, 0],
                                     [camMeasureH[0], 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0]])
+                                    [0, camMeasureH[1], 0, 0]], dtype = 'float')
 
-                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
+                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
                 
                     # Measurment cov
                     self.R_t = np.array(
                         [[lidarCov[0][0], lidarCov[0][1], 0, 0],
                         [lidarCov[1][0], lidarCov[1][1], 0, 0],
                         [0, 0, camCov[0][0], camCov[0][1]],
-                        [0, 0, camCov[1][0], camCov[1][1]]])
+                        [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
                 elif self.fusion_mode == 1:
                     # setup for x, dx, dxdx
                     self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
@@ -325,45 +341,43 @@ class Tracked:
                                         [0, 0, 1, 0, elapsed, 0],
                                         [0, 0, 0, 1, 0, elapsed],
                                         [0, 0, 0, 0, 1, 0],
-                                        [0, 0, 0, 0, 0, 1]])
+                                        [0, 0, 0, 0, 0, 1]], dtype = 'float')
 
                     tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
                                        [0, lidarMeasureH[1], 0, 0, 0, 0],
                                        [camMeasureH[0], 0, 0, 0, 0, 0],
-                                       [0, camMeasureH[1], 0, 0, 0, 0]])
+                                       [0, camMeasureH[1], 0, 0, 0, 0]], dtype = 'float')
 
-                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
+                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
                     
                     # Measurment cov
                     self.R_t = np.array(
                         [[lidarCov[0][0], lidarCov[0][1], 0, 0],
                         [lidarCov[1][0], lidarCov[1][1], 0, 0],
                         [0, 0, camCov[0][0], camCov[0][1]],
-                        [0, 0, camCov[1][0], camCov[1][1]]])
+                        [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
 
                 else:
                     # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
                     v_1 = self.X_hat_t[2]
                     phi_1 = self.X_hat_t[3]
                     phi_dot_1 = self.X_hat_t[4]
-                    if v_1 == 0.0:
-                        # Not moving, infinite correlation
-                        v_x = 1000000.0
-                        v_y = 1000000.0
-                    else:
-                        v_x = ( 1.0 / phi_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-                        v_y = ( 1.0 / phi_1 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
+                    #print ( self.X_hat_t, v_1, phi_1, phi_dot_1 )
                     if phi_1 == 0.0:
-                        # Not moving, infinite correlation
-                        phi_x = 1000000.0
-                        phi_y = 1000000.0
+                        # Not moving, No correlation
+                        v_x = 999.9
+                        v_y = 999.9
+                        phi_x = 999.9
+                        phi_y = 999.9
                     else:
-                        phi_x = ( v_1 / phi_1 ) * ( -math.cos(phi_1) + math.cos(phi_1 + elapsed * phi_dot_1))
-                        phi_y = ( v_1 / phi_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
+                        v_x = ( 1.0 / phi_dot_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
+                        v_y = ( 1.0 / phi_dot_1 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
+                        phi_x = ( v_1 / phi_dot_1 ) * ( -math.cos(phi_1) + math.cos(phi_1 + elapsed * phi_dot_1))
+                        phi_y = ( v_1 / phi_dot_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
                     if phi_dot_1 == 0.0:
-                        # Not accelerating, infinite correlation
-                        phi_dot_x = 1000000.0
-                        phi_dot_y = 1000000.0
+                        # Not accelerating, NO correlation
+                        phi_dot_x = 999.9
+                        phi_dot_y = 999.9
                     else:
                         phi_dot_x = ( v_1 * elapsed / phi_dot_1 ) * math.cos(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( - math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
                         phi_dot_y = ( v_1 * elapsed / phi_dot_1 ) * math.sin(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
@@ -371,21 +385,21 @@ class Tracked:
                                         [0, 1, v_y, phi_y, phi_dot_y],
                                         [0, 0, 1, 0, 0],
                                         [0, 0, 0, 1, elapsed],
-                                        [0, 0, 0, 0, 1]])
+                                        [0, 0, 0, 0, 1]], dtype = 'float')
 
                     tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0],
                                        [0, lidarMeasureH[1], 0, 0, 0],
                                        [camMeasureH[0], 0, 0, 0, 0],
-                                       [0, camMeasureH[1], 0, 0, 0]])
+                                       [0, camMeasureH[1], 0, 0, 0]], dtype = 'float')
 
-                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]])
+                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
                     
                     # Measurment cov
                     self.R_t = np.array(
                         [[lidarCov[0][0], lidarCov[0][1], 0, 0],
                         [lidarCov[1][0], lidarCov[1][1], 0, 0],
                         [0, 0, camCov[0][0], camCov[0][1]],
-                        [0, 0, camCov[1][0], camCov[1][1]]])
+                        [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
                 
                 X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
@@ -406,8 +420,13 @@ class Tracked:
                 self.prev_time = self.lastTracked
                 self.x = X_t[0][0]
                 self.y = X_t[1][0]
-                self.dx = X_t[2][0]
-                self.dy = X_t[3][0]
+                if self.fusion_mode == 2:
+                    # Different setup for fusion mode 2 need to calculate vector from angle and velocity
+                    self.dx = X_t[2][0] * math.cos(X_t[3][0])
+                    self.dy = X_t[2][0] * math.sin(X_t[3][0])
+                else:
+                    self.dx = X_t[2][0]
+                    self.dy = X_t[3][0]
                 self.idx += 1
                 if self.P_t[0][0] != 0.0 or self.P_t[0][1] != 0.0:
                     self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]])
@@ -488,72 +507,6 @@ class Tracked:
         a, b, phi = shared_math.ellipsify(self.error_covariance, 3.0)
         return self.x, self.y, self.min_size + a, self.min_size + b, phi
 
-    # def extractErrorElipseParamsFromBivariateGaussian(self, covariance):
-    #     # Eigenvalue and eigenvector computations
-    #     w, v = np.linalg.eig(covariance)
-
-    #     # Use the eigenvalue to figure out which direction is larger
-    #     if abs(w[0]) > abs(w[1]):
-    #         a = abs(w[0])
-    #         b = abs(w[1])
-    #         phi = math.atan2(v[0, 0], v[1, 0])
-    #     else:
-    #         a = abs(w[1])
-    #         b = abs(w[0])
-    #         phi = math.atan2(v[0, 1], v[1, 1])
-
-    #     return a, b, phi
-
-
-# def computeDistance(a, b, epsilon=1e-5):
-#     x1, y1, x2, y2 = a
-#     polygonA = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y1)])
-#     x1, y1, x2, y2 = b
-#     polygonb = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y1)])
-
-#     intersection = polygonA.intersection(polygonb)
-
-#     if intersection.area <= 0.0:
-#         return 1
-
-#     iou = intersection.area / polygonA.union(polygonb).area
-
-#     # Modified to invert the IOU so that it works with the BallTree class
-#     if iou <= 0:
-#         distance = 1
-#     else:
-#         distance = 1 - iou
-#     return distance
-
-def computeDistanceEllipseBox(a, b):
-    cx = a[0]
-    cy = a[1]
-    w = a[2]
-    h = a[3]
-    angle = a[4]
-    c = box(-w/2.0, -h/2.0, w/2.0, h/2.0)
-    rc = rotate(c, angle)
-    contour_a = translate(rc, cx, cy)
-
-    cx = b[0]
-    cy = b[1]
-    w = b[2]
-    h = b[3]
-    angle = a[4]
-    c = box(-w/2.0, -h/2.0, w/2.0, h/2.0)
-    rc = rotate(c, angle)
-    contour_b = translate(rc, cx, cy)
-
-    iou = contour_a.intersection(contour_b).area / contour_a.union(contour_b).area
-
-    # Modify to invert the IOU so that it works with the BallTree class
-    if iou <= 0:
-        distance = 1
-    else:
-        distance = 1 - iou
-
-    return distance
-
 
 class FUSION:
     # Fusion is a special class for matching and fusing detections for a variety of sources.
@@ -562,12 +515,13 @@ class FUSION:
     # output or it will not be matched. Detections too close to each other may be combined.
     # This is a modified version of the frame-by-frame tracker seen in:
     # https://github.com/eandert/Jetson_Nano_Camera_Vehicle_Tracker
-    def __init__(self):
+    def __init__(self, fusion_mode):
         # Set other parameters for the class
         self.trackedList = []
         self.id = 0
         self.prev_time = -99.0
         self.min_size = 0.5
+        self.fusion_mode = fusion_mode
 
         # Indicate our success
         print('Started FUSION successfully...')
@@ -577,9 +531,6 @@ class FUSION:
         result = []
         for track in self.trackedList:
             result.append([track.id, track.x_list, track.y_list, track.crossSection_list])
-
-        # Now clear the internal list
-        #self.trackedList = []
 
         return result
 
@@ -631,7 +582,7 @@ class FUSION:
         if len(detections_list_positions) > 0:
             if len(self.trackedList) > 0:
                 numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
-                thisFrameTrackTree = BallTree(numpy_formatted, metric=computeDistanceEllipseBox)
+                thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
 
                 # Need to check the tree size here in order to figure out if we can even do this
                 length = len(numpy_formatted)
@@ -719,7 +670,7 @@ class FUSION:
                     if first:
                         added.append(add)
                         new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
-                                      detection_list[add][3], detection_list[add][4], detection_list[add][5], timestamp, self.id)
+                                      detection_list[add][3], detection_list[add][4], detection_list[add][5], timestamp, self.id, self.fusion_mode)
                         if self.id < 1000000:
                             self.id += 1
                         else:
@@ -728,7 +679,7 @@ class FUSION:
 
             else:
                 for dl in detection_list:
-                    new = Tracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], timestamp, self.id)
+                    new = Tracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], timestamp, self.id, self.fusion_mode)
                     if self.id < 1000000:
                         self.id += 1
                     else:
