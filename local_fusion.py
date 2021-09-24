@@ -9,44 +9,45 @@ import shared_math
 CAMERA = 0
 LIDAR = 1
 
+
+class MatchClass:
+    def __init___(self, x, y, covariance, dx, dy, d_confidence, object_type, time, id):
+        self.x = x
+        self.y = y
+        self.covariance = covariance
+        self.dx = dx
+        self.dy = dy
+        self.velocity_confidence = d_confidence
+        self.type = object_type
+        self.last_tracked = time
+        self.id = id
+
+
 class Tracked:
     # This object tracks a single object that has been detected in a video frame.
     # We use this primarily to match objects seen between frames and included in here
     # is a function for kalman filter to smooth the x and y values as well as a
     # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, type, confidence, x, y, crossSection, sensorId, time, id, fusion_mode):
+    def __init__(self, sensorId, x, y, object_type, time, id, fusion_mode):
         self.x = x
         self.y = y
         self.dx = 0
         self.dy = 0
-        self.error_covariance = [[0.0, 0.0], [0.0, 0.0]]
+        self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
         self.typeArray = [0, 0, 0, 0]
-        self.typeArray[type] += 1
+        self.typeArray[object_type] += 1
         self.type = self.typeArray.index(max(self.typeArray))
-        self.confidence = confidence
         self.lastTracked = time
         self.id = id
-        self.crossSection = crossSection
-        self.trackVelocity = 0.0
         self.idx = 0
         self.min_size = 0.5
         self.track_count = 0
+        self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
 
-        self.x_list = []
-        self.y_list = []
-        self.type_list = []
-        self.confidence_list = []
-        self.lastTracked_list = []
-        self.crossSection_list = []
-        self.sensorId_List = []
-
-        self.x_list.append(x)
-        self.y_list.append(y)
-        self.type_list.append(type)
-        self.confidence_list.append(confidence)
-        self.lastTracked_list.append(time)
-        self.crossSection_list.append(crossSection)
-        self.sensorId_List.append(sensorId)
+        # Build the match list and add our match to it
+        self.match_list = []
+        new_match = MatchClass(x, y, None, None, None, None, object_type, time, id)
+        self.match_list.append(new_match)
 
         # Kalman stuff
         self.fusion_mode = fusion_mode
@@ -56,39 +57,20 @@ class Tracked:
 
         if self.fusion_mode == 0:
             # Set up the Kalman filter
-            # Setup for x_hat = x + dx,  y_hat = y + dy
             # Initial State cov
             self.P_t = np.identity(4)
             self.P_t[2][2] = 0.0
             self.P_t[3][3] = 0.0
             self.P_hat_t = self.P_t
             # Process cov
-            self.Q_t = np.identity(4)
-            #self.Q_t = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
-            #print ( self.Q_t )
-            #print ( np.transpose(self.Q_t) )
             four = (.125*.125*.125*.125)/4.0
             three = (.125*.125*.125)/2.0
             two = (.125*.125)
-            # four = 9.765625 * 10**(-8)
-            # three = 1.5625 * 10**(-6)
-            # two = 2.5 * 10**(-5)
-            #G = np.array([[.5*(.125*.125), 0], [0, .5*(.125*.125)], [.125, 0], [0, .125]])
-            #G = np.array([[.5*(.125*.125), 0, .125, 0], [0, .5*(.125*.125), 0, .125]])
-            # G = np.array([[.5*(.125*.125)], [.5*(.125*.125)], [.125], [.125]])
-            #self.Q_t = G @ np.transpose(G)
             self.Q_t = np.array([[four, 0, three, 0],
                                 [0, four, 0, three],
                                 [three, 0, two, 0],
                                 [0, three, 0, two]], dtype = 'float')
-            # print ( self.Q_t )
-            # print ( np.array([[four, 0, three, 0],
-            #                     [0, four, 0, three],
-            #                     [three, 0, two, 0],
-            #                     [0, three, 0, two]]) )
-            # End if it not commented
             # Control matrix
-            #transistion = np.array([[.5*(.125*.125), .5*(.125*.125), .125, .125]])
             self.B_t = np.array([[0], [0], [0], [0]], dtype = 'float')
             #self.B_t = G
             # Control vector
@@ -160,14 +142,10 @@ class Tracked:
         self.camMeasurePrevCovTrue = False
 
     # Update adds another detection to this track
-    def update(self, other, time, id):
-        self.x_list.append(other[2])
-        self.y_list.append(other[3])
-        self.type_list.append(other[0])
-        self.confidence_list.append(other[1])
-        self.lastTracked_list.append(time)
-        self.crossSection_list.append(other[4])
-        self.sensorId_List.append(other[5])
+    def update(self, other, time):
+        
+        new_match = MatchClass(other[1], other[2], None, None, None, None, other[3], time, other[0])
+        self.match_list.append(new_match)
 
         self.lastTracked = time
 
@@ -186,18 +164,9 @@ class Tracked:
         ]
 
     def clearLastFrame(self):
-        self.x_list = []
-        self.y_list = []
-        self.type_list = []
-        self.confidence_list = []
-        self.lastTracked_list = []
-        self.crossSection_list = []
-        self.sensorId_List = []
+        self.match_list = []
 
     def fusion(self, estimate_covariance, vehicle):
-        debug = False
-
-        #self.error_covariance = [[1.0, 0.0], [0.0, 1.0]]
         lidarCov = np.array([[0.0, 0.0], [0.0, 0.0]])
         camCov = np.array([[0.0, 0.0], [0.0, 0.0]])
         lidarMeasure = [0, 0]
@@ -208,16 +177,12 @@ class Tracked:
         lidar_added = False
         cam_added = False
 
-        speed = [0.0, 0.0]
-        speedH = [0, 0]
-        speedCov = np.array([[2, 0], [0, 2]])
-
         # Time to go through the track list and fuse!
-        for x, y, theta, sensor_id in zip(self.x_list, self.y_list, self.crossSection_list, self.sensorId_List):
-            if sensor_id == LIDAR:
+        for match in self.match_list:
+            if match.sensor_id == LIDAR:
                 if estimate_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
-                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, x, y)
+                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
                     success, lidar_expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(
                         relative_angle_to_detector, target_line_angle, relative_distance, False)
                     if success:
@@ -230,13 +195,13 @@ class Tracked:
                 else:
                     lidarCov = np.array([[.10, 0.0], [0.0, .10]])
                 # Set the new measurements
-                lidarMeasure = [x, y]
+                lidarMeasure = [match.x, match.y]
                 lidarMeasureH = [1, 1]
                 lidar_added = True
-            elif sensor_id == CAMERA:
+            elif match.sensor_id == CAMERA:
                 if estimate_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
-                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, x, y)
+                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
                     success, camera_expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(
                         relative_angle_to_detector, target_line_angle, relative_distance, False)
                     if success:
@@ -247,7 +212,7 @@ class Tracked:
                 else:
                     camCov = np.array([[.25, 0.0], [0.0, .25]])
                 # Set the new measurements
-                camMeasure = [x, y]
+                camMeasure = [match.x, match.y]
                 camMeasureH = [1, 1]
                 cam_added = True
 
@@ -266,7 +231,7 @@ class Tracked:
             elif cam_added:
                 self.error_covariance = camCov
             else:
-                self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
+                self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
 
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
@@ -429,10 +394,12 @@ class Tracked:
                     self.dy = X_t[3][0]
                 self.idx += 1
                 if self.P_t[0][0] != 0.0 or self.P_t[0][1] != 0.0:
-                    self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]])
+                    self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]], dtype = 'float')
+                    self.d_covariance = np.array([[self.P_t[2][2], self.P_t[2][3]], [self.P_t[3][2], self.P_t[3][3]]], dtype = 'float')
                 else:
                     #print ( " what the heck: ", self.P_t)
-                    self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
+                    self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
+                    self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
 
                 #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
 
@@ -526,31 +493,19 @@ class FUSION:
         # Indicate our success
         print('Started FUSION successfully...')
 
-    def dumpDetectionFrame(self):
-        # Build the result list
-        result = []
-        for track in self.trackedList:
-            result.append([track.id, track.x_list, track.y_list, track.crossSection_list])
-
-        return result
-
     def fuseDetectionFrame(self, estimate_covariance, vehicle):
-        debug = False
-        result = []
-
         # Time to go through each track list and fuse!
+        result = []
         for track in self.trackedList:
             track.fusion(estimate_covariance, vehicle)
             if track.track_count >= 3:
-                result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy])
+                result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
             # Clear the previous detection list
             track.clearLastFrame()
 
         return result
 
     def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimateCovariance):
-        debug = False
-
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
@@ -572,7 +527,7 @@ class FUSION:
             else:
                 # Use an arbitrary size if we have no covariance estimate
                 detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([0, 90, det[0], det[1], self.min_size, sensor_id])
+            detections_list.append([0, det[0], det[1], sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
@@ -632,7 +587,7 @@ class FUSION:
                 for track in self.trackedList:
                     if len(track.relations) == 1:
                         # Single match, go ahead and update the location
-                        track.update(detection_list[track.relations[0][0]], timestamp, timestamp - self.prev_time)
+                        track.update(detection_list[track.relations[0][0]], timestamp)
                     elif len(track.relations) > 1:
                         # if we have multiple matches, pick the best one
                         max = 0
@@ -643,7 +598,7 @@ class FUSION:
                                 idx = rel[0]
 
                         if idx != -99:
-                            track.update(detection_list[idx])
+                            track.update(detection_list[idx], timestamp)
 
                 if len(matches):
                     missing = sorted(set(range(0, len(detections_list_positions))) - set([i[0] for i in matches]))
@@ -670,7 +625,7 @@ class FUSION:
                     if first:
                         added.append(add)
                         new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
-                                      detection_list[add][3], detection_list[add][4], detection_list[add][5], timestamp, self.id, self.fusion_mode)
+                                      detection_list[add][3], timestamp, self.id, self.fusion_mode)
                         if self.id < 1000000:
                             self.id += 1
                         else:
@@ -679,7 +634,7 @@ class FUSION:
 
             else:
                 for dl in detection_list:
-                    new = Tracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], timestamp, self.id, self.fusion_mode)
+                    new = Tracked(dl[0], dl[1], dl[2], dl[3], timestamp, self.id, self.fusion_mode)
                     if self.id < 1000000:
                         self.id += 1
                     else:

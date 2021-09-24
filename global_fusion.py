@@ -7,6 +7,9 @@ from shapely.geometry import Polygon
 import bisect
 
 
+max_id = 10000
+
+
 def binarySearch(a, x):
     'Locate the leftmost value exactly equal to x'
     i = bisect.bisect_left(a, x)
@@ -15,8 +18,21 @@ def binarySearch(a, x):
     return -1
 
 
+class Match:
+    def __init___(self, x, y, confidence, dx, dy, d_confidence, object_type, time, id):
+        self.x = x
+        self.y = y
+        self.confidence = confidence
+        self.dx = dx
+        self.dy = dy
+        self.velocity_confidence = d_confidence
+        self.type = object_type
+        self.last_tracked = time
+        self.id = id
+
+
 class ResizableKalman:
-    def __init__(self, time, x, y):
+    def __init__(self, time, x, y, fusion_mode):
         # This list will take 
         self.localTrackersList = []
         self.localTrackersIDList = []
@@ -33,6 +49,9 @@ class ResizableKalman:
 
         # Track the number of times this Kalman filter has been used
         self.idx = 0
+
+        # Store the fusion mode
+        self.fusion_mode = fusion_mode
 
         # Set up the Kalman filter
         # Initial State cov
@@ -109,29 +128,40 @@ class ResizableKalman:
                             [0, 1]])
         self.measure = np.array([0.0, 0.0])
 
-    def addFilterFrames(self, measurementList):
+        self.x = x
+        self.y = y
+        self.confidence = confidence
+        self.dx = dx
+        self.dy = dy
+        self.velocity_confidence = d_confidence
+        self.type = object_type
+        self.last_tracked = time
+        self.sensor_id = sensor_id
+        self.object_id = object_id
+
+    def addFrames(self, measurement_list):
         # Regenerate the measurement array every frame
         self.H_t = np.zeros([self.F_t_len, len(measurementList)], dtype = float)
 
         # Check if there are more sensors in the area that have not been added
-        for each in measurementList:
-            measurment_index = binarySearch(self.localTrackersIDList, each[0])
+        for match in measurement_list:
+            measurment_index = binarySearch(self.localTrackersIDList, match.id)
             if measurment_index < 0:
                 # This is not in the tracked list, needs to be added
-                self.addTracker(each[0])
+                self.addTracker(match.id)
                 measurment_index = len(self.localTrackersIDList) - 1
             
             # All should be in the tracked list now, continue building the tables
             # Add the current covariance to the R matrix
             temp_index = 2 * measurment_index
-            self.R_t[temp_index][temp_index] = each[2][0][0]
-            self.R_t[temp_index][temp_index + 1] = each[2][0][1]
-            self.R_t[temp_index + 1][temp_index] = each[2][1][0]
-            self.R_t[temp_index + 1][temp_index + 1] = each[2][1][1]
+            self.R_t[temp_index][temp_index] = match.covariance[0][0]
+            self.R_t[temp_index][temp_index + 1] = match.covariance[0][1]
+            self.R_t[temp_index + 1][temp_index] = match.covariance[1][0]
+            self.R_t[temp_index + 1][temp_index + 1] = match.covariance[1][1]
 
             # Add the current measurments to the measurement matrix
-            self.measure[temp_index] = each[1][0]
-            self.measure[temp_index + 1] = each[1][1]
+            self.measure[temp_index] = match.x
+            self.measure[temp_index + 1] = match.y
 
             # Measurement array needs to add 2 ones, always the same two locations
             self.H_t[measurment_index][0] = 1.0
@@ -189,11 +219,11 @@ class ResizableKalman:
                                     [0, 0, 0, 0, 1, 0],
                                     [0, 0, 0, 0, 0, 1]])
                 
-                X_hat_t, self.P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+                X_hat_t, self.P_hat_t = shared_math.prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 Z_t = (self.measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                X_t, self.P_t = update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.H_t)
+                X_t, self.P_t = shared_math.update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.H_t)
                 self.X_hat_t = X_t
                 self.P_hat_t = self.P_t
                 x_out = X_t[0][0]
@@ -218,7 +248,7 @@ class ResizableKalman:
                                     [0, 0, 0, 1, 0, elapsed],
                                     [0, 0, 0, 0, 1, 0],
                                     [0, 0, 0, 0, 0, 1]])
-            X_hat_t, P_hat_t = prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+            X_hat_t, P_hat_t = shared_math.prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             return X_hat_t[0][0], X_hat_t[1][0]
         else:
@@ -230,65 +260,35 @@ class GlobalTracked:
     # We use this primarily to match objects seen between frames and included in here
     # is a function for kalman filter to smooth the x and y values as well as a
     # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, xmin, ymin, xmax, ymax, type, confidence, x, y, crossSection, sensorId, detectionId, covariance, time, id):
-        self.xmin = xmin
-        self.ymin = ymin
-        self.xmax = xmax
-        self.ymax = ymax
+    def __init__(self, x, y, type, covariance, sensor_id, detection_id, time, track_id):
         self.x = x
         self.y = y
-        self.typeArray = [0, 0, 0, 0]
-        self.typeArray[type] += 1
-        self.type = self.typeArray.index(max(self.typeArray))
+        self.covariance
+        self.object_type = None
         self.confidence = confidence
-        self.id = id
-        self.crossSection = crossSection
-        self.trackVelocity = 0.0
+        self.id = track_id
         self.min_size = 1.0
         self.track_count = 0
         self.lastTracked = time
+        self.match_list = []
 
-        self.xmin_list = []
-        self.ymin_list = []
-        self.xmax_list = []
-        self.ymax_list = []
-        self.x_list = []
-        self.y_list = []
-        self.type_list = []
-        self.confidence_list = []
-        self.lastTracked_list = []
-        self.crossSection_list = []
-        self.sensorId_List = []
-        self.detectionId_List = []
-        self.errorCovarianceList = []
-
-        self.xmin_list.append(xmin)
-        self.ymin_list.append(ymin)
-        self.xmax_list.append(xmax)
-        self.ymax_list.append(ymax)
-        self.x_list.append(x)
-        self.y_list.append(y)
-        self.type_list.append(type)
-        self.confidence_list.append(confidence)
-        self.lastTracked_list.append(time)
-        self.crossSection_list.append(crossSection)
-        self.sensorId_List.append(sensorId)
-        self.detectionId_List.append(detectionId)
-        self.errorCovarianceList.append(covariance)
+        # Add this first match
+        # Calcualte the id
+        universal_id = sensor_id * max_id + detection_id
+        # (self, x, y, confidence, dx, dy, d_confidence, object_type, time, id):
+        new_match = Match(x, y, confidence, 0, 0, 0, type, time, universal_id)
+        self.match_list.append(new_match)
 
         # Kalman stuff
         self.kalman = ResizableKalman(time, x, y)
 
     # Update adds another detection to this track
     def update(self, position, other, time, id):
-        self.x_list.append(other[2])
-        self.y_list.append(other[3])
-        self.type_list.append(other[0])
-        self.confidence_list.append(other[1])
-        self.lastTracked_list.append(time)
-        self.crossSection_list.append(other[4])
-        self.sensorId_List.append(other[5])
-        self.detectionId_List.append(other[6])
+        # Calcualte the id
+        universal_id = sensor_id * max_id + detection_id
+        # (self, x, y, confidence, dx, dy, d_confidence, object_type, time, id):
+        new_match = Match(x, y, confidence, 0, 0, 0, type, time, universal_id)
+        self.match_list.append(new_match)
 
         self.lastTracked = time
 
@@ -310,13 +310,7 @@ class GlobalTracked:
         self.kalman.fusion(estimate_covariance)
 
     def clearLastFrame(self):
-        self.x_list = []
-        self.y_list = []
-        self.type_list = []
-        self.confidence_list = []
-        self.lastTracked_list = []
-        self.crossSection_list = []
-        self.sensorId_List = []
+        self.match_list = []
 
 
 class GlobalFUSION:
@@ -337,31 +331,20 @@ class GlobalFUSION:
         # Indicate our success
         print('Started FUSION successfully...')
 
-    def dumpDetectionFrame(self):
-        # Build the result list
-        result = []
-        for track in self.trackedList:
-            result.append([track.detector_id, track.id, track.x_list, track.y_list, track.crossSection_list])
-
-        return result
-
     def fuseDetectionFrame(self, estimate_covariance, vehicle):
-        debug = False
         result = []
 
         # Time to go through each track list and fuse!
         for track in self.trackedList:
             track.fusion(estimate_covariance, vehicle)
             if track.track_count >= 3:
-                result.append([track.detector_id, track.id, track.x, track.y, track.error_covariance, track.dx, track.dy])
+                result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy])
             # Clear the previous detection list
             track.clearLastFrame()
 
         return result
 
     def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimateCovariance):
-        debug = False
-
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
@@ -483,7 +466,7 @@ class GlobalFUSION:
                         new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
                                       detection_list[add][3], detection_list[add][4], detection_list[add][5], 
                                       detection_list[add][6], timestamp, self.id, self.fusion_mode)
-                        if self.id < 1000000:
+                        if self.id < max_id:
                             self.id += 1
                         else:
                             self.id = 0
@@ -492,7 +475,7 @@ class GlobalFUSION:
             else:
                 for dl in detection_list:
                     new = Tracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], dl[6], timestamp, self.id, self.fusion_mode)
-                    if self.id < 1000000:
+                    if self.id < max_id:
                         self.id += 1
                     else:
                         self.id = 0

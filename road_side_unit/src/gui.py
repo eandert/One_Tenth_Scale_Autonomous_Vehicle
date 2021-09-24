@@ -607,7 +607,7 @@ class MainWindow(QMainWindow):
                                 self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
-                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
+                        #self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
 
             for idx, cis in self.cis.items():
                 #print ( " CIS:", idx )
@@ -698,7 +698,7 @@ class MainWindow(QMainWindow):
                                 self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
-                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
+                        #self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
 
             #print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
 
