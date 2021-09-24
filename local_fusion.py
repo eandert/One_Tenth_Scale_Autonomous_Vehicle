@@ -8,10 +8,11 @@ import shared_math
 
 CAMERA = 0
 LIDAR = 1
+MAX_ID = 10000
 
 
 class MatchClass:
-    def __init___(self, x, y, covariance, dx, dy, d_confidence, object_type, time, id):
+    def __init__(self, x, y, covariance, dx, dy, d_confidence, object_type, time, id):
         self.x = x
         self.y = y
         self.covariance = covariance
@@ -46,7 +47,7 @@ class Tracked:
 
         # Build the match list and add our match to it
         self.match_list = []
-        new_match = MatchClass(x, y, None, None, None, None, object_type, time, id)
+        new_match = MatchClass(x, y, None, None, None, None, object_type, time, sensorId)
         self.match_list.append(new_match)
 
         # Kalman stuff
@@ -179,7 +180,7 @@ class Tracked:
 
         # Time to go through the track list and fuse!
         for match in self.match_list:
-            if match.sensor_id == LIDAR:
+            if match.id == LIDAR:
                 if estimate_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                         vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
@@ -198,7 +199,7 @@ class Tracked:
                 lidarMeasure = [match.x, match.y]
                 lidarMeasureH = [1, 1]
                 lidar_added = True
-            elif match.sensor_id == CAMERA:
+            elif match.id == CAMERA:
                 if estimate_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                         vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
@@ -482,10 +483,10 @@ class FUSION:
     # output or it will not be matched. Detections too close to each other may be combined.
     # This is a modified version of the frame-by-frame tracker seen in:
     # https://github.com/eandert/Jetson_Nano_Camera_Vehicle_Tracker
-    def __init__(self, fusion_mode):
+    def __init__(self, fusion_mode, sensor_id):
         # Set other parameters for the class
         self.trackedList = []
-        self.id = 0
+        self.id = sensor_id
         self.prev_time = -99.0
         self.min_size = 0.5
         self.fusion_mode = fusion_mode
@@ -499,7 +500,9 @@ class FUSION:
         for track in self.trackedList:
             track.fusion(estimate_covariance, vehicle)
             if track.track_count >= 3:
-                result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
+                # Calculate a custom ID that encodes the sensorid and local fusion track number
+                universal_id = self.id * MAX_ID + track.id
+                result.append([universal_id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
             # Clear the previous detection list
             track.clearLastFrame()
 
@@ -626,7 +629,7 @@ class FUSION:
                         added.append(add)
                         new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
                                       detection_list[add][3], timestamp, self.id, self.fusion_mode)
-                        if self.id < 1000000:
+                        if self.id < MAX_ID:
                             self.id += 1
                         else:
                             self.id = 0
@@ -635,7 +638,7 @@ class FUSION:
             else:
                 for dl in detection_list:
                     new = Tracked(dl[0], dl[1], dl[2], dl[3], timestamp, self.id, self.fusion_mode)
-                    if self.id < 1000000:
+                    if self.id < MAX_ID:
                         self.id += 1
                     else:
                         self.id = 0

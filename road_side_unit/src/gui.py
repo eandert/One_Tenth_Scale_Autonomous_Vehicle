@@ -63,14 +63,15 @@ class MainWindow(QMainWindow):
         for idx, veh in self.vehicles.items():
             if veh.simVehicle:
                 self.lidarRecognitionList.append(lidar_recognition.LIDAR(0.0))
-                self.localFusionCAV.append(local_fusion.FUSION(self.local_fusion_mode))
+                self.localFusionCAV.append(local_fusion.FUSION(self.local_fusion_mode, idx))
             else:
                 self.lidarRecognitionList.append(None)
                 self.localFusionCAV.append(None)
         # Add in the arrays for local fusion storage for CIS sensors
         for idx, sens in self.cis.items():
             if sens.simCIS:
-                self.localFusionCIS.append(local_fusion.FUSION(self.local_fusion_mode))
+                # 1000 is to make sure our sensor ids are different for CIS vs CAV
+                self.localFusionCIS.append(local_fusion.FUSION(self.local_fusion_mode, 1000 + idx))
             else:
                 self.localFusionCIS.append(None)
 
@@ -607,7 +608,7 @@ class MainWindow(QMainWindow):
                                 self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
-                        #self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
+                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
 
             for idx, cis in self.cis.items():
                 #print ( " CIS:", idx )
@@ -698,11 +699,15 @@ class MainWindow(QMainWindow):
                                 self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
-                        #self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
+                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
 
             #print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
 
             self.vehiclesLock.release()
+
+            final_result = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+
+            print ( final_result )
 
             self.drawTrafficLight = True
 
