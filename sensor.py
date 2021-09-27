@@ -166,6 +166,8 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
         camera_array_searcher = []
         camera_array = []
         camera_error_array = []
+        lidar_array_searcher = []
+        lidar_detected_error = []
 
         # Get the points the Slamware M1M1 should generate
         lidar_freq = 7000 / 8
@@ -245,11 +247,28 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                             detector.localizationPositionX, detector.localizationPositionY, detector.theta, point[0], point[1])
                         success, expected_error_gaussian, actual_sim_error = detector.cameraSensor.calculateErrorGaussian(
                             relative_angle_to_detector, target_line_angle, relative_distance, True)
-                        #print ( success, point, expected_error_gaussian, actual_sim_error )
-                        #print ( detector.localizationPositionX, detector.localizationPositionY )
                         if success:
                             camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian))
                             camera_array.append((point[0], point[1], expected_error_gaussian))
                             camera_array_searcher.append((point[0], point[1]))
+                
+                # Fast lidar math to skip the points
+                if shared_math.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, detector.theta + cam_center_angle,
+                                               math.radians(360), lidar_range):
+                    # Object checks out and is in range and not blocked
+                    # TODO: Do a little better approxamation of percent seen and account for this
+                    point = list(final_polygon.centroid.coords)[0]
+                    if point not in lidar_array_searcher:
+                        # Create the error component of the lidar detection
+                        relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
+                            detector.localizationPositionX, detector.localizationPositionY, detector.theta, point[0], point[1])
+                        success_lidar = False
+                        if detector.lidarSensor != None:
+                            success_lidar, expected_error_gaussian_lidar, actual_sim_error_lidar = detector.lidarSensor.calculateErrorGaussian(
+                                relative_angle_to_detector, target_line_angle, relative_distance, True)
 
-        return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array
+                        if success_lidar:
+                            lidar_detected_error.append((point[0] + actual_sim_error_lidar[0], point[1] + actual_sim_error_lidar[1], expected_error_gaussian_lidar))
+                            lidar_array_searcher.append((point[0], point[1]))
+
+        return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array, lidar_detected_error

@@ -377,6 +377,7 @@ class Tracked:
 
                 Z_t = (measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
+                # print ( "z_t2", Z_t )
                 X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, self.R_t, tempH_t)
                 self.X_hat_t = X_t
 
@@ -403,7 +404,6 @@ class Tracked:
                     self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
 
                 #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
-
             except Exception as e:
                 print ( " Exception: " + str(e) )
 

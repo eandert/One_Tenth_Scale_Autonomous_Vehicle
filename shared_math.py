@@ -46,7 +46,6 @@ def kalman_prediction(X_hat_t_1, P_t_1, F_t, B_t, U_t, Q_t):
 ''' Kalman filter update equasion '''
 def kalman_update(X_hat_t, P_t, Z_t, R_t, H_t):
     K_prime = P_t.dot(H_t.transpose()).dot(kalman_inverse(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
-    # print("K:\n",K_prime)
     # print("X_hat:\n",X_hat_t)
     X_t = X_hat_t + K_prime.dot(Z_t - H_t.dot(X_hat_t))
     P_t = P_t - K_prime.dot(H_t).dot(P_t)

@@ -36,6 +36,7 @@ class Planner:
 
         self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
                                                0, .025, .10, .10)
+        self.lidarSensor = None
         
     def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, id_in, simCIS):
         # This holds the actual position of the vehicle

@@ -1,0 +1,53 @@
+ Test:  0  local_rmse_val:  1.2493272527740997  over misses:  10006  under misses:  2037
+ Test:  0  global_rmse_val:  0.24840942130747562  over misses:  484  under misses:  21
+ Test:  1  local_rmse_val:  1.2415620473512081  over misses:  11043  under misses:  2073
+ Test:  1  global_rmse_val:  0.2859067609780813  over misses:  231  under misses:  33
+ 
+  Test:  0  local_rmse_val:  1.2413212712825006  over misses:  9967  under misses:  2026
+ Test:  0  global_rmse_val:  0.3070753701818485  over misses:  461  under misses:  52
+ Test:  1  local_rmse_val:  1.2362631085675606  over misses:  11205  under misses:  2051
+ Test:  1  global_rmse_val:  0.24457566868487438  over misses:  298  under misses:  15
+ 
+  Test:  0  local_rmse_val:  1.243796958308026  over misses:  10071  under misses:  2022
+ Test:  0  global_rmse_val:  0.2567581243658935  over misses:  530  under misses:  26
+ Test:  1  local_rmse_val:  1.2367075260793565  over misses:  11487  under misses:  2050
+ Test:  1  global_rmse_val:  0.2442783503142517  over misses:  335  under misses:  10
+ 
+  Test:  0  local_rmse_val:  1.2335707663151567  over misses:  10260  under misses:  2016
+ Test:  0  global_rmse_val:  0.2744228669700341  over misses:  690  under misses:  25
+ Test:  1  local_rmse_val:  1.2398243235435253  over misses:  11702  under misses:  2033
+ Test:  1  global_rmse_val:  0.22329684476323308  over misses:  364  under misses:  10
+ 
+ 
+ 
+ 
+ 
+ 
+ No speed passing, using gaussians exactly
+ local, global
+ New 0,0
+  Test:  0  local_rmse_val:  0.33071812389632355  over misses:  3360  under misses:  197
+ Test:  0  global_rmse_val:  0.1850654056801256  over misses:  115  under misses:  8
+ Test:  1  local_rmse_val:  0.36228467061750774  over misses:  4091  under misses:  218
+ Test:  1  global_rmse_val:  0.17582174197120515  over misses:  89  under misses:  5
+ 0, 1
+  Test:  0  local_rmse_val:  0.33983190362223126  over misses:  3344  under misses:  200
+ Test:  0  global_rmse_val:  0.1886779216009125  over misses:  142  under misses:  8
+ Test:  1  local_rmse_val:  0.3558238655712066  over misses:  3960  under misses:  216
+ Test:  1  global_rmse_val:  0.16511348636782322  over misses:  120  under misses:  0
+ 0,2
+ Test:  0  local_rmse_val:  0.3388907123964131  over misses:  3293  under misses:  201
+ Test:  0  global_rmse_val:  0.18932306818805172  over misses:  70  under misses:  8
+ Test:  1  local_rmse_val:  0.370537710749053  over misses:  3851  under misses:  234
+ Test:  1  global_rmse_val:  0.1737137289909567  over misses:  109  under misses:  14
+ 1,0
+  Test:  0  local_rmse_val:  0.33799227183673675  over misses:  3296  under misses:  205
+ Test:  0  global_rmse_val:  0.17722282412022833  over misses:  93  under misses:  8
+ Test:  1  local_rmse_val:  0.38018414677090334  over misses:  4052  under misses:  236
+ Test:  1  global_rmse_val:  0.20260041931659672  over misses:  264  under misses:  6
+ 1,1
+  Test:  0  local_rmse_val:  0.3407184709871325  over misses:  3302  under misses:  204
+ Test:  0  global_rmse_val:  0.1738300539972414  over misses:  89  under misses:  8
+ Test:  1  local_rmse_val:  0.3534946007549502  over misses:  3901  under misses:  212
+ Test:  1  global_rmse_val:  0.17911324675324755  over misses:  194  under misses:  0
+ 

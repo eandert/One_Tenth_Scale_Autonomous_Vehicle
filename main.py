@@ -281,38 +281,39 @@ def main(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test
     mainWin.show()
 
     sys.exit(QTapp.exec_())
+    #QTapp.exec_()
 
-for each in range(3):
-    # Unit test stuff
-    simulation = True
-    unit_test = [True, 1, each]
+#for each in range(9):
+# Unit test stuff
+simulation = True
+unit_test = [True, 1, 1]
 
-    # Setup the thread lock
-    vehiclesLock = Lock()
+# Setup the thread lock
+vehiclesLock = Lock()
 
-    # Setup the shared variables
-    vehicles = {}
-    sensors = {}
-    pose = {}
-    trafficLightArray = [0, 2, 0]
+# Setup the shared variables
+vehicles = {}
+sensors = {}
+pose = {}
+trafficLightArray = [0, 2, 0]
 
-    # Setup the mapspecs
-    mapSpecs = mapGenerator.MapSpecs(0)
-    sim = RSU(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, simulation)
+# Setup the mapspecs
+mapSpecs = mapGenerator.MapSpecs(0)
+sim = RSU(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, simulation)
 
-    # Start up the GUI as it's own thread
-    t = Thread(target=main, args=(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test))
-    t.daemon = True
-    t.start()
+# Start up the GUI as it's own thread
+t = Thread(target=main, args=(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test))
+t.daemon = True
+t.start()
 
-    # Queue to talk with threads
-    q = Queue()
-    # Start up the Flask back end processor as it's own thread
-    t2 = Thread(target=BackendProcessor, args=(q, vehicles, sensors, trafficLightArray))
-    t2.daemon = True
-    t2.start()
+# Queue to talk with threads
+q = Queue()
+# Start up the Flask back end processor as it's own thread
+t2 = Thread(target=BackendProcessor, args=(q, vehicles, sensors, trafficLightArray))
+t2.daemon = True
+t2.start()
 
-    # Startup the web service
-    communication.flask_app.config['RSUClass'] = sim
-    communication.flask_app.config['RSUQueue'] = q
-    communication.flask_app.run(host="localhost") #host='192.168.0.103')
+# Startup the web service
+communication.flask_app.config['RSUClass'] = sim
+communication.flask_app.config['RSUQueue'] = q
+communication.flask_app.run(host="localhost") #host='192.168.0.103')

@@ -50,7 +50,7 @@ class ResizableKalman:
         self.elapsed = 0.125
 
         # Arbitrary min tracking size so we are not too small to match to
-        self.min_size = .5
+        self.min_size = .75
 
         # Track the time of the last track
         self.lastTracked = time
@@ -132,23 +132,25 @@ class ResizableKalman:
 
     def addFrames(self, measurement_list):
         # Regenerate the measurement array every frame
-        self.H_t = np.zeros([len(self.localTrackersIDList), self.F_t_len], dtype = float)
+        self.H_t = np.zeros([2 * len(self.localTrackersIDList), self.F_t_len], dtype = float)
 
         # Check if there are more sensors in the area that have not been added
         for match in measurement_list:
-            print ( len(self.localTrackersIDList) )
             measurment_index = binarySearch(self.localTrackersIDList, match.id)
-            print ( measurment_index )
             if measurment_index < 0:
                 # This is not in the tracked list, needs to be added
                 self.addTracker(match.id)
                 measurment_index = len(self.localTrackersIDList) - 1
-            print ( measurment_index )
+                # Add 2 new rows to H_t
+                if measurment_index == 0:
+                    self.H_t = np.zeros([2 * len(self.localTrackersIDList), self.F_t_len], dtype = float)
+                else:
+                    np.r_[ self.H_t, np.zeros(self.F_t_len) ]
+                    np.r_[ self.H_t, np.zeros(self.F_t_len) ]
             
             # All should be in the tracked list now, continue building the tables
             # Add the current covariance to the R matrix
             temp_index = 2 * measurment_index
-            print ( temp_index )
             self.R_t[temp_index][temp_index] = match.covariance[0][0]
             self.R_t[temp_index][temp_index + 1] = match.covariance[0][1]
             self.R_t[temp_index + 1][temp_index] = match.covariance[1][0]
@@ -158,11 +160,6 @@ class ResizableKalman:
             self.measure[temp_index] = match.x
             self.measure[temp_index + 1] = match.y
 
-            # Measurement array needs to add 2 ones, always the same two locations
-            # R needs 2 more rows
-            np.r_[ self.R_t, np.zeros(self.F_t_len) ]
-            np.r_[ self.R_t, np.zeros(self.F_t_len) ]
-
             self.H_t[measurment_index][0] = 1.0
             self.H_t[measurment_index + 1][1] = 1.0
 
@@ -171,7 +168,7 @@ class ResizableKalman:
         # Start off with measuring only 1 sensor x and y, this will be dynamically built
         if len(self.localTrackersIDList) == 0:
             self.measure = np.array([0.0, 0.0])
-            self.R_t = np.zeros([2, self.F_t_len], dtype = float)
+            self.R_t = np.zeros([2, 2], dtype = float)
 
             # Add to the list and list searcher
             self.localTrackersIDList.append(id)
@@ -193,7 +190,8 @@ class ResizableKalman:
             np.r_[ self.R_t, np.zeros(newlength) ]
 
             # Current measurment array needs 2 extra spaces
-            np.c_[ self.measure, [0.0], [0.0] ]
+            self.measure.append(0.0)
+            self.measure.append(0.0)
 
     def fusion(self, measurement_list, estimate_covariance):
         # Set the kalman variables and resize the arrays dynalically (if needed
@@ -296,12 +294,6 @@ class ResizableKalman:
                 
                 X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-                # print ( "m ", measure )
-                # print ( tempH_t )
-                # print ( self.R_t )
-
-                #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
-
                 Z_t = (self.measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
                 X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.H_t)
@@ -378,8 +370,6 @@ class GlobalTracked:
 
         self.lastTracked = time
 
-        self.track_count += 1
-
     # Gets our position in an array form so we can use it in the BallTree
     def getPosition(self):
         return [
@@ -387,13 +377,26 @@ class GlobalTracked:
         ]
 
     def getPositionPredicted(self, timestamp):
-        x, y, a, b, phi = self.kalman.getKalmanPred(timestamp)
-        return [
-            [x, y, a, b, phi]
-        ]
+        if self.track_count < 1:
+            # If this kalman fitler has never been run, we can't use it for prediction!
+            return [
+                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+            ]
+        else:
+            x, y, a, b, phi = self.kalman.getKalmanPred(timestamp)
+            return [
+                [x, y, a, b, phi]
+            ]
 
     def fusion(self, estimate_covariance):
         self.kalman.fusion(self.match_list, estimate_covariance)
+        self.x = self.kalman.x
+        self.y = self.kalman.y
+        self.error_covariance = self.kalman.error_covariance
+        self.dx = self.kalman.dx
+        self.dy = self.kalman.dy
+        self.d_covariance = self.kalman.d_covariance
+        self.track_count += 1
 
     def clearLastFrame(self):
         self.match_list = []
@@ -411,7 +414,7 @@ class GlobalFUSION:
         self.trackedList = []
         self.id = 0
         self.prev_time = -99.0
-        self.min_size = 0.5
+        self.min_size = 0.75
         self.fusion_mode = fusion_mode
 
         # Indicate our success
@@ -423,6 +426,7 @@ class GlobalFUSION:
         for track in self.trackedList:
             track.fusion(estimate_covariance)
             if track.track_count >= 3:
+                #print ( track.id, track.x, track.y, track.error_covariance )
                 result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
             # Clear the previous detection list
             track.clearLastFrame()
@@ -439,7 +443,7 @@ class GlobalFUSION:
             if estimateCovariance and len(det) >= 3:
                 # Calculate our 3 sigma std deviation to create a bounding box for matching
                 try:
-                    a, b, phi = det[2].extractErrorElipseParamsFromBivariateGaussian(3)
+                    a, b, phi = shared_math.ellipsify(det[2], 3.0)
                     # Enforce a minimum size so matching doesn't fail
                     a += self.min_size
                     b += self.min_size

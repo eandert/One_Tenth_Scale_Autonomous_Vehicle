@@ -57,7 +57,8 @@ class MainWindow(QMainWindow):
         # Create the simulated LIDARs, planner, etc.
         self.lidarRecognitionList = []
         self.localFusionCAV = []
-        self.localFusionCIS = [] = []
+        self.localFusionCIS = []
+        self.globalFusionList = []
         self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
         # Add in the arrays for local fusion storage for CAV vehicles
         for idx, veh in self.vehicles.items():
@@ -83,7 +84,16 @@ class MainWindow(QMainWindow):
         self.local_over_detection_miss = 0
         self.local_under_detection_miss = 0
         self.local_differences = []
-        
+
+        # Global stats
+        self.unit_test_global_over_detection_miss_results = []
+        self.unit_test_global_under_detection_miss_results = []
+        self.unit_test_global_rmse_results = []
+        self.global_over_detection_miss = 0
+        self.global_under_detection_miss = 0
+        self.global_differences = []
+
+        self.real_lidar = True
 
         # Parameters of test
         self.mapSpecs = mapSpecs
@@ -152,6 +162,12 @@ class MainWindow(QMainWindow):
         self.covarianceDisplayButton.move(1000, 590)
         self.covarianceDisplayButton.clicked.connect(self.on_display_covariance_clicked)
         self.display_covariance = False
+
+        # self.covarianceDisplayButton = QPushButton('Display Covariance Off', self)
+        # self.covarianceDisplayButton.resize(140, 32)
+        # self.covarianceDisplayButton.move(1000, 590)
+        # self.covarianceDisplayButton.clicked.connect(self.on_display_covariance_clicked)
+        self.display_global_fusion = True
 
         self.testGroup = QButtonGroup(self)  # Radio button group
 
@@ -359,6 +375,11 @@ class MainWindow(QMainWindow):
                     self.local_over_detection_miss = 0
                     self.local_under_detection_miss = 0
                     self.local_differences = []
+                    self.global_over_detection_miss = 0
+                    self.global_under_detection_miss = 0
+                    self.global_differences = []
+
+                    self.real_lidar = False
                 elif self.unit_test_state == 1:
                     # Calculate the prior results
                     differences_squared = np.array(self.local_differences) ** 2
@@ -369,6 +390,15 @@ class MainWindow(QMainWindow):
                     self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
                     self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
 
+                    # Global
+                    differences_squared = np.array(self.global_differences) ** 2
+                    mean_of_differences_squared = differences_squared.mean()
+                    rmse_val = np.sqrt(mean_of_differences_squared)
+
+                    self.unit_test_global_rmse_results.append(rmse_val)
+                    self.unit_test_global_under_detection_miss_results.append(self.global_under_detection_miss)
+                    self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
+
                     #print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
 
 
@@ -376,6 +406,9 @@ class MainWindow(QMainWindow):
                     self.local_over_detection_miss = 0
                     self.local_under_detection_miss = 0
                     self.local_differences = []
+                    self.global_over_detection_miss = 0
+                    self.global_under_detection_miss = 0
+                    self.global_differences = []
 
                     for idx, vehicle in self.vehicles.items():
                         self.lineVehicleSpeed[idx].setText("0.5")
@@ -394,12 +427,26 @@ class MainWindow(QMainWindow):
                     self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
                     self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
 
+                    # Global
+                    differences_squared = np.array(self.global_differences) ** 2
+                    mean_of_differences_squared = differences_squared.mean()
+                    rmse_val = np.sqrt(mean_of_differences_squared)
+
+                    self.unit_test_global_rmse_results.append(rmse_val)
+                    self.unit_test_global_under_detection_miss_results.append(self.global_under_detection_miss)
+                    self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
+
                     #print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
 
                     # Reset the stats
                     self.local_over_detection_miss = 0
                     self.local_under_detection_miss = 0
                     self.local_differences = []
+                    self.global_over_detection_miss = 0
+                    self.global_under_detection_miss = 0
+                    self.global_differences = []
+
+                    self.real_lidar = True
 
                     for idx, vehicle in self.vehicles.items():
                         self.lineVehicleSpeed[idx].setText("0.0")
@@ -407,18 +454,20 @@ class MainWindow(QMainWindow):
 
                     idx = 0
                     fails = 0
-                    for rmse, u_miss, O_miss  in zip(self.unit_test_local_rmse_results, self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results):
-                        print(" Test: ", idx, " local_rmse_val: ", rmse, " over misses: ", O_miss, " under misses: ", u_miss)
-                        if idx == 0:
-                            if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
-                                fails += 1
-                        elif idx == 1:
-                            if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
-                                fails += 1
+                    for l_rmse, l_u_miss, l_o_miss, g_rmse, g_u_miss, g_o_miss  in zip(self.unit_test_local_rmse_results, self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
+                        self.unit_test_global_rmse_results, self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
+                        print(" Test: ", idx, " local_rmse_val: ", l_rmse, " over misses: ", l_o_miss, " under misses: ", l_u_miss)
+                        print(" Test: ", idx, " global_rmse_val: ", g_rmse, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
+                        # if idx == 0:
+                        #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
+                        #         fails += 1
+                        # elif idx == 1:
+                        #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
+                        #         fails += 1
                         idx += 1
 
-                    if fails:
-                        print( " One or more unit tests has failed! Failures: ", fails)
+                    # if fails:
+                    #     print( " One or more unit tests has failed! Failures: ", fails)
 
                     # Test over
                     self.sensorsButton.setEnabled(True)
@@ -436,6 +485,8 @@ class MainWindow(QMainWindow):
                     self.unit_test = False
                     self.unitTestButton.setText('Unit Test Off')
                     self.unitTestButton.setEnabled(True)
+
+                    sys.exit()
 
 
         if not self.pause_simulation:
@@ -521,13 +572,16 @@ class MainWindow(QMainWindow):
                         if self.full_simulation:
                             # Create that fake LIDAR
                             if self.lidarRecognitionList[idx] != None:
-                                point_cloud, point_cloud_error, camera_array, camera_error_array = sensor.fake_lidar_and_camera(vehicle, tempList, [], 15.0, 15.0, 0.0, 160.0)
+                                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(vehicle, tempList, [], 15.0, 15.0, 0.0, 160.0)
                                 if self.simulate_error:
                                     vehicle.cameraDetections = camera_error_array
-                                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
-                                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
-                                    vehicle.rawLidarDetections = point_cloud_error
-                                    vehicle.lidarDetections = lidarcoordinates
+                                    if self.real_lidar:
+                                        lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
+                                            vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
+                                        vehicle.rawLidarDetections = point_cloud_error
+                                        vehicle.lidarDetections = lidarcoordinates
+                                    else:
+                                        vehicle.lidarDetections = lidar_detected_error
                                 else:
                                     vehicle.cameraDetections = camera_array
                                     lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0,
@@ -571,7 +625,6 @@ class MainWindow(QMainWindow):
                                 sensed_x = each[0]
                                 sensed_y = each[1]
                                 vehicle.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
-                            vehicle.groundTruth.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
 
                         # Now update our current PID with respect to other vehicles
                         vehicle.check_positions_of_other_vehicles_adjust_velocity(tempList)
@@ -599,13 +652,13 @@ class MainWindow(QMainWindow):
                             for dist in distances:
                                 self.local_differences.append(dist)
 
-                            # Check how much large the test set is from the ground truth and add that as well
-                            if len(testSet) > len(groundTruth):
-                                # Overdetection case
-                                self.local_over_detection_miss += len(testSet) - len(groundTruth)
-                            elif len(testSet) < len(groundTruth):
-                                # Underdetection case, we count this differently because it may be from obstacle blocking
-                                self.local_under_detection_miss += len(groundTruth) - len(testSet)
+                        # Check how much large the test set is from the ground truth and add that as well
+                        if len(testSet) > len(groundTruth):
+                            # Overdetection case
+                            self.local_over_detection_miss += len(testSet) - len(groundTruth)
+                        elif len(testSet) < len(groundTruth):
+                            # Underdetection case, we count this differently because it may be from obstacle blocking
+                            self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
                         self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
@@ -629,7 +682,7 @@ class MainWindow(QMainWindow):
                         if self.full_simulation:
                             # Create that fake camera
                             if self.lidarRecognitionList[idx] != None:
-                                point_cloud, point_cloud_error, camera_array, camera_error_array = sensor.fake_lidar_and_camera(cis, tempList, [], 15.0, 15.0, 0.0, 160.0)
+                                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(cis, tempList, [], 15.0, 15.0, 0.0, 160.0)
                                 if self.simulate_error:
                                     cis.cameraDetections = camera_error_array
                                 else:
@@ -668,7 +721,6 @@ class MainWindow(QMainWindow):
                                 sensed_x = each[0]
                                 sensed_y = each[1]
                                 cis.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
-                                cis.groundTruth.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0))
 
                         # Ground truth to the original dataset
                         testSet = []
@@ -677,10 +729,10 @@ class MainWindow(QMainWindow):
                             sensed_x = each[0]
                             sensed_y = each[1]
                             testSet.append([sensed_x, sensed_y])
-                        for each in tempList:
+                        for each in cis.groundTruth:
                             sensed_x = each[0]
                             sensed_y = each[1]
-                            cis.groundTruth.append([sensed_x, sensed_y])
+                            groundTruth.append([sensed_x, sensed_y])
 
                         if len(testSet) >= 1 and len(groundTruth) >= 1:
                             nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
@@ -690,24 +742,49 @@ class MainWindow(QMainWindow):
                             for dist in distances:
                                 self.local_differences.append(dist)
 
-                            # Check how much large the test set is from the ground truth and add that as well
-                            if len(testSet) > len(groundTruth):
-                                # Overdetection case
-                                self.local_over_detection_miss += len(testSet) - len(groundTruth)
-                            elif len(testSet) < len(groundTruth):
-                                # Underdetection case, we count this differently because it may be from obstacle blocking
-                                self.local_under_detection_miss += len(groundTruth) - len(testSet)
+                        # Check how much large the test set is from the ground truth and add that as well
+                        if len(testSet) > len(groundTruth):
+                            # Overdetection case
+                            self.local_over_detection_miss += len(testSet) - len(groundTruth)
+                        elif len(testSet) < len(groundTruth):
+                            # Underdetection case, we count this differently because it may be from obstacle blocking
+                            self.local_under_detection_miss += len(groundTruth) - len(testSet)
 
                         # Add to the global sensor fusion
                         self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
 
-            #print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
-
             self.vehiclesLock.release()
 
-            final_result = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+            self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
-            print ( final_result )
+            # Ground truth to the original dataset
+            testSetGlobal = []
+            groundTruthGlobal = []
+            for each in self.globalFusionList:
+                sensed_x = each[1]
+                sensed_y = each[2]
+                testSetGlobal.append([sensed_x, sensed_y])
+            for each in tempList:
+                sensed_x = each[0]
+                sensed_y = each[1]
+                groundTruthGlobal.append([sensed_x, sensed_y])
+            if len(testSetGlobal) >= 1 and len(groundTruthGlobal) >= 1:
+                nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSetGlobal))
+                distances, indices = nbrs.kneighbors(np.array(groundTruthGlobal))
+
+                # Now calculate the score
+                for dist in distances:
+                    self.global_differences.append(dist)
+            # Check how much large the test set is from the ground truth and add that as well
+            if len(testSetGlobal) > len(groundTruthGlobal):
+                # Overdetection case
+                self.global_over_detection_miss += len(testSetGlobal) - len(groundTruthGlobal)
+            elif len(testSetGlobal) < len(groundTruthGlobal):
+                # Underdetection case, we count this differently because it may be from obstacle blocking
+                self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+
+            #print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
+            #print ( " over misses: ", self.global_over_detection_miss, " under misses: ", self.global_under_detection_miss )
 
             self.drawTrafficLight = True
 
@@ -1299,6 +1376,49 @@ class MainWindow(QMainWindow):
                                 painter.drawEllipse(0, 0, a, b)
                                 # Restore the environment to what it was before
                                 painter.restore()
+
+        if self.display_global_fusion:
+            # Now draw the camera fusion detections
+            pen.setBrush(brush_color['sensor_fusion_centroid'])
+            pen.setWidth(6)
+            painter.setPen(pen)
+            for fuse in self.globalFusionList:
+                painter.drawPoint(self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale))
+            pen.setWidth(.5)
+            painter.setPen(pen)
+            for fuse in self.globalFusionList:
+                painter.drawLine(self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale),
+                                self.translateX((fuse[1] + (8.0*fuse[4])) * self.mapSpecs.meters_to_print_scale),
+                                self.translateY((fuse[2] + (8.0*fuse[5])) * self.mapSpecs.meters_to_print_scale))
+
+            if self.display_covariance:
+                pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                for fuse in self.globalFusionList:
+                    # Make sure covariance parameters have been added
+                    if len(fuse) >= 4:
+                        pos = ( self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale) )
+                        a, b, phi = shared_math.ellipsify(fuse[3], 3.0)
+                        a = a * self.mapSpecs.meters_to_print_scale
+                        b = b * self.mapSpecs.meters_to_print_scale
+                        if not math.isnan(a) and not math.isnan(b):
+                            # Save the previous painter envinronment so we don't mess up the other things
+                            painter.save()
+                            # get the x and y components of the ellipse position
+                            ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                            ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                            # translate the center to where our ellipse should be
+                            painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                            # Rotate by phi to tunr the ellipse the correct way
+                            painter.rotate(math.degrees(phi))
+                            # Draw the ellipse at 0.0
+                            painter.drawEllipse(0, 0, a, b)
+                            # Restore the environment to what it was before
+                            painter.restore()
 
         if self.drawTrafficLight:
             pen = QPen()
