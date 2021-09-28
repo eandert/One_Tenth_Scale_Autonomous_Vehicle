@@ -286,7 +286,7 @@ def main(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test
 #for each in range(9):
 # Unit test stuff
 simulation = True
-unit_test = [True, 2, 1]
+unit_test = [True, 2, 2]
 
 # Setup the thread lock
 vehiclesLock = Lock()

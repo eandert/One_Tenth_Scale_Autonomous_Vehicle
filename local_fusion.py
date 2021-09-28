@@ -1,8 +1,11 @@
 import math
 import numpy as np
+from numpy.testing._private.utils import measure
 from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
+from filterpy.kalman import UnscentedKalmanFilter as UKF
+from filterpy.kalman import MerweScaledSigmaPoints
 
 import shared_math
 
@@ -42,6 +45,7 @@ class Tracked:
         self.id = id
         self.idx = 0
         self.min_size = 0.5
+        self.dt = .125
         self.track_count = 0
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
 
@@ -52,6 +56,7 @@ class Tracked:
 
         # Kalman stuff
         self.fusion_mode = fusion_mode
+        self.ukf_mode = False
 
         # Set other parameters for the class
         self.prev_time = -99
@@ -167,6 +172,25 @@ class Tracked:
     def clearLastFrame(self):
         self.match_list = []
 
+    def fx(self, x, dt):
+        """ state transition function for a 
+        constant velocity aircraft"""
+    
+        F = np.array([[1, 0, dt, 0],
+                     [0, 1, 0, dt],
+                     [0, 0, 1, 0],
+                     [0, 0, 0, 1]], dtype = 'float')
+                     
+        return F @ x
+
+    def hx(self, x):
+        ret_val = self.tempH_t
+        ret_val[0][0] = ret_val[0][0] * x[0]
+        ret_val[1][1] = ret_val[1][1] * x[1]
+        ret_val[2][2] = ret_val[2][0] * x[2]
+        ret_val[3][3] = ret_val[3][1] * x[3]
+        return ret_val
+
     def fusion(self, estimate_covariance, vehicle):
         lidarCov = np.array([[0.0, 0.0], [0.0, 0.0]])
         camCov = np.array([[0.0, 0.0], [0.0, 0.0]])
@@ -248,12 +272,23 @@ class Tracked:
 
             if self.fusion_mode == 0:
                 # Store so that next fusion is better
-                self.X_hat_t = np.array(
-                    [[x_out], [y_out], [0], [0]], dtype = 'float')
+                self.X_hat_t = np.array([x_out, y_out, 0, 0], dtype = 'float')
+                if self.ukf_mode:
+                    self.F_t = np.array([[1, 0, self.dt, 0],
+                                        [0, 1, 0, self.dt],
+                                        [0, 0, 1, 0],
+                                        [0, 0, 0, 1]], dtype = 'float')
+                    self.tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
+                                    [0, lidarMeasureH[1], 0, 0],
+                                    [camMeasureH[0], 0, 0, 0],
+                                    [0, camMeasureH[1], 0, 0]], dtype = 'float')
+                    sigmas = MerweScaledSigmaPoints(4, alpha=.1, beta=2., kappa=1.)
+                    self.ukf = UKF(dim_x=4, dim_z=2, fx=self.fx, hx=self.hx, dt=self.dt, points=sigmas)
+                    self.ukf.q = self.Q_t
+                    self.ukf.x = self.X_hat_t
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
-                self.X_hat_t = np.array(
-                    [[x_out], [y_out], [0], [0], [0], [0]], dtype = 'float')
+                self.X_hat_t = np.array([x_out, y_out, 0, 0, 0, 0], dtype = 'float')
             else:
                 # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
                 self.X_hat_t = np.array(
@@ -272,140 +307,155 @@ class Tracked:
             self.dy = 0.0
             self.idx += 1
         else:
-            try:
-                # We have valid data
-                # Transition matrix
-                elapsed = self.lastTracked - self.prev_time
-                if elapsed <= 0.0:
-                    #print( "Error time elapsed is incorrect! " + str(elapsed) )
-                    # Set to arbitrary time
-                    elapsed = 0.125
+            #try:
+            # We have valid data
+            # Transition matrix
+            elapsed = self.lastTracked - self.prev_time
+            if elapsed <= 0.0:
+                #print( "Error time elapsed is incorrect! " + str(elapsed) )
+                # Set to arbitrary time
+                elapsed = 0.125
 
-                if self.fusion_mode == 0:
-                    self.F_t = np.array([[1, 0, elapsed, 0],
-                                        [0, 1, 0, elapsed],
-                                        [0, 0, 1, 0],
-                                        [0, 0, 0, 1]], dtype = 'float')
+            if self.fusion_mode == 0:
+                self.F_t = np.array([[1, 0, elapsed, 0],
+                                    [0, 1, 0, elapsed],
+                                    [0, 0, 1, 0],
+                                    [0, 0, 0, 1]], dtype = 'float')
 
-                    tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0],
-                                    [camMeasureH[0], 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0]], dtype = 'float')
+                self.tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
+                                [0, lidarMeasureH[1], 0, 0],
+                                [camMeasureH[0], 0, 0, 0],
+                                [0, camMeasureH[1], 0, 0]], dtype = 'float')
 
-                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
+                self.measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
+            
+                # Measurment cov
+                self.R_t = np.array(
+                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
+                    [lidarCov[1][0], lidarCov[1][1], 0, 0],
+                    [0, 0, camCov[0][0], camCov[0][1]],
+                    [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
+            elif self.fusion_mode == 1:
+                # setup for x, dx, dxdx
+                self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
+                                    [0, 1, 0, elapsed, 0, elapsed*elapsed],
+                                    [0, 0, 1, 0, elapsed, 0],
+                                    [0, 0, 0, 1, 0, elapsed],
+                                    [0, 0, 0, 0, 1, 0],
+                                    [0, 0, 0, 0, 0, 1]], dtype = 'float')
+
+                self.tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
+                                    [0, lidarMeasureH[1], 0, 0, 0, 0],
+                                    [camMeasureH[0], 0, 0, 0, 0, 0],
+                                    [0, camMeasureH[1], 0, 0, 0, 0]], dtype = 'float')
+
+                self.measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
                 
-                    # Measurment cov
-                    self.R_t = np.array(
-                        [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                        [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                        [0, 0, camCov[0][0], camCov[0][1]],
-                        [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
-                elif self.fusion_mode == 1:
-                    # setup for x, dx, dxdx
-                    self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
-                                        [0, 1, 0, elapsed, 0, elapsed*elapsed],
-                                        [0, 0, 1, 0, elapsed, 0],
-                                        [0, 0, 0, 1, 0, elapsed],
-                                        [0, 0, 0, 0, 1, 0],
-                                        [0, 0, 0, 0, 0, 1]], dtype = 'float')
+                # Measurment cov
+                self.R_t = np.array(
+                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
+                    [lidarCov[1][0], lidarCov[1][1], 0, 0],
+                    [0, 0, camCov[0][0], camCov[0][1]],
+                    [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
 
-                    tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
-                                       [0, lidarMeasureH[1], 0, 0, 0, 0],
-                                       [camMeasureH[0], 0, 0, 0, 0, 0],
-                                       [0, camMeasureH[1], 0, 0, 0, 0]], dtype = 'float')
-
-                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
-                    
-                    # Measurment cov
-                    self.R_t = np.array(
-                        [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                        [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                        [0, 0, camCov[0][0], camCov[0][1]],
-                        [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
-
+            else:
+                # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
+                v_1 = self.X_hat_t[2]
+                phi_1 = self.X_hat_t[3]
+                phi_dot_1 = self.X_hat_t[4]
+                #print ( self.X_hat_t, v_1, phi_1, phi_dot_1 )
+                if phi_1 == 0.0:
+                    # Not moving, No correlation
+                    v_x = 999.9
+                    v_y = 999.9
+                    phi_x = 999.9
+                    phi_y = 999.9
                 else:
-                    # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
-                    v_1 = self.X_hat_t[2]
-                    phi_1 = self.X_hat_t[3]
-                    phi_dot_1 = self.X_hat_t[4]
-                    #print ( self.X_hat_t, v_1, phi_1, phi_dot_1 )
-                    if phi_1 == 0.0:
-                        # Not moving, No correlation
-                        v_x = 999.9
-                        v_y = 999.9
-                        phi_x = 999.9
-                        phi_y = 999.9
-                    else:
-                        v_x = ( 1.0 / phi_dot_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-                        v_y = ( 1.0 / phi_dot_1 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
-                        phi_x = ( v_1 / phi_dot_1 ) * ( -math.cos(phi_1) + math.cos(phi_1 + elapsed * phi_dot_1))
-                        phi_y = ( v_1 / phi_dot_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-                    if phi_dot_1 == 0.0:
-                        # Not accelerating, NO correlation
-                        phi_dot_x = 999.9
-                        phi_dot_y = 999.9
-                    else:
-                        phi_dot_x = ( v_1 * elapsed / phi_dot_1 ) * math.cos(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( - math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-                        phi_dot_y = ( v_1 * elapsed / phi_dot_1 ) * math.sin(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
-                    self.F_t = np.array([[1, 0, v_x, phi_x, phi_dot_x],
-                                        [0, 1, v_y, phi_y, phi_dot_y],
-                                        [0, 0, 1, 0, 0],
-                                        [0, 0, 0, 1, elapsed],
-                                        [0, 0, 0, 0, 1]], dtype = 'float')
+                    v_x = ( 1.0 / phi_dot_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
+                    v_y = ( 1.0 / phi_dot_1 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
+                    phi_x = ( v_1 / phi_dot_1 ) * ( -math.cos(phi_1) + math.cos(phi_1 + elapsed * phi_dot_1))
+                    phi_y = ( v_1 / phi_dot_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
+                if phi_dot_1 == 0.0:
+                    # Not accelerating, NO correlation
+                    phi_dot_x = 999.9
+                    phi_dot_y = 999.9
+                else:
+                    phi_dot_x = ( v_1 * elapsed / phi_dot_1 ) * math.cos(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( - math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
+                    phi_dot_y = ( v_1 * elapsed / phi_dot_1 ) * math.sin(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
+                self.F_t = np.array([[1, 0, v_x, phi_x, phi_dot_x],
+                                    [0, 1, v_y, phi_y, phi_dot_y],
+                                    [0, 0, 1, 0, 0],
+                                    [0, 0, 0, 1, elapsed],
+                                    [0, 0, 0, 0, 1]], dtype = 'float')
 
-                    tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0],
-                                       [0, lidarMeasureH[1], 0, 0, 0],
-                                       [camMeasureH[0], 0, 0, 0, 0],
-                                       [0, camMeasureH[1], 0, 0, 0]], dtype = 'float')
+                self.tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0],
+                                    [0, lidarMeasureH[1], 0, 0, 0],
+                                    [camMeasureH[0], 0, 0, 0, 0],
+                                    [0, camMeasureH[1], 0, 0, 0]], dtype = 'float')
 
-                    measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
-                    
-                    # Measurment cov
-                    self.R_t = np.array(
-                        [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                        [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                        [0, 0, camCov[0][0], camCov[0][1]],
-                        [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
+                self.measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
                 
+                # Measurment cov
+                self.R_t = np.array(
+                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
+                    [lidarCov[1][0], lidarCov[1][1], 0, 0],
+                    [0, 0, camCov[0][0], camCov[0][1]],
+                    [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
+            
+            if self.ukf_mode:
+                print ( 1 )
+                #self.ukf.fx = self.F_t
+                print ( 2 )
+                #self.ukf.hx = self.tempH_t
+                print ( 3 )
+                self.ukf.predict()
+                print ( 4 )
+                self.ukf.update(self.measure)
+                print ( 5 )
+                X_t = self.ukf.x
+                self.P_t = self.ukf.P
+            else:
                 X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 # print ( "m ", measure )
-                # print ( tempH_t )
+                # print ( self.tempH_t )
                 # print ( self.R_t )
 
                 #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
 
-                Z_t = (measure).transpose()
+                Z_t = (self.measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
                 # print ( "z_t2", Z_t )
-                X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, self.R_t, tempH_t)
+                X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.tempH_t)
                 self.X_hat_t = X_t
 
                 #print ( "P_hat2: ", self.P_hat_t, " P_t2: ", self.P_t )
 
                 self.P_hat_t = self.P_t
-                self.prev_time = self.lastTracked
-                self.x = X_t[0][0]
-                self.y = X_t[1][0]
-                if self.fusion_mode == 2:
-                    # Different setup for fusion mode 2 need to calculate vector from angle and velocity
-                    self.dx = X_t[2][0] * math.cos(X_t[3][0])
-                    self.dy = X_t[2][0] * math.sin(X_t[3][0])
-                else:
-                    self.dx = X_t[2][0]
-                    self.dy = X_t[3][0]
-                self.idx += 1
-                if self.P_t[0][0] != 0.0 or self.P_t[0][1] != 0.0:
-                    self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]], dtype = 'float')
-                    self.d_covariance = np.array([[self.P_t[2][2], self.P_t[2][3]], [self.P_t[3][2], self.P_t[3][3]]], dtype = 'float')
-                else:
-                    #print ( " what the heck: ", self.P_t)
-                    self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
-                    self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
 
-                #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
-            except Exception as e:
-                print ( " Exception: " + str(e) )
+            self.prev_time = self.lastTracked
+
+            self.x = X_t[0][0]
+            self.y = X_t[1][0]
+            if self.fusion_mode == 2:
+                # Different setup for fusion mode 2 need to calculate vector from angle and velocity
+                self.dx = X_t[2][0] * math.cos(X_t[3][0])
+                self.dy = X_t[2][0] * math.sin(X_t[3][0])
+            else:
+                self.dx = X_t[2][0]
+                self.dy = X_t[3][0]
+            self.idx += 1
+            if self.P_t[0][0] != 0.0 or self.P_t[0][1] != 0.0:
+                self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]], dtype = 'float')
+                self.d_covariance = np.array([[self.P_t[2][2], self.P_t[2][3]], [self.P_t[3][2], self.P_t[3][3]]], dtype = 'float')
+            else:
+                #print ( " what the heck: ", self.P_t)
+                self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
+                self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
+
+            #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
+            # except Exception as e:
+            #     print ( " Exception: " + str(e) )
 
     def getKalmanPred(self, time):
         # Only let the kalman predict after it has settled for a minute
