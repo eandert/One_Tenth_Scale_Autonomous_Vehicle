@@ -3,3 +3,4 @@
 *.xml
 *.iml
 test.py
+.vscode/settings.json
