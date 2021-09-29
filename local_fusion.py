@@ -69,9 +69,10 @@ class Tracked:
             self.P_t[3][3] = 0.0
             self.P_hat_t = self.P_t
             # Process cov
-            four = (.125*.125*.125*.125)/4.0
-            three = (.125*.125*.125)/2.0
-            two = (.125*.125)
+            process_variation = 1000
+            four = process_variation * (.125*.125*.125*.125)/4.0
+            three = process_variation * (.125*.125*.125)/2.0
+            two = process_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0],
                                 [0, four, 0, three],
                                 [three, 0, two, 0],
@@ -184,11 +185,21 @@ class Tracked:
         return F @ x
 
     def hx(self, x):
+        #print ( x )
+        #print ( self.tempH_t.dot(x) )
+        #Z_t = (x).transpose()
+        #Z_t = Z_t.reshape(Z_t.shape[0], -1)
+        #final = Z_t - self.tempH_t.dot(x)
+        #print ( Z_t )
+        print ( "h", self.tempH_t, x )
+        # print ( self.tempH_t @ x)
+        # print ( x @ self.tempH_t, "end" )
         ret_val = self.tempH_t
         ret_val[0][0] = ret_val[0][0] * x[0]
         ret_val[1][1] = ret_val[1][1] * x[1]
         ret_val[2][2] = ret_val[2][0] * x[2]
         ret_val[3][3] = ret_val[3][1] * x[3]
+        print(ret_val)
         return ret_val
 
     def fusion(self, estimate_covariance, vehicle):
@@ -278,13 +289,13 @@ class Tracked:
                                         [0, 1, 0, self.dt],
                                         [0, 0, 1, 0],
                                         [0, 0, 0, 1]], dtype = 'float')
-                    self.tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0],
-                                    [camMeasureH[0], 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0]], dtype = 'float')
-                    sigmas = MerweScaledSigmaPoints(4, alpha=.1, beta=2., kappa=1.)
-                    self.ukf = UKF(dim_x=4, dim_z=2, fx=self.fx, hx=self.hx, dt=self.dt, points=sigmas)
-                    self.ukf.q = self.Q_t
+                    self.tempH_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
+                                    [0., lidarMeasureH[1], 0., 0.],
+                                    [camMeasureH[0], 0., 0., 0.],
+                                    [0., camMeasureH[1], 0., 0.]], dtype = 'float')
+                    sigmas = MerweScaledSigmaPoints(4, alpha=.1, beta=2., kappa=0.)
+                    self.ukf = UKF(dim_x=4, dim_z=4, fx=self.fx, hx=self.hx, dt=self.dt, points=sigmas)
+                    self.ukf.Q = self.Q_t
                     self.ukf.x = self.X_hat_t
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
@@ -322,10 +333,10 @@ class Tracked:
                                     [0, 0, 1, 0],
                                     [0, 0, 0, 1]], dtype = 'float')
 
-                self.tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0],
-                                [0, lidarMeasureH[1], 0, 0],
-                                [camMeasureH[0], 0, 0, 0],
-                                [0, camMeasureH[1], 0, 0]], dtype = 'float')
+                self.tempH_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
+                                [0., lidarMeasureH[1], 0., 0.],
+                                [camMeasureH[0], 0., 0., 0.],
+                                [0., camMeasureH[1], 0., 0.]], dtype = 'float')
 
                 self.measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
             
@@ -403,22 +414,26 @@ class Tracked:
                     [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
             
             if self.ukf_mode:
+                self.ukf.R = self.R_t
+                #print ( self.ukf.z )
                 print ( 1 )
                 #self.ukf.fx = self.F_t
                 print ( 2 )
                 #self.ukf.hx = self.tempH_t
                 print ( 3 )
                 self.ukf.predict()
+                #print ( self.ukf.z )
                 print ( 4 )
                 self.ukf.update(self.measure)
                 print ( 5 )
                 X_t = self.ukf.x
                 self.P_t = self.ukf.P
+                print(X_t, self.P_t)
             else:
                 X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 # print ( "m ", measure )
-                # print ( self.tempH_t )
+                #print ( self.tempH_t )
                 # print ( self.R_t )
 
                 #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
@@ -428,6 +443,8 @@ class Tracked:
                 # print ( "z_t2", Z_t )
                 X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.tempH_t)
                 self.X_hat_t = X_t
+
+                #print ( X_t )
 
                 #print ( "P_hat2: ", self.P_hat_t, " P_t2: ", self.P_t )
 

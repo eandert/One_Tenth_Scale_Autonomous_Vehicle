@@ -58,6 +58,9 @@ class ResizableKalman:
         # Track the number of times this Kalman filter has been used
         self.idx = 0
 
+        # The amount of time before a tracker is removed from the list
+        self.time_until_removal = .5
+
         # Store the fusion mode
         self.fusion_mode = fusion_mode
 
@@ -131,37 +134,44 @@ class ResizableKalman:
             self.U_t = 0
 
     def addFrames(self, measurement_list):
-        # Regenerate the measurement array every frame
-        self.H_t = np.zeros([2 * len(self.localTrackersIDList), self.F_t_len], dtype = float)
+        try:
+            # Regenerate the measurement array every frame
+            self.H_t = np.zeros([2 * len(self.localTrackersIDList), self.F_t_len], dtype = float)
 
-        # Check if there are more sensors in the area that have not been added
-        for match in measurement_list:
-            measurment_index = binarySearch(self.localTrackersIDList, match.id)
-            if measurment_index < 0:
-                # This is not in the tracked list, needs to be added
-                self.addTracker(match.id)
-                measurment_index = len(self.localTrackersIDList) - 1
-                # Add 2 new rows to H_t
-                if measurment_index == 0:
-                    self.H_t = np.zeros([2 * len(self.localTrackersIDList), self.F_t_len], dtype = float)
-                else:
-                    np.r_[ self.H_t, np.zeros(self.F_t_len) ]
-                    np.r_[ self.H_t, np.zeros(self.F_t_len) ]
-            
-            # All should be in the tracked list now, continue building the tables
-            # Add the current covariance to the R matrix
-            temp_index = 2 * measurment_index
-            self.R_t[temp_index][temp_index] = match.covariance[0][0]
-            self.R_t[temp_index][temp_index + 1] = match.covariance[0][1]
-            self.R_t[temp_index + 1][temp_index] = match.covariance[1][0]
-            self.R_t[temp_index + 1][temp_index + 1] = match.covariance[1][1]
+            # Check if there are more sensors in the area that have not been added
+            for match in measurement_list:
+                measurment_index = binarySearch(self.localTrackersIDList, match.id)
+                if measurment_index < 0:
+                    # This is not in the tracked list, needs to be added
+                    self.addTracker(match.id)
+                    measurment_index = len(self.localTrackersIDList) - 1
+                    # Add 2 new rows to H_t
+                    #print ( " Adding ", match.id, measurment_index)
+                    if measurment_index == 0:
+                        # First element, we need to make H_t
+                        self.H_t = np.zeros([2, self.F_t_len], dtype = float)
+                    else:
+                        # Add anothe 2 rows to H_t
+                        self.H_t = np.r_[ self.H_t, [np.zeros(self.F_t_len)] ]
+                        self.H_t = np.r_[ self.H_t, [np.zeros(self.F_t_len)] ]
+                
+                # All should be in the tracked list now, continue building the tables
+                # Add the current covariance to the R matrix
+                temp_index = 2 * measurment_index
+                self.R_t[temp_index][temp_index] = match.covariance[0][0]
+                self.R_t[temp_index][temp_index + 1] = match.covariance[0][1]
+                self.R_t[temp_index + 1][temp_index] = match.covariance[1][0]
+                self.R_t[temp_index + 1][temp_index + 1] = match.covariance[1][1]
 
-            # Add the current measurments to the measurement matrix
-            self.measure[temp_index] = match.x
-            self.measure[temp_index + 1] = match.y
+                # Add the current measurments to the measurement matrix
+                self.measure[temp_index] = match.x
+                self.measure[temp_index + 1] = match.y
 
-            self.H_t[measurment_index][0] = 1.0
-            self.H_t[measurment_index + 1][1] = 1.0
+                self.H_t[temp_index][0] = 1.0
+                self.H_t[temp_index + 1][1] = 1.0
+            #print ( self.measure, self.R_t, self.H_t )
+        except Exception as e:
+            print ( " Exception: " + str(e) )
 
     def addTracker(self, id):
         # Make sure we have something, if not create the array here
@@ -179,22 +189,54 @@ class ResizableKalman:
             self.localTrackersIDList.append(id)
             self.localTrackersTimeAliveList.append(self.lastTracked)
 
-            newlength = len(self.localTrackersIDList) + 2
+            newlength = len(self.localTrackersIDList) * 2
 
             # R needs 2 more columns
-            np.c_[ self.R_t, np.zeros(newlength - 2) ]
-            np.c_[ self.R_t, np.zeros(newlength - 2) ]
+            self.R_t = np.c_[ self.R_t, np.zeros(newlength - 2) ]
+            self.R_t = np.c_[ self.R_t, np.zeros(newlength - 2) ]
 
             # R needs 2 more rows
-            np.r_[ self.R_t, np.zeros(newlength) ]
-            np.r_[ self.R_t, np.zeros(newlength) ]
+            self.R_t = np.r_[ self.R_t, [np.zeros(newlength)] ]
+            self.R_t = np.r_[ self.R_t, [np.zeros(newlength)] ]
 
             # Current measurment array needs 2 extra spaces
-            self.measure.append(0.0)
-            self.measure.append(0.0)
+            self.measure = np.append(self.measure, [0., 0.])
+
+    def removeOldTrackers(self):
+        # REmove any trackers that have not been used for a while
+        # Do this in reverse so we can delete the entire time
+        for position, trackerAlive in enumerate(reversed(self.localTrackersTimeAliveList)):
+            if (self.lastTracked - trackerAlive) > self.time_until_removal:
+                # Time to remove this track
+                if len(self.localTrackersIDList) <= 1:
+                    # Removing the last track from a filter, this should not
+                    # occur normally as we delete the entire tracker sooner
+                    self.measure = np.array([0.0, 0.0])
+                    self.R_t = np.zeros([2, 2], dtype = float)
+
+                    # Add to the list and list searcher
+                    self.localTrackersIDList = []
+                    self.localTrackersTimeAliveList = []
+                else:
+                    # R needs to have 2 specifica colums removed
+                    self.R_t = np.delete(self.R_t, position * 2, 1)
+                    self.R_t = np.delete(self.R_t, position * 2, 1)
+
+                    # R needs to have 2 rows removed
+                    self.R_t = np.delete(self.R_t, position * 2, 0)
+                    self.R_t = np.delete(self.R_t, position * 2, 0)
+
+                    # Measurment array needs 2 spots removed
+                    self.measure = np.delete(self.measure, position * 2, 0)
+                    self.measure = np.delete(self.measure, position * 2, 0)
+
+                    # Remove from the list and list searcher
+                    self.localTrackersIDList.pop(position)
+                    self.localTrackersTimeAliveList.pop(position)
 
     def fusion(self, measurement_list, estimate_covariance):
         # Set the kalman variables and resize the arrays dynalically (if needed
+        #print( measurement_list )
         self.addFrames(measurement_list)
         # Do the kalman thing!
         if self.idx == 0:
@@ -292,6 +334,12 @@ class ResizableKalman:
                                         [0, 0, 0, 1, elapsed],
                                         [0, 0, 0, 0, 1]], dtype = 'float')
                 
+                # print( " e ")
+                # print ( self.X_hat_t )
+                # print ( self.R_t )
+                # print ( self.H_t )
+                # print ( self.measure)
+
                 X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 Z_t = (self.measure).transpose()
@@ -322,6 +370,8 @@ class ResizableKalman:
                     self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
 
                 #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
+                # Post fusion, lets clrea old trackers now
+                self.removeOldTrackers()
 
             except Exception as e:
                 print ( " Exception: " + str(e) )
@@ -350,7 +400,7 @@ class GlobalTracked:
         self.lastTracked = time
         self.id = id
         self.idx = 0
-        self.min_size = 0.5
+        self.min_size = 0.75
         self.track_count = 0
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
         self.match_list = []
@@ -365,7 +415,7 @@ class GlobalTracked:
 
     # Update adds another detection to this track
     def update(self, other, time):
-        new_match = MatchClass(other[1], other[2], other[3], None, None, None, other[4], time, other[0])
+        new_match = MatchClass(other[1], other[2], other[3], None, None, None, other[0], time, other[4])
         self.match_list.append(new_match)
 
         self.lastTracked = time
@@ -478,7 +528,7 @@ class GlobalFUSION:
                                                          return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                            if .95 >= IOUVsDetection >= 0:
+                            if .99 >= IOUVsDetection >= 0:
                                 # Only grab the first match
                                 # Before determining if this is a match check if this detection has been matched already
                                 if first:
@@ -541,7 +591,7 @@ class GlobalFUSION:
                     first = True
                     for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
                         # Check to make sure thie IOU match is high
-                        if .25 >= IOUsDetection >= 0:
+                        if .5 >= IOUsDetection >= 0:
                             # Make sure this is not ourself
                             if add != detectionIdx:
                                 # If this is not ourself, add ourself only if none of our matches has been added yet
