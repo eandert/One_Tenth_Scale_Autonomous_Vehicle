@@ -407,6 +407,7 @@ class GlobalTracked:
         self.track_count = 0
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
         self.match_list = []
+        self.fusion_steps = 0
 
         # Add this first match
         new_match = MatchClass(x, y, covariance, None, None, None, object_type, time, sensed_id)
@@ -423,6 +424,8 @@ class GlobalTracked:
 
         self.lastTracked = time
 
+        self.track_count += 1
+
     # Gets our position in an array form so we can use it in the BallTree
     def getPosition(self):
         return [
@@ -430,7 +433,7 @@ class GlobalTracked:
         ]
 
     def getPositionPredicted(self, timestamp):
-        if self.track_count < 1:
+        if self.fusion_steps < 2:
             # If this kalman fitler has never been run, we can't use it for prediction!
             return [
                 [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
@@ -449,7 +452,7 @@ class GlobalTracked:
         self.dx = self.kalman.dx
         self.dy = self.kalman.dy
         self.d_covariance = self.kalman.d_covariance
-        self.track_count += 1
+        self.fusion_steps += 1
 
     def clearLastFrame(self):
         self.match_list = []
@@ -478,7 +481,7 @@ class GlobalFUSION:
         result = []
         for track in self.trackedList:
             track.fusion(estimate_covariance)
-            if track.track_count >= 3:
+            if track.fusion_steps >= 4:
                 #print ( track.id, track.x, track.y, track.error_covariance )
                 result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
             # Clear the previous detection list
@@ -531,7 +534,7 @@ class GlobalFUSION:
                                                          return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                            if .90 >= IOUVsDetection >= 0:
+                            if .95 >= IOUVsDetection >= 0:
                                 # Only grab the first match
                                 # Before determining if this is a match check if this detection has been matched already
                                 if first:
@@ -594,7 +597,7 @@ class GlobalFUSION:
                     first = True
                     for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
                         # Check to make sure thie IOU match is high
-                        if .5 >= IOUsDetection >= 0:
+                        if .25 >= IOUsDetection >= 0:
                             # Make sure this is not ourself
                             if add != detectionIdx:
                                 # If this is not ourself, add ourself only if none of our matches has been added yet
@@ -607,7 +610,7 @@ class GlobalFUSION:
                         added.append(add)
                         new = GlobalTracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
                                       detection_list[add][3], detection_list[add][4], timestamp, self.id, self.fusion_mode)
-                        if self.id < 1000000:
+                        if self.id < max_id:
                             self.id += 1
                         else:
                             self.id = 0
@@ -616,7 +619,7 @@ class GlobalFUSION:
             else:
                 for dl in detection_list:
                     new = GlobalTracked(dl[0], dl[1], dl[2], dl[3], dl[4], timestamp, self.id, self.fusion_mode)
-                    if self.id < 1000000:
+                    if self.id < max_id:
                         self.id += 1
                     else:
                         self.id = 0

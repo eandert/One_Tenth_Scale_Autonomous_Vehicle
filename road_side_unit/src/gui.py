@@ -29,7 +29,9 @@ brush_color = {
     "lidar_detection_raw": Qt.lightGray,
     "camera_detection_centroid": Qt.darkYellow,
     "sensor_fusion_centroid": Qt.red,
-    "sensor_fusion_error_ellipse": Qt.green
+    "sensor_fusion_error_ellipse": Qt.green,
+    "global_sensor_fusion_centroid": Qt.blue,
+    "global_sensor_fusion_error_ellipse": Qt.darkGreen
 }
 
 class MainWindow(QMainWindow):
@@ -541,10 +543,6 @@ class MainWindow(QMainWindow):
                 vehicleList.append(otherVehicle.get_location())
 
             for idx, vehicle in self.vehicles.items():
-                #print ( " CAV:", idx )
-                # Do this if we are not in a full sim
-                if not self.full_simulation and vehicle.simVehicle:
-                    vehicle.updatePosition(.125)
                 if self.pause_simulation:
                     # Make sure we relay the pause to our vehicles
                     vehicle.targetVelocityGeneral = 0.0
@@ -1379,7 +1377,7 @@ class MainWindow(QMainWindow):
 
         if self.display_global_fusion:
             # Now draw the camera fusion detections
-            pen.setBrush(brush_color['sensor_fusion_centroid'])
+            pen.setBrush(brush_color['global_sensor_fusion_centroid'])
             pen.setWidth(6)
             painter.setPen(pen)
             for fuse in self.globalFusionList:
@@ -1394,7 +1392,7 @@ class MainWindow(QMainWindow):
                                 self.translateY((fuse[2] + (8.0*fuse[5])) * self.mapSpecs.meters_to_print_scale))
 
             if self.display_covariance:
-                pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                pen.setBrush(brush_color['global_sensor_fusion_error_ellipse'])
                 pen.setWidth(.5)
                 painter.setPen(pen)
                 for fuse in self.globalFusionList:

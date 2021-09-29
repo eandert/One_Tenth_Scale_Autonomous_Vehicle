@@ -47,6 +47,7 @@ class Tracked:
         self.min_size = 0.5
         self.dt = .125
         self.track_count = 0
+        self.fusion_steps = 0
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
 
         # Build the match list and add our match to it
@@ -152,7 +153,7 @@ class Tracked:
     # Update adds another detection to this track
     def update(self, other, time):
         
-        new_match = MatchClass(other[1], other[2], None, None, None, None, other[3], time, other[0])
+        new_match = MatchClass(other[1], other[2], None, None, None, None, other[0], time, other[3])
         self.match_list.append(new_match)
 
         self.lastTracked = time
@@ -166,10 +167,16 @@ class Tracked:
         ]
 
     def getPositionPredicted(self, timestamp):
-        x, y, a, b, phi = self.getKalmanPred(timestamp)
-        return [
-            [x, y, a, b, phi]
-        ]
+        if self.fusion_steps < 2:
+            # If this kalman fitler has never been run, we can't use it for prediction!
+            return [
+                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+            ]
+        else:
+            x, y, a, b, phi = self.getKalmanPred(timestamp)
+            return [
+                [x, y, a, b, phi]
+            ]
 
     def clearLastFrame(self):
         self.match_list = []
@@ -284,7 +291,7 @@ class Tracked:
 
             if self.fusion_mode == 0:
                 # Store so that next fusion is better
-                self.X_hat_t = np.array([x_out, y_out, 0, 0], dtype = 'float')
+                self.X_hat_t = np.array([[x_out], [y_out], [0], [0]], dtype = 'float')
                 if self.ukf_mode:
                     self.F_t = np.array([[1, 0, self.dt, 0],
                                         [0, 1, 0, self.dt],
@@ -300,7 +307,7 @@ class Tracked:
                     self.ukf.x = self.X_hat_t
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
-                self.X_hat_t = np.array([x_out, y_out, 0, 0, 0, 0], dtype = 'float')
+                self.X_hat_t = np.array([[x_out], [y_out], [0], [0], [0], [0]], dtype = 'float')
             else:
                 # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
                 self.X_hat_t = np.array(
@@ -339,7 +346,7 @@ class Tracked:
                                 [camMeasureH[0], 0., 0., 0.],
                                 [0., camMeasureH[1], 0., 0.]], dtype = 'float')
 
-                self.measure = np.array([[lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]]], dtype = 'float')
+                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
             
                 # Measurment cov
                 self.R_t = np.array(
@@ -361,7 +368,7 @@ class Tracked:
                                     [camMeasureH[0], 0, 0, 0, 0, 0],
                                     [0, camMeasureH[1], 0, 0, 0, 0]], dtype = 'float')
 
-                self.measure = np.array([[lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]]], dtype = 'float')
+                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
                 
                 # Measurment cov
                 self.R_t = np.array(
@@ -405,7 +412,7 @@ class Tracked:
                                     [camMeasureH[0], 0, 0, 0, 0],
                                     [0, camMeasureH[1], 0, 0, 0]], dtype = 'float')
 
-                self.measure = np.array([[lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]]], dtype = 'float')
+                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
                 
                 # Measurment cov
                 self.R_t = np.array(
@@ -439,7 +446,7 @@ class Tracked:
 
                 #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
 
-                Z_t = (self.measure).transpose()
+                Z_t = (measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
                 # print ( "z_t2", Z_t )
                 X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.tempH_t)
@@ -470,6 +477,8 @@ class Tracked:
                 #print ( " what the heck: ", self.P_t)
                 self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
                 self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
+
+            self.fusion_steps += 1
 
             #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
             # except Exception as e:
@@ -567,7 +576,7 @@ class FUSION:
         result = []
         for track in self.trackedList:
             track.fusion(estimate_covariance, vehicle)
-            if track.track_count >= 3:
+            if track.fusion_steps >= 4:
                 # Calculate a custom ID that encodes the sensorid and local fusion track number
                 universal_id = self.id * MAX_ID + track.id
                 result.append([universal_id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
