@@ -52,6 +52,9 @@ class ResizableKalman:
         # Arbitrary min tracking size so we are not too small to match to
         self.min_size = .75
 
+        # Process varaition guess
+        process_variation = 1
+
         # Track the time of the last track
         self.lastTracked = time
 
@@ -76,9 +79,9 @@ class ResizableKalman:
             self.P_t[3][3] = 0.0
             self.P_hat_t = self.P_t
             # Process cov
-            four = (.125*.125*.125*.125)/4.0
-            three = (.125*.125*.125)/2.0
-            two = (.125*.125)
+            four = process_variation * (.125*.125*.125*.125)/4.0
+            three = process_variation * (.125*.125*.125)/2.0
+            two = process_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0],
                                 [0, four, 0, three],
                                 [three, 0, two, 0],
@@ -97,10 +100,10 @@ class ResizableKalman:
             self.P_t[5][5] = 0.0
             self.P_hat_t = self.P_t
             # Process cov
-            five = (.125*.125*.125*.125*.125)/8.0
-            four = (.125*.125*.125*.125)/4.0
-            three = (.125*.125*.125)/2.0
-            two = (.125*.125)
+            five = process_variation * (.125*.125*.125*.125*.125)/8.0
+            four = process_variation * (.125*.125*.125*.125)/4.0
+            three = process_variation * (.125*.125*.125)/2.0
+            two = process_variation * (.125*.125)
             self.Q_t = np.array([[five, 0, four, 0, 0, 0],
                                 [0, five, 0, four, 0, 0],
                                 [four, 0, three, 0, three, 0],
@@ -120,9 +123,9 @@ class ResizableKalman:
             self.P_t[4][4] = 0.0
             self.P_hat_t = self.P_t
             # Process cov
-            four = (.125*.125*.125*.125)/4.0
-            three = (.125*.125*.125)/2.0
-            two = (.125*.125)
+            four = process_variation * (.125*.125*.125*.125)/4.0
+            three = process_variation * (.125*.125*.125)/2.0
+            two = process_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0, 0],
                                 [0, four, 0, three, 0],
                                 [three, three, two, 0, 0],
@@ -528,7 +531,7 @@ class GlobalFUSION:
                                                          return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                            if .99 >= IOUVsDetection >= 0:
+                            if .90 >= IOUVsDetection >= 0:
                                 # Only grab the first match
                                 # Before determining if this is a match check if this detection has been matched already
                                 if first:

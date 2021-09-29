@@ -67,3 +67,11 @@
  Test:  0  global_rmse_val:  0.23564138561328057  over misses:  207  under misses:  12
  Test:  1  local_rmse_val:  0.4134439651362925  over misses:  4022  under misses:  320
  Test:  1  global_rmse_val:  0.22833376497775362  over misses:  199  under misses:  18
+ 
+ 
+ new
+ 1,1
+ Test:  0  local_rmse_val:  0.5673670053615606  over misses:  3243  under misses:  614
+ Test:  0  global_rmse_val:  0.20660395322194663  over misses:  482  under misses:  17
+ Test:  1  local_rmse_val:  0.5114309516439521  over misses:  3427  under misses:  493
+ Test:  1  global_rmse_val:  0.2432274417198386  over misses:  164  under misses:  25 

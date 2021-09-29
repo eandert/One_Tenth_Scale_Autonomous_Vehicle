@@ -58,6 +58,8 @@ class Tracked:
         self.fusion_mode = fusion_mode
         self.ukf_mode = False
 
+        process_variation = 1
+
         # Set other parameters for the class
         self.prev_time = -99
 
@@ -69,7 +71,6 @@ class Tracked:
             self.P_t[3][3] = 0.0
             self.P_hat_t = self.P_t
             # Process cov
-            process_variation = 1000
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
             two = process_variation * (.125*.125)
@@ -99,10 +100,10 @@ class Tracked:
             self.P_hat_t = self.P_t
             # Process cov
             #self.Q_t = np.identity(6)
-            five = (.125*.125*.125*.125*.125)/8.0
-            four = (.125*.125*.125*.125)/4.0
-            three = (.125*.125*.125)/2.0
-            two = (.125*.125)
+            five = process_variation * (.125*.125*.125*.125*.125)/8.0
+            four = process_variation * (.125*.125*.125*.125)/4.0
+            three = process_variation * (.125*.125*.125)/2.0
+            two = process_variation * (.125*.125)
             self.Q_t = np.array([[five, 0, four, 0, 0, 0],
                                 [0, five, 0, four, 0, 0],
                                 [four, 0, three, 0, three, 0],
@@ -126,9 +127,9 @@ class Tracked:
             self.P_hat_t = self.P_t
             # Process cov
             #self.Q_t = np.identity(5)
-            four = (.125*.125*.125*.125)/4.0
-            three = (.125*.125*.125)/2.0
-            two = (.125*.125)
+            four = process_variation * (.125*.125*.125*.125)/4.0
+            three = process_variation * (.125*.125*.125)/2.0
+            two = process_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0, 0],
                                 [0, four, 0, three, 0],
                                 [three, three, two, 0, 0],
@@ -338,7 +339,7 @@ class Tracked:
                                 [camMeasureH[0], 0., 0., 0.],
                                 [0., camMeasureH[1], 0., 0.]], dtype = 'float')
 
-                self.measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
+                self.measure = np.array([[lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]]], dtype = 'float')
             
                 # Measurment cov
                 self.R_t = np.array(
@@ -360,7 +361,7 @@ class Tracked:
                                     [camMeasureH[0], 0, 0, 0, 0, 0],
                                     [0, camMeasureH[1], 0, 0, 0, 0]], dtype = 'float')
 
-                self.measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
+                self.measure = np.array([[lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]]], dtype = 'float')
                 
                 # Measurment cov
                 self.R_t = np.array(
@@ -404,7 +405,7 @@ class Tracked:
                                     [camMeasureH[0], 0, 0, 0, 0],
                                     [0, camMeasureH[1], 0, 0, 0]], dtype = 'float')
 
-                self.measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
+                self.measure = np.array([[lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]]], dtype = 'float')
                 
                 # Measurment cov
                 self.R_t = np.array(
