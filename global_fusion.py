@@ -136,7 +136,7 @@ class ResizableKalman:
             # Control vector
             self.U_t = 0
 
-    def addFrames(self, measurement_list):
+    def addFrames(self, measurement_list, estimate_covariance):
         try:
             # Regenerate the measurement array every frame
             self.H_t = np.zeros([2 * len(self.localTrackersIDList), self.F_t_len], dtype = float)
@@ -161,10 +161,16 @@ class ResizableKalman:
                 # All should be in the tracked list now, continue building the tables
                 # Add the current covariance to the R matrix
                 temp_index = 2 * measurment_index
-                self.R_t[temp_index][temp_index] = match.covariance[0][0]
-                self.R_t[temp_index][temp_index + 1] = match.covariance[0][1]
-                self.R_t[temp_index + 1][temp_index] = match.covariance[1][0]
-                self.R_t[temp_index + 1][temp_index + 1] = match.covariance[1][1]
+                if estimate_covariance:
+                    self.R_t[temp_index][temp_index] = match.covariance[0][0]
+                    self.R_t[temp_index][temp_index + 1] = match.covariance[0][1]
+                    self.R_t[temp_index + 1][temp_index] = match.covariance[1][0]
+                    self.R_t[temp_index + 1][temp_index + 1] = match.covariance[1][1]
+                else:
+                    self.R_t[temp_index][temp_index] = 0.5
+                    self.R_t[temp_index][temp_index + 1] = 0.0
+                    self.R_t[temp_index + 1][temp_index] = 0.0
+                    self.R_t[temp_index + 1][temp_index + 1] = 0.5
 
                 # Add the current measurments to the measurement matrix
                 self.measure[temp_index] = match.x
@@ -240,7 +246,7 @@ class ResizableKalman:
     def fusion(self, measurement_list, estimate_covariance):
         # Set the kalman variables and resize the arrays dynalically (if needed
         #print( measurement_list )
-        self.addFrames(measurement_list)
+        self.addFrames(measurement_list, estimate_covariance)
         # Do the kalman thing!
         if self.idx == 0:
             # We have no prior detection so we need to just output what we have but store for later
