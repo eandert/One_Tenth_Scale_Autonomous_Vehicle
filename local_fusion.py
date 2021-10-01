@@ -173,10 +173,15 @@ class Tracked:
                 [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
             ]
         else:
-            x, y, a, b, phi = self.getKalmanPred(timestamp)
-            return [
-                [x, y, a, b, phi]
-            ]
+            try:
+                x, y, a, b, phi = self.getKalmanPred(timestamp)
+                return [
+                    [x, y, a, b, phi]
+                ]
+            except:
+                return [
+                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+                ]
 
     def clearLastFrame(self):
         self.match_list = []
@@ -613,119 +618,122 @@ class FUSION:
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
 
     def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime):
-        matches = []
-        if len(detections_list_positions) > 0:
-            if len(self.trackedList) > 0:
-                numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
-                thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
+        try:
+            matches = []
+            if len(detections_list_positions) > 0:
+                if len(self.trackedList) > 0:
+                    numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
+                    thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
 
-                # Need to check the tree size here in order to figure out if we can even do this
-                length = len(numpy_formatted)
-                if length > 0:
-                    for trackedListIdx, track in enumerate(self.trackedList):
-                        # The only difference between this and our other version is that
-                        # the below line is commented out
-                        # track.calcEstimatedPos(timestamp - self.prev_time)
-                        tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(timestamp)), k=length,
-                                                         return_distance=True)
-                        first = True
-                        for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                            if .95 >= IOUVsDetection >= 0:
-                                # Only grab the first match
-                                # Before determining if this is a match check if this detection has been matched already
-                                if first:
-                                    try:
-                                        index = [i[0] for i in matches].index(detectionIdx)
-                                        # We have found the detection index, lets see which track is a better match
-                                        if matches[index][2] > IOUVsDetection:
-                                            # We are better so add ourselves
+                    # Need to check the tree size here in order to figure out if we can even do this
+                    length = len(numpy_formatted)
+                    if length > 0:
+                        for trackedListIdx, track in enumerate(self.trackedList):
+                            # The only difference between this and our other version is that
+                            # the below line is commented out
+                            # track.calcEstimatedPos(timestamp - self.prev_time)
+                            tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(timestamp)), k=length,
+                                                            return_distance=True)
+                            first = True
+                            for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
+                                if .95 >= IOUVsDetection >= 0:
+                                    # Only grab the first match
+                                    # Before determining if this is a match check if this detection has been matched already
+                                    if first:
+                                        try:
+                                            index = [i[0] for i in matches].index(detectionIdx)
+                                            # We have found the detection index, lets see which track is a better match
+                                            if matches[index][2] > IOUVsDetection:
+                                                # We are better so add ourselves
+                                                matches.append([detectionIdx, trackedListIdx, IOUVsDetection])
+                                                # Now unmatch the other one because we are better
+                                                # This essentiall eliminates double matching
+                                                matches[index][2] = 1
+                                                matches[index][1] = -99
+                                                # Now break the loop
+                                                first = False
+                                        except:
+                                            # No matches in the list, go ahead and add
                                             matches.append([detectionIdx, trackedListIdx, IOUVsDetection])
-                                            # Now unmatch the other one because we are better
-                                            # This essentiall eliminates double matching
-                                            matches[index][2] = 1
-                                            matches[index][1] = -99
-                                            # Now break the loop
                                             first = False
-                                    except:
-                                        # No matches in the list, go ahead and add
-                                        matches.append([detectionIdx, trackedListIdx, IOUVsDetection])
+                                    else:
+                                        # The other matches need to be marked so they arent made into a new track
+                                        # Set distance to 1 so we know this wasn't the main match
+                                        if detectionIdx not in [i[0] for i in matches]:
+                                            # No matches in the list, go ahead and add
+                                            matches.append([detectionIdx, -99, 1])
+
+                    # update the tracks that made it through
+                    for match in matches:
+                        if match[1] != -99:
+                            # Now append to the correct track
+                            self.trackedList[match[1]].relations.append([match[0], match[2]])
+
+                    # Old way
+                    for track in self.trackedList:
+                        if len(track.relations) == 1:
+                            # Single match, go ahead and update the location
+                            track.update(detection_list[track.relations[0][0]], timestamp)
+                        elif len(track.relations) > 1:
+                            # if we have multiple matches, pick the best one
+                            max = 0
+                            idx = -99
+                            for rel in track.relations:
+                                if rel[1] < max:
+                                    max = rel[1]
+                                    idx = rel[0]
+
+                            if idx != -99:
+                                track.update(detection_list[idx], timestamp)
+
+                    if len(matches):
+                        missing = sorted(set(range(0, len(detections_list_positions))) - set([i[0] for i in matches]))
+                    else:
+                        missing = list(range(0, len(detections_list_positions)))
+
+                    added = []
+                    for add in missing:
+                        # Before we add anything, let's check back against the list to make sure there is no IOU match over .5 with this new item and another new item
+                        tuple = thisFrameTrackTree.query((np.array([detections_list_positions[add]])), k=length,
+                                                        return_distance=True)
+                        first = True
+                        for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
+                            # Check to make sure thie IOU match is high
+                            if .25 >= IOUsDetection >= 0:
+                                # Make sure this is not ourself
+                                if add != detectionIdx:
+                                    # If this is not ourself, add ourself only if none of our matches has been added yet
+                                    if detectionIdx in added:
                                         first = False
-                                else:
-                                    # The other matches need to be marked so they arent made into a new track
-                                    # Set distance to 1 so we know this wasn't the main match
-                                    if detectionIdx not in [i[0] for i in matches]:
-                                        # No matches in the list, go ahead and add
-                                        matches.append([detectionIdx, -99, 1])
+                                        break
 
-                # update the tracks that made it through
-                for match in matches:
-                    if match[1] != -99:
-                        # Now append to the correct track
-                        self.trackedList[match[1]].relations.append([match[0], match[2]])
+                        # We are the best according to arbitrarily broken tie and can be added
+                        if first:
+                            added.append(add)
+                            new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
+                                        detection_list[add][3], timestamp, self.id, self.fusion_mode)
+                            if self.id < MAX_ID:
+                                self.id += 1
+                            else:
+                                self.id = 0
+                            self.trackedList.append(new)
 
-                # Old way
-                for track in self.trackedList:
-                    if len(track.relations) == 1:
-                        # Single match, go ahead and update the location
-                        track.update(detection_list[track.relations[0][0]], timestamp)
-                    elif len(track.relations) > 1:
-                        # if we have multiple matches, pick the best one
-                        max = 0
-                        idx = -99
-                        for rel in track.relations:
-                            if rel[1] < max:
-                                max = rel[1]
-                                idx = rel[0]
-
-                        if idx != -99:
-                            track.update(detection_list[idx], timestamp)
-
-                if len(matches):
-                    missing = sorted(set(range(0, len(detections_list_positions))) - set([i[0] for i in matches]))
                 else:
-                    missing = list(range(0, len(detections_list_positions)))
-
-                added = []
-                for add in missing:
-                    # Before we add anything, let's check back against the list to make sure there is no IOU match over .5 with this new item and another new item
-                    tuple = thisFrameTrackTree.query((np.array([detections_list_positions[add]])), k=length,
-                                                     return_distance=True)
-                    first = True
-                    for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                        # Check to make sure thie IOU match is high
-                        if .25 >= IOUsDetection >= 0:
-                            # Make sure this is not ourself
-                            if add != detectionIdx:
-                                # If this is not ourself, add ourself only if none of our matches has been added yet
-                                if detectionIdx in added:
-                                    first = False
-                                    break
-
-                    # We are the best according to arbitrarily broken tie and can be added
-                    if first:
-                        added.append(add)
-                        new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
-                                      detection_list[add][3], timestamp, self.id, self.fusion_mode)
+                    for dl in detection_list:
+                        new = Tracked(dl[0], dl[1], dl[2], dl[3], timestamp, self.id, self.fusion_mode)
                         if self.id < MAX_ID:
                             self.id += 1
                         else:
                             self.id = 0
                         self.trackedList.append(new)
 
-            else:
-                for dl in detection_list:
-                    new = Tracked(dl[0], dl[1], dl[2], dl[3], timestamp, self.id, self.fusion_mode)
-                    if self.id < MAX_ID:
-                        self.id += 1
-                    else:
-                        self.id = 0
-                    self.trackedList.append(new)
+            remove = []
+            for idx, track in enumerate(self.trackedList):
+                track.relations = []
+                if track.lastTracked < ( timestamp - cleanupTime ):
+                    remove.append(idx)
 
-        remove = []
-        for idx, track in enumerate(self.trackedList):
-            track.relations = []
-            if track.lastTracked < ( timestamp - cleanupTime ):
-                remove.append(idx)
-
-        for delete in reversed(remove):
-            self.trackedList.pop(delete)
+            for delete in reversed(remove):
+                self.trackedList.pop(delete)
+        except:
+            return
