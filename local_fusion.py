@@ -44,7 +44,7 @@ class Tracked:
         self.lastTracked = time
         self.id = id
         self.idx = 0
-        self.min_size = 0.5
+        self.min_size = 0.75
         self.dt = .125
         self.track_count = 0
         self.fusion_steps = 0
@@ -167,21 +167,21 @@ class Tracked:
         ]
 
     def getPositionPredicted(self, timestamp):
-        if self.fusion_steps < 2:
-            # If this kalman fitler has never been run, we can't use it for prediction!
-            return [
-                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
-            ]
-        else:
-            try:
-                x, y, a, b, phi = self.getKalmanPred(timestamp)
-                return [
-                    [x, y, a, b, phi]
-                ]
-            except:
-                return [
-                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
-                ]
+        # if self.fusion_steps < 2:
+        # If this kalman fitler has never been run, we can't use it for prediction!
+        return [
+            [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+        ]
+        # else:
+        #     try:
+        #         x, y, a, b, phi = self.getKalmanPred(timestamp)
+        #         return [
+        #             [x, y, a, b, phi]
+        #         ]
+        #     except:
+        #         return [
+        #         [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+        #         ]
 
     def clearLastFrame(self):
         self.match_list = []

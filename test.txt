@@ -69,19 +69,17 @@
  Test:  1  global_rmse_val:  0.22833376497775362  over misses:  199  under misses:  18
  
  
+ 2x1
  new
  0,0
- Test:  0  local_rmse_val:  0.3875014372180902  over misses:  3702  under misses:  282
- Test:  0  global_rmse_val:  0.21541226773387032  over misses:  47  under misses:  26
- Test:  1  local_rmse_val:  0.38536026269378887  over misses:  4169  under misses:  251
- Test:  1  global_rmse_val:  0.1781546897462987  over misses:  234  under misses:  4
+ Test:  0  local_rmse_val:  0.43626156144619954  over misses:  4738  under misses:  341
+ Test:  0  global_rmse_val:  0.21365537502223192  over misses:  458  under misses:  26
+ Test:  1  local_rmse_val:  0.4098700297588114  over misses:  4062  under misses:  296
+ Test:  1  global_rmse_val:  0.18705441066310566  over misses:  348  under misses:  16
  1,1
- Test:  0  local_rmse_val:  0.3900201719985762  over misses:  3650  under misses:  279
- Test:  0  global_rmse_val:  0.16831200612155356  over misses:  29  under misses:  17
- Test:  1  local_rmse_val:  0.3926027780671287  over misses:  4232  under misses:  291
- Test:  1  global_rmse_val:  0.1846173523558271  over misses:  253  under misses:  10
+ Test:  0  local_rmse_val:  0.39340376889875106  over misses:  3670  under misses:  277
+ Test:  0  global_rmse_val:  0.17058226031706145  over misses:  84  under misses:  17
+ Test:  1  local_rmse_val:  0.40935816145169673  over misses:  4271  under misses:  300
+ Test:  1  global_rmse_val:  0.20767646828887462  over misses:  260  under misses:  18
  2,2
- Test:  0  local_rmse_val:  0.4144250236892821  over misses:  3579  under misses:  357
- Test:  0  global_rmse_val:  0.22147155725120196  over misses:  5  under misses:  29
- Test:  1  local_rmse_val:  0.43680376665862936  over misses:  3924  under misses:  402
- Test:  1  global_rmse_val:  0.2420014017724059  over misses:  180  under misses:  23
+ 

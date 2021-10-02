@@ -439,16 +439,16 @@ class GlobalTracked:
         ]
 
     def getPositionPredicted(self, timestamp):
-        if self.fusion_steps < 2:
-            # If this kalman fitler has never been run, we can't use it for prediction!
-            return [
-                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
-            ]
-        else:
-            x, y, a, b, phi = self.kalman.getKalmanPred(timestamp)
-            return [
-                [x, y, a, b, phi]
-            ]
+        # if self.fusion_steps < 2:
+        # If this kalman fitler has never been run, we can't use it for prediction!
+        return [
+            [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+        ]
+        # else:
+        #     x, y, a, b, phi = self.kalman.getKalmanPred(timestamp)
+        #     return [
+        #         [x, y, a, b, phi]
+        #     ]
 
     def fusion(self, estimate_covariance):
         self.kalman.fusion(self.match_list, estimate_covariance)
