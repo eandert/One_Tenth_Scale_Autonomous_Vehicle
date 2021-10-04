@@ -7,7 +7,7 @@ class will be ammended to work with SUMO and allow more complex maps to be gener
 class MapSpecs():
     def __init__(self, map=0):
         # Intersection Params
-        self.intersectionStraightLength = 1.0
+        self.intersectionStraightLength = 2.0
         self.intersectionWidth = .5
         self.centerX = 500
         self.centerY = 500

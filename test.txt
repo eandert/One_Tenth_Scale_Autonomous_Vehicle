@@ -69,19 +69,47 @@
  Test:  1  global_rmse_val:  0.22833376497775362  over misses:  199  under misses:  18
  
  
- new
+ new, 2 cars 1 camera
  0,0
  Test:  0  local_rmse_val:  0.3875014372180902  over misses:  3702  under misses:  282
  Test:  0  global_rmse_val:  0.21541226773387032  over misses:  47  under misses:  26
  Test:  1  local_rmse_val:  0.38536026269378887  over misses:  4169  under misses:  251
  Test:  1  global_rmse_val:  0.1781546897462987  over misses:  234  under misses:  4
  1,1
- Test:  0  local_rmse_val:  0.3900201719985762  over misses:  3650  under misses:  279
- Test:  0  global_rmse_val:  0.16831200612155356  over misses:  29  under misses:  17
- Test:  1  local_rmse_val:  0.3926027780671287  over misses:  4232  under misses:  291
- Test:  1  global_rmse_val:  0.1846173523558271  over misses:  253  under misses:  10
+ Test:  0  local_rmse_val:  0.40832021423592546  over misses:  3617  under misses:  293
+ Test:  0  global_rmse_val:  0.16055627004166553  over misses:  51  under misses:  14
+ Test:  1  local_rmse_val:  0.39322273270027513  over misses:  4220  under misses:  277
+ Test:  1  global_rmse_val:  0.1825866844892678  over misses:  279  under misses:  8
  2,2
- Test:  0  local_rmse_val:  0.4144250236892821  over misses:  3579  under misses:  357
- Test:  0  global_rmse_val:  0.22147155725120196  over misses:  5  under misses:  29
- Test:  1  local_rmse_val:  0.43680376665862936  over misses:  3924  under misses:  402
- Test:  1  global_rmse_val:  0.2420014017724059  over misses:  180  under misses:  23
+ Test:  0  local_rmse_val:  0.46205002359398667  over misses:  3606  under misses:  400
+ Test:  0  global_rmse_val:  0.24298913928227908  over misses:  26  under misses:  32
+ Test:  1  local_rmse_val:  0.4534065611411484  over misses:  3782  under misses:  451
+ Test:  1  global_rmse_val:  0.2322926857350562  over misses:  155  under misses:  12
+ 0,2
+ Test:  0  local_rmse_val:  0.3946540617752527  over misses:  3596  under misses:  283
+ Test:  0  global_rmse_val:  0.1869264212157522  over misses:  28  under misses:  19
+ Test:  1  local_rmse_val:  0.37250547108286075  over misses:  4194  under misses:  263
+ Test:  1  global_rmse_val:  0.17407980748902738  over misses:  194  under misses:  2
+ 
+ 
+ big map, 2 cars 1 camera
+ 0,0
+  Test:  0  local_rmse_val:  0.778455379496257  over misses:  7128  under misses:  424
+ Test:  0  global_rmse_val:  1.602410051768879  over misses:  839  under misses:  241
+ Test:  1  local_rmse_val:  0.6688613002766548  over misses:  7288  under misses:  323
+ Test:  1  global_rmse_val:  0.33373966226680707  over misses:  1247  under misses:  8
+ 1,1
+  Test:  0  local_rmse_val:  0.8003418892678914  over misses:  7212  under misses:  453
+ Test:  0  global_rmse_val:  1.60605059901201  over misses:  753  under misses:  222
+ Test:  1  local_rmse_val:  0.6624074251123162  over misses:  7114  under misses:  324
+ Test:  1  global_rmse_val:  0.3398687880549509  over misses:  965  under misses:  7
+ 2,2
+  Test:  0  local_rmse_val:  1.0778041210972908  over misses:  6296  under misses:  887
+ Test:  0  global_rmse_val:  1.9252444160238598  over misses:  345  under misses:  431
+ Test:  1  local_rmse_val:  0.8510681804115972  over misses:  6178  under misses:  539
+ Test:  1  global_rmse_val:  0.37823296815411617  over misses:  646  under misses:  9
+ 0,2
+  Test:  0  local_rmse_val:  0.7111797490470455  over misses:  7286  under misses:  409
+ Test:  0  global_rmse_val:  1.3141572546846967  over misses:  790  under misses:  150
+ Test:  1  local_rmse_val:  0.6566954571691114  over misses:  7347  under misses:  304
+ Test:  1  global_rmse_val:  0.346875755262488  over misses:  1119  under misses:  8
