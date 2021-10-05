@@ -51,8 +51,8 @@ class RSU():
 
             newSensor = cam_planning.Planner()
             newSensor.initialVehicleAtPosition(
-                (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+                (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 100) / mapSpecs.meters_to_print_scale, (
+                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale,
                 -45, 2, True)
 
             newSensor2 = cam_planning.Planner()
@@ -63,10 +63,10 @@ class RSU():
 
             self.vehicles[0] = newvehicle1
             self.vehicles[1] = newvehicle2
-            self.vehicles[2] = newvehicle3
-            self.vehicles[3] = newvehicle4
+            #self.vehicles[2] = newvehicle3
+            #self.vehicles[3] = newvehicle4
             self.sensors[0] = newSensor
-            self.sensors[1] = newSensor2
+            #self.sensors[1] = newSensor2
 
             # print("Pos veh 0: ", (- (
             #             mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
@@ -295,7 +295,7 @@ def main(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test
 #for each in range(9):
 # Unit test stuff
 simulation = True
-unit_test = [True, 0, 0]
+unit_test = [True, 2, 2]
 
 # Setup the thread lock
 vehiclesLock = Lock()

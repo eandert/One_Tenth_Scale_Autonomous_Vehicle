@@ -83,6 +83,7 @@ class MainWindow(QMainWindow):
         self.unit_test_local_over_detection_miss_results = []
         self.unit_test_local_under_detection_miss_results = []
         self.unit_test_local_rmse_results = []
+        self.unit_test_local_variance_results = []
         self.local_over_detection_miss = 0
         self.local_under_detection_miss = 0
         self.local_differences = []
@@ -91,6 +92,7 @@ class MainWindow(QMainWindow):
         self.unit_test_global_over_detection_miss_results = []
         self.unit_test_global_under_detection_miss_results = []
         self.unit_test_global_rmse_results = []
+        self.unit_test_global_variance_results = []
         self.global_over_detection_miss = 0
         self.global_under_detection_miss = 0
         self.global_differences = []
@@ -383,12 +385,51 @@ class MainWindow(QMainWindow):
 
                     self.real_lidar = False
                 elif self.unit_test_state == 1:
+                    # Reset vehicle positions and filters
+                    for idx, vehicle in self.vehicles.items():
+                        # Clear sensors
+                        vehicle.cameraDetections = []
+                        vehicle.lidarDetections = []
+                        vehicle.fusionDetections = []
+                        vehicle.fusionDetectionsCovariance = []
+                        vehicle.rawLidarDetections = []
+                        vehicle.groundTruth = []
+
+                        # Raw LIDAR for gui debug
+                        vehicle.lidarPoints = []
+
+                        # Move back to start location
+                        reverse_theta = vehicle.theta_offset-math.radians(180)
+                        vehicle.rearAxlePositionX = vehicle.positionX_offset + (vehicle.axleFromCenter * math.cos(reverse_theta))
+                        vehicle.rearAxlePositionY = vehicle.positionY_offset + (vehicle.axleFromCenter * math.sin(reverse_theta))
+                        vehicle.localizationPositionX = vehicle.positionX_offset
+                        vehicle.localizationPositionY = vehicle.positionY_offset
+                        vehicle.positionX_sim = vehicle.rearAxlePositionX
+                        vehicle.positionY_sim = vehicle.rearAxlePositionY
+                        vehicle.velocity = 0
+                        vehicle.theta = vehicle.theta_offset
+                        vehicle.lastPointIndex = None
+
+                    # Reset detections from CIS sensors
+                    # Reset vehicle positions and filters
+                    for idx, cis in self.cis.items():
+                        # Clear sensors
+                        cis.cameraDetections = []
+                        cis.fusionDetections = []
+                        cis.fusionDetectionsCovariance = []
+                        cis.groundTruth = []
+
+                    # Clear the global fusion
+                    self.globalFusion.trackedList = []
+
                     # Calculate the prior results
                     differences_squared = np.array(self.local_differences) ** 2
                     mean_of_differences_squared = differences_squared.mean()
                     rmse_val = np.sqrt(mean_of_differences_squared)
+                    variance = np.var(self.local_differences,ddof=1)
 
                     self.unit_test_local_rmse_results.append(rmse_val)
+                    self.unit_test_local_variance_results.append(variance)
                     self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
                     self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
 
@@ -396,8 +437,10 @@ class MainWindow(QMainWindow):
                     differences_squared = np.array(self.global_differences) ** 2
                     mean_of_differences_squared = differences_squared.mean()
                     rmse_val = np.sqrt(mean_of_differences_squared)
+                    variance = np.var(self.global_differences,ddof=1)
 
                     self.unit_test_global_rmse_results.append(rmse_val)
+                    self.unit_test_global_variance_results.append(variance)
                     self.unit_test_global_under_detection_miss_results.append(self.global_under_detection_miss)
                     self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
 
@@ -424,8 +467,10 @@ class MainWindow(QMainWindow):
                     differences_squared = np.array(self.local_differences) ** 2
                     mean_of_differences_squared = differences_squared.mean()
                     rmse_val = np.sqrt(mean_of_differences_squared)
+                    variance = np.var(self.local_differences,ddof=1)
 
                     self.unit_test_local_rmse_results.append(rmse_val)
+                    self.unit_test_local_variance_results.append(variance)
                     self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
                     self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
 
@@ -433,8 +478,10 @@ class MainWindow(QMainWindow):
                     differences_squared = np.array(self.global_differences) ** 2
                     mean_of_differences_squared = differences_squared.mean()
                     rmse_val = np.sqrt(mean_of_differences_squared)
+                    variance = np.var(self.global_differences,ddof=1)
 
                     self.unit_test_global_rmse_results.append(rmse_val)
+                    self.unit_test_global_variance_results.append(variance)
                     self.unit_test_global_under_detection_miss_results.append(self.global_under_detection_miss)
                     self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
 
@@ -456,10 +503,12 @@ class MainWindow(QMainWindow):
 
                     idx = 0
                     fails = 0
-                    for l_rmse, l_u_miss, l_o_miss, g_rmse, g_u_miss, g_o_miss  in zip(self.unit_test_local_rmse_results, self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
-                        self.unit_test_global_rmse_results, self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
-                        print(" Test: ", idx, " local_rmse_val: ", l_rmse, " over misses: ", l_o_miss, " under misses: ", l_u_miss)
-                        print(" Test: ", idx, " global_rmse_val: ", g_rmse, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
+                    for l_rmse, l_var, l_u_miss, l_o_miss, g_rmse, g_var, g_u_miss, g_o_miss  in zip(self.unit_test_local_rmse_results, self.unit_test_local_variance_results, 
+                        self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
+                        self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
+                        self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
+                        print(" Test: ", idx, " local_rmse_val: ", l_rmse, " local_variance: ", l_var, " over misses: ", l_o_miss, " under misses: ", l_u_miss)
+                        print(" Test: ", idx, " global_rmse_val: ", g_rmse, " global_variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
                         # if idx == 0:
                         #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
                         #         fails += 1

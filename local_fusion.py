@@ -570,7 +570,7 @@ class FUSION:
         self.trackedList = []
         self.id = sensor_id
         self.prev_time = -99.0
-        self.min_size = 0.5
+        self.min_size = 0.75
         self.fusion_mode = fusion_mode
 
         # Indicate our success

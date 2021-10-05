@@ -20,7 +20,7 @@ def binarySearch(a, x):
 
 
 class MatchClass:
-    def __init__(self, x, y, covariance, dx, dy, d_confidence, object_type, time, id):
+    def __init__(self, id, x, y, covariance, dx, dy, d_confidence, object_type, time):
         self.x = x
         self.y = y
         self.covariance = covariance
@@ -167,10 +167,10 @@ class ResizableKalman:
                     self.R_t[temp_index + 1][temp_index] = match.covariance[1][0]
                     self.R_t[temp_index + 1][temp_index + 1] = match.covariance[1][1]
                 else:
-                    self.R_t[temp_index][temp_index] = 0.5
+                    self.R_t[temp_index][temp_index] = 1.0
                     self.R_t[temp_index][temp_index + 1] = 0.0
                     self.R_t[temp_index + 1][temp_index] = 0.0
-                    self.R_t[temp_index + 1][temp_index + 1] = 0.5
+                    self.R_t[temp_index + 1][temp_index + 1] = 1.0
 
                 # Add the current measurments to the measurement matrix
                 self.measure[temp_index] = match.x
@@ -256,8 +256,6 @@ class ResizableKalman:
             y_out = ( a[1] / len(self.localTrackersIDList) )
 
             # Store so that next fusion is better
-            self.X_hat_t = np.array(
-                [[x_out], [y_out], [0], [0], [0], [0]])
             self.prev_time = self.lastTracked
             self.x = x_out
             self.y = y_out
@@ -397,7 +395,7 @@ class GlobalTracked:
     # We use this primarily to match objects seen between frames and included in here
     # is a function for kalman filter to smooth the x and y values as well as a
     # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, sensed_id, x, y, covariance, object_type, time, id, fusion_mode):
+    def __init__(self, sensed_id, x, y, covariance, dx, dy, dcovariance, object_type, time, id, fusion_mode):
         self.x = x
         self.y = y
         self.dx = 0
@@ -416,7 +414,7 @@ class GlobalTracked:
         self.fusion_steps = 0
 
         # Add this first match
-        new_match = MatchClass(x, y, covariance, None, None, None, object_type, time, sensed_id)
+        new_match = MatchClass(sensed_id, x, y, covariance, dx, dy, dcovariance, object_type, time)
         self.match_list.append(new_match)
 
         # Kalman stuff
@@ -425,7 +423,7 @@ class GlobalTracked:
 
     # Update adds another detection to this track
     def update(self, other, time):
-        new_match = MatchClass(other[1], other[2], other[3], None, None, None, other[0], time, other[4])
+        new_match = MatchClass(other[0], other[1], other[2], other[3], other[4], other[5], other[6], other[7], time)
         self.match_list.append(new_match)
 
         self.lastTracked = time
@@ -517,7 +515,7 @@ class GlobalFUSION:
             else:
                 # Use an arbitrary size if we have no covariance estimate
                 detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([0, det[0], det[1], det[2], sensor_id])
+            detections_list.append([0, det[0], det[1], det[2], det[3], det[4], det[5], sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
@@ -615,7 +613,8 @@ class GlobalFUSION:
                     if first:
                         added.append(add)
                         new = GlobalTracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
-                                      detection_list[add][3], detection_list[add][4], timestamp, self.id, self.fusion_mode)
+                                      detection_list[add][3], detection_list[add][4], detection_list[add][5],
+                                      detection_list[add][6], detection_list[add][7], timestamp, self.id, self.fusion_mode)
                         if self.id < max_id:
                             self.id += 1
                         else:
@@ -624,7 +623,7 @@ class GlobalFUSION:
 
             else:
                 for dl in detection_list:
-                    new = GlobalTracked(dl[0], dl[1], dl[2], dl[3], dl[4], timestamp, self.id, self.fusion_mode)
+                    new = GlobalTracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], dl[6], dl[7], timestamp, self.id, self.fusion_mode)
                     if self.id < max_id:
                         self.id += 1
                     else:
