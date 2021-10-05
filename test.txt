@@ -117,3 +117,68 @@
  Test:  0  global_rmse_val:  1.3141572546846967  over misses:  790  under misses:  150
  Test:  1  local_rmse_val:  0.6566954571691114  over misses:  7347  under misses:  304
  Test:  1  global_rmse_val:  0.346875755262488  over misses:  1119  under misses:  8
+ 
+ Test:  0  g_mode: 0  l_mode: 0  local_rmse_val:  1.1482939827929175  local_variance:  1.1447234026369395  over misses:  7746  under misses:  584
+ Test:  0  g_mode: 0  l_mode: 0  global_rmse_val:  1.4983684054303485  global_variance:  1.9883060846270584  over misses:  2080  under misses:  127
+ Test:  0.5  g_mode: 0  l_mode: 0  local_rmse_val:  1.005050700901052  local_variance:  0.8525595392138213  over misses:  7022  under misses:  393
+ Test:  0.5  g_mode: 0  l_mode: 0  global_rmse_val:  0.5040905754370255  global_variance:  0.19251179514524427  over misses:  1415  under misses:  16
+ Test:  1.0  g_mode: 1  l_mode: 1  local_rmse_val:  1.1962035641430089  local_variance:  1.2411650135881727  over misses:  7944  under misses:  644
+ Test:  1.0  g_mode: 1  l_mode: 1  global_rmse_val:  1.408982616555217  global_variance:  1.749307945626542  over misses:  2102  under misses:  140
+ Test:  1.5  g_mode: 1  l_mode: 1  local_rmse_val:  1.0143262060567204  local_variance:  0.8711962379824507  over misses:  7164  under misses:  456
+ Test:  1.5  g_mode: 1  l_mode: 1  global_rmse_val:  0.4922339435970862  global_variance:  0.1780065746867272  over misses:  1413  under misses:  28
+ Test:  2.0  g_mode: 2  l_mode: 2  local_rmse_val:  1.1985087960486622  local_variance:  1.2470164833779271  over misses:  7795  under misses:  597
+ Test:  2.0  g_mode: 2  l_mode: 2  global_rmse_val:  1.4302282061684686  global_variance:  1.8059641875283516  over misses:  2109  under misses:  117
+ Test:  2.5  g_mode: 2  l_mode: 2  local_rmse_val:  0.9669383036517769  local_variance:  0.7889993218903212  over misses:  7000  under misses:  400
+ Test:  2.5  g_mode: 2  l_mode: 2  global_rmse_val:  0.5366714962690656  global_variance:  0.22818851192965875  over misses:  1453  under misses:  26
+
+ Test:  0  g_mode: 0  l_mode: 0  local_rmse_val:  1.2257165862198915  local_variance:  1.3025174864080067  over misses:  7831  under misses:  619
+ Test:  0  g_mode: 0  l_mode: 0  global_rmse_val:  1.3996692703984899  global_variance:  1.723858148035732  over misses:  2207  under misses:  138
+ Test:  0.5  g_mode: 0  l_mode: 0  local_rmse_val:  0.9626969534984334  local_variance:  0.784722417521105  over misses:  7164  under misses:  379
+ Test:  0.5  g_mode: 0  l_mode: 0  global_rmse_val:  0.596192462702252  global_variance:  0.2906280738528358  over misses:  1367  under misses:  30
+ Test:  1.0  g_mode: 1  l_mode: 0  local_rmse_val:  1.182212453441688  local_variance:  1.2109564548240135  over misses:  7827  under misses:  634
+ Test:  1.0  g_mode: 1  l_mode: 0  global_rmse_val:  1.3896159785062012  global_variance:  1.696322221297406  over misses:  2021  under misses:  125
+ Test:  1.5  g_mode: 1  l_mode: 0  local_rmse_val:  0.9972100404409184  local_variance:  0.8396281177675899  over misses:  7104  under misses:  429
+ Test:  1.5  g_mode: 1  l_mode: 0  global_rmse_val:  0.5410871799285931  global_variance:  0.22603984525670798  over misses:  1523  under misses:  29
+ Test:  2.0  g_mode: 2  l_mode: 0  local_rmse_val:  1.1536175880053405  local_variance:  1.1494416372206155  over misses:  7944  under misses:  594
+ Test:  2.0  g_mode: 2  l_mode: 0  global_rmse_val:  1.3708479046357167  global_variance:  1.6520725696633873  over misses:  2161  under misses:  125
+ Test:  2.5  g_mode: 2  l_mode: 0  local_rmse_val:  1.005370273129394  local_variance:  0.8552379929212371  over misses:  7268  under misses:  402
+ Test:  2.5  g_mode: 2  l_mode: 0  global_rmse_val:  0.418150687613317  global_variance:  0.11499722424974519  over misses:  1493  under misses:  24
+ Test:  3.0  g_mode: 0  l_mode: 1  local_rmse_val:  1.1458298390405441  local_variance:  1.1413551716306563  over misses:  7761  under misses:  588
+ Test:  3.0  g_mode: 0  l_mode: 1  global_rmse_val:  1.4807317636935833  global_variance:  1.937316840327815  over misses:  2144  under misses:  136
+ Test:  3.5  g_mode: 0  l_mode: 1  local_rmse_val:  1.008342721835086  local_variance:  0.8628655368039125  over misses:  7027  under misses:  421
+ Test:  3.5  g_mode: 0  l_mode: 1  global_rmse_val:  0.5194406736692567  global_variance:  0.20969195164864815  over misses:  1420  under misses:  26
+ Test:  4.0  g_mode: 1  l_mode: 1  local_rmse_val:  1.1385026739757937  local_variance:  1.121016901557876  over misses:  7881  under misses:  607
+ Test:  4.0  g_mode: 1  l_mode: 1  global_rmse_val:  1.3372112565715186  global_variance:  1.5734764420598242  over misses:  2155  under misses:  106
+ Test:  4.5  g_mode: 1  l_mode: 1  local_rmse_val:  1.0155794635119724  local_variance:  0.8721525099501425  over misses:  7124  under misses:  427
+ Test:  4.5  g_mode: 1  l_mode: 1  global_rmse_val:  0.5145264431889683  global_variance:  0.20253452954622694  over misses:  1638  under misses:  29
+ Test:  5.0  g_mode: 2  l_mode: 1  local_rmse_val:  1.2652223392374735  local_variance:  1.39718317308227  over misses:  7822  under misses:  634
+ Test:  5.0  g_mode: 2  l_mode: 1  global_rmse_val:  1.480645686598812  global_variance:  1.9456160254602624  over misses:  2174  under misses:  148
+ Test:  5.5  g_mode: 2  l_mode: 1  local_rmse_val:  1.0107688116990932  local_variance:  0.8625942145213379  over misses:  7194  under misses:  397
+ Test:  5.5  g_mode: 2  l_mode: 1  global_rmse_val:  0.41553170311353205  global_variance:  0.11550344277259594  over misses:  1539  under misses:  26
+ Test:  6.0  g_mode: 0  l_mode: 2  local_rmse_val:  1.1366338825264524  local_variance:  1.1193864742825996  over misses:  7646  under misses:  596
+ Test:  6.0  g_mode: 0  l_mode: 2  global_rmse_val:  1.4367263912778883  global_variance:  1.8197389098377175  over misses:  2061  under misses:  146
+ Test:  6.5  g_mode: 0  l_mode: 2  local_rmse_val:  0.9996391274287806  local_variance:  0.8464377105355838  over misses:  7312  under misses:  421
+ Test:  6.5  g_mode: 0  l_mode: 2  global_rmse_val:  0.41530381293748253  global_variance:  0.1187432117945508  over misses:  1522  under misses:  19
+ Test:  7.0  g_mode: 1  l_mode: 2  local_rmse_val:  1.1650532708663166  local_variance:  1.175416919430199  over misses:  7693  under misses:  597
+ Test:  7.0  g_mode: 1  l_mode: 2  global_rmse_val:  1.489533390715209  global_variance:  1.9548065123931326  over misses:  2056  under misses:  125
+ Test:  7.5  g_mode: 1  l_mode: 2  local_rmse_val:  1.0194273047032505  local_variance:  0.8838733000785074  over misses:  7060  under misses:  421
+ Test:  7.5  g_mode: 1  l_mode: 2  global_rmse_val:  0.39537908585945764  global_variance:  0.10384604454619699  over misses:  1392  under misses:  18
+ Test:  8.0  g_mode: 2  l_mode: 2  local_rmse_val:  1.1374453941572449  local_variance:  1.1246690305208211  over misses:  7882  under misses:  541
+ Test:  8.0  g_mode: 2  l_mode: 2  global_rmse_val:  1.4173857733135005  global_variance:  1.7660044561613175  over misses:  2094  under misses:  125
+ Test:  8.5  g_mode: 2  l_mode: 2  local_rmse_val:  1.004922709851663  local_variance:  0.8535189881956448  over misses:  7138  under misses:  419
+ Test:  8.5  g_mode: 2  l_mode: 2  global_rmse_val:  0.4880282557470112  global_variance:  0.17332083825099606  over misses:  1362  under misses:  29
+
+
+big, 2,4
+ Test:  0  g_mode: 0  l_mode: 0  local_rmse_val:  0.8604098146583226  local_variance:  0.636573842844579  over misses:  39385  under misses:  2237
+ Test:  0  g_mode: 0  l_mode: 0  global_rmse_val:  0.2839317254053142  global_variance:  0.02105322657372028  over misses:  10978  under misses:  29
+ Test:  0.5  g_mode: 0  l_mode: 0  local_rmse_val:  0.805161505771764  local_variance:  0.5255677860487793  over misses:  42554  under misses:  2090
+ Test:  0.5  g_mode: 0  l_mode: 0  global_rmse_val:  0.3218416427983465  global_variance:  0.04263693131551712  over misses:  15110  under misses:  17
+ Test:  1.0  g_mode: 1  l_mode: 1  local_rmse_val:  1.0864411011657422  local_variance:  0.9987106446986479  over misses:  40845  under misses:  2560
+ Test:  1.0  g_mode: 1  l_mode: 1  global_rmse_val:  0.29315288705729287  global_variance:  0.02420559088500375  over misses:  10958  under misses:  20
+ Test:  1.5  g_mode: 1  l_mode: 1  local_rmse_val:  0.980398762485676  local_variance:  0.7870689187967213  over misses:  41075  under misses:  2219
+ Test:  1.5  g_mode: 1  l_mode: 1  global_rmse_val:  0.2934485665371771  global_variance:  0.03460610881315296  over misses:  10918  under misses:  24
+ Test:  2.0  g_mode: 2  l_mode: 2  local_rmse_val:  0.8454904453026015  local_variance:  0.612833873218659  over misses:  38954  under misses:  2178
+ Test:  2.0  g_mode: 2  l_mode: 2  global_rmse_val:  0.2958138470934437  global_variance:  0.025289130303029636  over misses:  9856  under misses:  21
+ Test:  2.5  g_mode: 2  l_mode: 2  local_rmse_val:  0.808000218048224  local_variance:  0.5296458928607832  over misses:  42330  under misses:  2015
+ Test:  2.5  g_mode: 2  l_mode: 2  global_rmse_val:  0.3267693346243785  global_variance:  0.04435861819206071  over misses:  15380  under misses:  17
