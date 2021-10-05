@@ -57,16 +57,16 @@ class RSU():
 
             newSensor2 = cam_planning.Planner()
             newSensor2.initialVehicleAtPosition(
-                (+ (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale, -(
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+                (+ (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale, -(
+                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale,
                 -45 + 180, 2, True)
 
             self.vehicles[0] = newvehicle1
             self.vehicles[1] = newvehicle2
-            #self.vehicles[2] = newvehicle3
-            #self.vehicles[3] = newvehicle4
+            self.vehicles[2] = newvehicle3
+            self.vehicles[3] = newvehicle4
             self.sensors[0] = newSensor
-            #self.sensors[1] = newSensor2
+            self.sensors[1] = newSensor2
 
             # print("Pos veh 0: ", (- (
             #             mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,

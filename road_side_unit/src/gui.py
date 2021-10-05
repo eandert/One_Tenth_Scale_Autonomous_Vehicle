@@ -361,6 +361,9 @@ class MainWindow(QMainWindow):
     def stepTime(self):
         if self.unit_test:
             test_time = 600000
+            test_time_print = 10000
+            if self.time % test_time_print == 0:
+                print("Test: ", 100 * (self.time % test_time)/test_time, "% num:", self.unit_test_idx)
             if self.time % test_time == 0:
                 # Reset vehicle positions and filters
                 for idx, vehicle in self.vehicles.items():
