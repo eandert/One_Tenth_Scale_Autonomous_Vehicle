@@ -35,7 +35,7 @@ brush_color = {
 }
 
 class MainWindow(QMainWindow):
-    def __init__(self, mapSpecs, vehiclesLock, cav, cis, trafficLightArray, unitTest):
+    def __init__(self, mapSpecs, vehiclesLock, cav, cis, trafficLightArray, unitTestEnable):
         print ( " GUI Started ")
 
         self.vehicles = cav
@@ -48,13 +48,16 @@ class MainWindow(QMainWindow):
         self.full_simulation = False
 
         # Check the fusion mode from unit tests
-        if unitTest[0]:
-            self.local_fusion_mode = unitTest[1]
+        if unitTestEnable:
+            self.unitTest = [[0,0],
+                        [1,1],
+                        [2,2]]
+            self.local_fusion_mode = self.unitTest[0][0]
+            self.global_fusion_mode = self.unitTest[0][1]
         else:
             # Default to 1
             # TODO: add a button for this
             self.local_fusion_mode = 1
-        self.global_fusion_mode = 0
 
         # Create the simulated LIDARs, planner, etc.
         self.lidarRecognitionList = []
@@ -80,6 +83,7 @@ class MainWindow(QMainWindow):
 
         # Keep track of stats if this is a simulation
         self.unit_test_state = 0
+        self.unit_test_idx = 0
         self.unit_test_local_over_detection_miss_results = []
         self.unit_test_local_under_detection_miss_results = []
         self.unit_test_local_rmse_results = []
@@ -214,7 +218,7 @@ class MainWindow(QMainWindow):
         self.unitTestButton.move(1000, 820)
 
         self.unitTestButton.clicked.connect(self.on_unit_test_clicked)
-        self.unit_test = unitTest[0]
+        self.unit_test = unitTestEnable
 
         self.drawIntersection = True
 
@@ -358,6 +362,91 @@ class MainWindow(QMainWindow):
         if self.unit_test:
             test_time = 600000
             if self.time % test_time == 0:
+                # Reset vehicle positions and filters
+                for idx, vehicle in self.vehicles.items():
+                    # Clear sensors
+                    vehicle.cameraDetections = []
+                    vehicle.lidarDetections = []
+                    vehicle.fusionDetections = []
+                    vehicle.fusionDetectionsCovariance = []
+                    vehicle.rawLidarDetections = []
+                    vehicle.groundTruth = []
+
+                    # Raw LIDAR for gui debug
+                    vehicle.lidarPoints = []
+
+                    # Move back to start location
+                    reverse_theta = vehicle.theta_offset-math.radians(180)
+                    vehicle.rearAxlePositionX = vehicle.positionX_offset + (vehicle.axleFromCenter * math.cos(reverse_theta))
+                    vehicle.rearAxlePositionY = vehicle.positionY_offset + (vehicle.axleFromCenter * math.sin(reverse_theta))
+                    vehicle.localizationPositionX = vehicle.positionX_offset
+                    vehicle.localizationPositionY = vehicle.positionY_offset
+                    vehicle.positionX_sim = vehicle.rearAxlePositionX
+                    vehicle.positionY_sim = vehicle.rearAxlePositionY
+                    vehicle.velocity = 0
+                    vehicle.theta = vehicle.theta_offset
+                    vehicle.lastPointIndex = None
+
+                # Reset detections from CIS sensors
+                # Reset vehicle positions and filters
+                for idx, cis in self.cis.items():
+                    # Clear sensors
+                    cis.cameraDetections = []
+                    cis.fusionDetections = []
+                    cis.fusionDetectionsCovariance = []
+                    cis.groundTruth = []
+
+                # Clear the global fusion
+                self.globalFusion.trackedList = []
+
+                # Reset the light
+                self.trafficLightArray = [0, 2, 0]
+
+                # Check to see if we are starting the next test leg
+                if self.unit_test_state == 2 and len(self.unitTest) > self.unit_test_idx:
+                    self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
+                    self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
+                    self.unit_test_state = 0
+
+                    # Calculate the prior results
+                    differences_squared = np.array(self.local_differences) ** 2
+                    mean_of_differences_squared = differences_squared.mean()
+                    rmse_val = np.sqrt(mean_of_differences_squared)
+                    variance = np.var(self.local_differences,ddof=1)
+
+                    self.unit_test_local_rmse_results.append(rmse_val)
+                    self.unit_test_local_variance_results.append(variance)
+                    self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
+                    self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
+
+                    # Global
+                    differences_squared = np.array(self.global_differences) ** 2
+                    mean_of_differences_squared = differences_squared.mean()
+                    rmse_val = np.sqrt(mean_of_differences_squared)
+                    variance = np.var(self.global_differences,ddof=1)
+
+                    self.unit_test_global_rmse_results.append(rmse_val)
+                    self.unit_test_global_variance_results.append(variance)
+                    self.unit_test_global_under_detection_miss_results.append(self.global_under_detection_miss)
+                    self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
+
+                    #print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
+
+                    # Reset the stats
+                    self.local_over_detection_miss = 0
+                    self.local_under_detection_miss = 0
+                    self.local_differences = []
+                    self.global_over_detection_miss = 0
+                    self.global_under_detection_miss = 0
+                    self.global_differences = []
+
+                    for idx, vehicle in self.vehicles.items():
+                        self.lineVehicleSpeed[idx].setText("0.5")
+                    self.full_simulation = True
+                    self.simulate_error = True
+                    self.estimate_covariance = True
+                    self.pause_simulation = False
+
                 if self.unit_test_state == 0:
                     for idx, vehicle in self.vehicles.items():
                         self.lineVehicleSpeed[idx].setText("0.5")
@@ -384,44 +473,10 @@ class MainWindow(QMainWindow):
                     self.global_differences = []
 
                     self.real_lidar = False
+    
+                    # Increment the unit test counter for those long tests
+                    self.unit_test_idx += 1
                 elif self.unit_test_state == 1:
-                    # Reset vehicle positions and filters
-                    for idx, vehicle in self.vehicles.items():
-                        # Clear sensors
-                        vehicle.cameraDetections = []
-                        vehicle.lidarDetections = []
-                        vehicle.fusionDetections = []
-                        vehicle.fusionDetectionsCovariance = []
-                        vehicle.rawLidarDetections = []
-                        vehicle.groundTruth = []
-
-                        # Raw LIDAR for gui debug
-                        vehicle.lidarPoints = []
-
-                        # Move back to start location
-                        reverse_theta = vehicle.theta_offset-math.radians(180)
-                        vehicle.rearAxlePositionX = vehicle.positionX_offset + (vehicle.axleFromCenter * math.cos(reverse_theta))
-                        vehicle.rearAxlePositionY = vehicle.positionY_offset + (vehicle.axleFromCenter * math.sin(reverse_theta))
-                        vehicle.localizationPositionX = vehicle.positionX_offset
-                        vehicle.localizationPositionY = vehicle.positionY_offset
-                        vehicle.positionX_sim = vehicle.rearAxlePositionX
-                        vehicle.positionY_sim = vehicle.rearAxlePositionY
-                        vehicle.velocity = 0
-                        vehicle.theta = vehicle.theta_offset
-                        vehicle.lastPointIndex = None
-
-                    # Reset detections from CIS sensors
-                    # Reset vehicle positions and filters
-                    for idx, cis in self.cis.items():
-                        # Clear sensors
-                        cis.cameraDetections = []
-                        cis.fusionDetections = []
-                        cis.fusionDetectionsCovariance = []
-                        cis.groundTruth = []
-
-                    # Clear the global fusion
-                    self.globalFusion.trackedList = []
-
                     # Calculate the prior results
                     differences_squared = np.array(self.local_differences) ** 2
                     mean_of_differences_squared = differences_squared.mean()
@@ -445,7 +500,6 @@ class MainWindow(QMainWindow):
                     self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
 
                     #print(" test", self.unit_test_state - 1, " local_rmse_val: ", rmse_val, " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss)
-
 
                     # Reset the stats
                     self.local_over_detection_miss = 0
@@ -507,15 +561,16 @@ class MainWindow(QMainWindow):
                         self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
                         self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
                         self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
-                        print(" Test: ", idx, " local_rmse_val: ", l_rmse, " local_variance: ", l_var, " over misses: ", l_o_miss, " under misses: ", l_u_miss)
-                        print(" Test: ", idx, " global_rmse_val: ", g_rmse, " global_variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
+                        utidx = math.floor(idx)
+                        print(" Test: ", idx, " g_mode:", self.unitTest[utidx][0], " l_mode:", self.unitTest[utidx][1], " local_rmse_val: ", l_rmse, " local_variance: ", l_var, " over misses: ", l_o_miss, " under misses: ", l_u_miss)
+                        print(" Test: ", idx, " g_mode:", self.unitTest[utidx][0], " l_mode:", self.unitTest[utidx][1], " global_rmse_val: ", g_rmse, " global_variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
                         # if idx == 0:
                         #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
                         #         fails += 1
                         # elif idx == 1:
                         #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
                         #         fails += 1
-                        idx += 1
+                        idx += 0.5
 
                     # if fails:
                     #     print( " One or more unit tests has failed! Failures: ", fails)
