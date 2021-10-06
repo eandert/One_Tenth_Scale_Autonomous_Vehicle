@@ -485,7 +485,7 @@ class GlobalFUSION:
         result = []
         for track in self.trackedList:
             track.fusion(estimate_covariance)
-            if track.fusion_steps >= 4:
+            if track.fusion_steps >= 5:
                 #print ( track.id, track.x, track.y, track.error_covariance )
                 result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
             # Clear the previous detection list
@@ -500,21 +500,22 @@ class GlobalFUSION:
         for det in observations:
             # Create a rotated rectangle for IOU of 2 ellipses
             # [cx, cy, w, h, angle]
-            if estimateCovariance and len(det) >= 3:
-                # Calculate our 3 sigma std deviation to create a bounding box for matching
-                try:
-                    a, b, phi = shared_math.ellipsify(det[2], 3.0)
-                    # Enforce a minimum size so matching doesn't fail
-                    a += self.min_size
-                    b += self.min_size
-                    detections_position_list.append([det[0], det[1], a, b, phi])
-                except Exception as e:
-                    print ( " Failed! ", str(e))
-                    # Use an arbitrary size if we have no covariance estimate
-                    detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            else:
-                # Use an arbitrary size if we have no covariance estimate
-                detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            # if estimateCovariance and len(det) >= 3:
+            #     # Calculate our 3 sigma std deviation to create a bounding box for matching
+            #     try:
+            #         a, b, phi = shared_math.ellipsify(det[2], 3.0)
+            #         # Enforce a minimum size so matching doesn't fail
+            #         a += self.min_size
+            #         b += self.min_size
+            #         detections_position_list.append([det[0], det[1], a, b, phi])
+            #     except Exception as e:
+            #         print ( " Failed! ", str(e))
+            #         # Use an arbitrary size if we have no covariance estimate
+            #         detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            # else:
+            #     # Use an arbitrary size if we have no covariance estimate
+            #     detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             detections_list.append([0, det[0], det[1], det[2], det[3], det[4], det[5], sensor_id])
 
         # Call the matching function to modify our detections in trackedList
@@ -538,7 +539,7 @@ class GlobalFUSION:
                                                          return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                            if .95 >= IOUVsDetection >= 0:
+                            if .99 >= IOUVsDetection >= 0:
                                 # Only grab the first match
                                 # Before determining if this is a match check if this detection has been matched already
                                 if first:
@@ -601,7 +602,7 @@ class GlobalFUSION:
                     first = True
                     for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
                         # Check to make sure thie IOU match is high
-                        if .25 >= IOUsDetection >= 0:
+                        if .75 >= IOUsDetection >= 0:
                             # Make sure this is not ourself
                             if add != detectionIdx:
                                 # If this is not ourself, add ourself only if none of our matches has been added yet

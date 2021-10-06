@@ -74,10 +74,10 @@ class Planner:
 
         # Raw LIDAR for gui debug
         self.lidarPoints = []
+        self.localizationError = None
 
         # Start sensors with standard error model
-        #self.localization = sensor.Localization("M1M1_localizer",
-        #                                       0, .05, .05, .05)
+        self.localization = sensor.Localization(0.1, .25, 0.1, .05)
         self.lidarSensor = sensor.Sensor("M1M1", 0.0, 360, 15.0,
                                                0, .05, .05, .05)
         self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,

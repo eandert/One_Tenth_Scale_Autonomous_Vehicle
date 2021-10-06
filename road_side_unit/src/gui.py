@@ -29,6 +29,7 @@ brush_color = {
     "lidar_detection_raw": Qt.lightGray,
     "camera_detection_centroid": Qt.darkYellow,
     "sensor_fusion_centroid": Qt.red,
+    "localization_error": Qt.yellow,
     "sensor_fusion_error_ellipse": Qt.green,
     "global_sensor_fusion_centroid": Qt.blue,
     "global_sensor_fusion_error_ellipse": Qt.darkGreen
@@ -49,8 +50,18 @@ class MainWindow(QMainWindow):
 
         # Check the fusion mode from unit tests
         if unitTestEnable:
+            #self.unitTest = [[0,0]]
+            # self.unitTest = [[0,0],
+            #             [1,1],
+            #             [2,2]]
             self.unitTest = [[0,0],
+                        [1,0],
+                        [2,0],
+                        [0,1],
                         [1,1],
+                        [2,1],
+                        [0,2],
+                        [1,2],
                         [2,2]]
             self.local_fusion_mode = self.unitTest[0][0]
             self.global_fusion_mode = self.unitTest[0][1]
@@ -114,6 +125,7 @@ class MainWindow(QMainWindow):
 
         # Draw params
         self.drawTrafficLight = False
+        self.display_localization = True
 
         QMainWindow.__init__(self)
 
@@ -411,6 +423,16 @@ class MainWindow(QMainWindow):
                     self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
                     self.unit_test_state = 0
 
+                    # Reset the fusion modes
+                    self.globalFusion.fusion_mode = self.global_fusion_mode
+                    for idx, veh in self.vehicles.items():
+                        if veh.simVehicle:
+                            self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode
+                    for idx, sens in self.cis.items():
+                        if sens.simCIS:
+                            # 1000 is to make sure our sensor ids are different for CIS vs CAV
+                            self.localFusionCIS[idx].fusion_mode = self.local_fusion_mode
+
                     # Calculate the prior results
                     differences_squared = np.array(self.local_differences) ** 2
                     mean_of_differences_squared = differences_squared.mean()
@@ -677,9 +699,15 @@ class MainWindow(QMainWindow):
                         if self.full_simulation:
                             # Create that fake LIDAR
                             if self.lidarRecognitionList[idx] != None:
-                                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(vehicle, tempList, [], 15.0, 15.0, 0.0, 160.0)
+                                localization_error_gaussian, localization_error = vehicle.localization.getErrorParamsAtVelocity(vehicle.velocity, vehicle.theta)
+                                if self.estimate_covariance:
+                                    temp_covariance = localization_error_gaussian
+                                else:
+                                    temp_covariance = sensor.BivariateGaussian(0.05, 0.05, 0)
+                                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(vehicle, tempList, [], 15.0, 15.0, 0.0, 160.0, l_error = localization_error, l_error_gauss = temp_covariance)
                                 if self.simulate_error:
                                     vehicle.cameraDetections = camera_error_array
+                                    vehicle.localizationError = localization_error_gaussian
                                     if self.real_lidar:
                                         lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
                                             vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
@@ -722,6 +750,10 @@ class MainWindow(QMainWindow):
                                     sensed_x = each[1]
                                     sensed_y = each[2]
                                     vehicle.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
+                                # Add ourself to this
+                                vehicle.fusionDetections.append((vehicle.localizationPositionX + localization_error[0],
+                                                                vehicle.localizationPositionY + localization_error[1],
+                                                                localization_error_gaussian.covariance, 0, 0, -1))
 
                         else:
                             # Quick fake of sensor values
@@ -1389,6 +1421,31 @@ class MainWindow(QMainWindow):
                             painter.drawEllipse(0, 0, a, b)
                             # Restore the environment to what it was before
                             painter.restore()
+
+        if self.display_localization:
+            pen.setBrush(brush_color['localization_error'])
+            pen.setWidth(.5)
+            painter.setPen(pen)
+            for idx, vehicle in self.vehicles.items():
+                if vehicle.localizationError != None:
+                    pos = ( self.translateX(vehicle.localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                            self.translateY(vehicle.localizationPositionY * self.mapSpecs.meters_to_print_scale) )
+                    a, b, phi = shared_math.ellipsify(vehicle.localizationError.covariance, 3.0)
+                    a = a * self.mapSpecs.meters_to_print_scale
+                    b = b * self.mapSpecs.meters_to_print_scale
+                    # Save the previous painter envinronment so we don't mess up the other things
+                    painter.save()
+                    # get the x and y components of the ellipse position
+                    ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                    ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                    # translate the center to where our ellipse should be
+                    painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                    # Rotate by phi to tunr the ellipse the correct way
+                    painter.rotate(math.degrees(phi))
+                    # Draw the ellipse at 0.0
+                    painter.drawEllipse(0, 0, a, b)
+                    # Restore the environment to what it was before
+                    painter.restore()
 
         if self.fusion_debug:
             for idx, vehicle in self.vehicles.items():

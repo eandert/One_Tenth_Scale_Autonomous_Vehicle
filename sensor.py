@@ -66,6 +66,19 @@ class BivariateGaussian:
         y_comp = abs(self.calcSelfRadiusAtAnlge(math.radians(90)), 1)
         return x_comp, y_comp
 
+    def unionBivariateGaussians(self, gaussianB):
+        # Now we have both distributions, it is time to do the combination math
+        # Source: http://www.geostatisticslessons.com/lessons/errorellipses
+        self.covariance = np.add(self.covariance.transpose(), gaussianB.covariance.transpose()).transpose()
+
+
+def unionBivariateGaussians(gaussianA, gaussianB):
+    # Now we have both distributions, it is time to do the combination math
+    # Source: http://www.geostatisticslessons.com/lessons/errorellipses
+    covariance_new = np.add(gaussianA.transpose(), gaussianB.transpose()).transpose()
+
+    return covariance_new
+
 
 def intersectionBivariateGaussiansCovariance(covariance_gaussian_a, covariance_gaussian_b):
     # Now we have both distributions, it is time to do the combination math
@@ -73,6 +86,37 @@ def intersectionBivariateGaussiansCovariance(covariance_gaussian_a, covariance_g
     covariance_new = np.subtract(covariance_gaussian_a.transpose(), covariance_gaussian_b.transpose()).transpose()
 
     return covariance_new
+
+
+class Localization:
+    # This object is for storing and calculating expected localization accuracy for 
+    # object. In full simulation we inject error and generate expected error 
+    # gaussians. In real world we only generate expected error gaussians.
+    def __init__(self, longitudinal_error_x, longitudinal_error_b, lateral_error_x, lateral_error_b):
+        self.longitudinal_error_x = longitudinal_error_x
+        self.longitudinal_error_b = longitudinal_error_b
+        self.lateral_error_x = lateral_error_x
+        self.lateral_error_b = lateral_error_b
+
+    def getErrorParamsAtVelocity(self, velocity, theta):
+        elipse_a_expected = self.longitudinal_error_x * velocity + self.longitudinal_error_b
+        elipse_b_expected = self.lateral_error_x * velocity + self.lateral_error_b
+        if elipse_a_expected > elipse_b_expected:
+            elipse_angle_expected = theta
+        else:                
+            elipse_temp = elipse_a_expected
+            elipse_a_expected = elipse_b_expected
+            elipse_b_expected = elipse_temp
+            elipse_angle_expected = theta + math.radians(90)
+        expected_error_gaussian = BivariateGaussian(elipse_a_expected,
+                                    elipse_b_expected,
+                                    elipse_angle_expected)
+        locErrorA_actual = np.random.normal(0, elipse_a_expected, 1)[0]
+        locErrorB_actual = np.random.normal(0, elipse_b_expected, 1)[0]
+        x_error_generated = (locErrorA_actual * math.cos(theta)) - (locErrorB_actual * math.sin(theta))
+        y_error_generated = (locErrorA_actual * math.sin(theta)) - (locErrorB_actual * math.cos(theta))
+        actual_sim_error = [x_error_generated, y_error_generated]
+        return expected_error_gaussian, actual_sim_error
 
 
 class Sensor:
@@ -158,7 +202,7 @@ def addBivariateGaussians(gaussianA, gaussianB):
 # This function is for full simulation where we fake both LIDAR and camera
 # TODO: modularize this more so we can consider other sensor locations and facing angles
 def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
-                              cam_center_angle, cam_fov):
+                              cam_center_angle, cam_fov, l_error = [0.0,0.0], l_error_gauss = None):
 
         # print ( "FAKING LIDAR" )
         lidar_point_cloud = []
@@ -233,7 +277,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                 # Generate error for the individual points
                 x_error = np.random.normal(0, 0.05, 1)[0]
                 y_error = np.random.normal(0, 0.05, 1)[0]
-                lidar_point_cloud_error.append((final_point[0] + x_error, final_point[1] + y_error))
+                lidar_point_cloud_error.append((final_point[0] + x_error + l_error[0], final_point[1] + y_error + l_error[1]))
 
                 # See if we can add a camera point as well
                 if shared_math.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, detector.theta + cam_center_angle,
@@ -248,7 +292,9 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                         success, expected_error_gaussian, actual_sim_error = detector.cameraSensor.calculateErrorGaussian(
                             relative_angle_to_detector, target_line_angle, relative_distance, True)
                         if success:
-                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian))
+                            if l_error_gauss != None:
+                                expected_error_gaussian.unionBivariateGaussians(l_error_gauss)
+                            camera_error_array.append((point[0] + actual_sim_error[0] + l_error[0], point[1] + actual_sim_error[1] + l_error[1], expected_error_gaussian))
                             camera_array.append((point[0], point[1], expected_error_gaussian))
                             camera_array_searcher.append((point[0], point[1]))
                 
@@ -268,7 +314,9 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                                 relative_angle_to_detector, target_line_angle, relative_distance, True)
 
                         if success_lidar:
-                            lidar_detected_error.append((point[0] + actual_sim_error_lidar[0], point[1] + actual_sim_error_lidar[1], expected_error_gaussian_lidar))
+                            if l_error_gauss != None:
+                                expected_error_gaussian_lidar.unionBivariateGaussians(l_error_gauss)
+                            lidar_detected_error.append((point[0] + actual_sim_error_lidar[0] + l_error[0], point[1] + actual_sim_error_lidar[1] + l_error[1], expected_error_gaussian_lidar))
                             lidar_array_searcher.append((point[0], point[1]))
 
         return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array, lidar_detected_error
