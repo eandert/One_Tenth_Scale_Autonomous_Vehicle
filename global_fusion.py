@@ -490,6 +490,8 @@ class GlobalFUSION:
                 result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
             # Clear the previous detection list
             track.clearLastFrame()
+            # Clean up the tracks for next time
+            self.cleanDetections()
 
         return result
 
@@ -648,3 +650,83 @@ class GlobalFUSION:
 
         for delete in reversed(remove):
             self.trackedList.pop(delete)
+
+    def cleanDetections(self):
+        detections_position_list = []
+        detections_position_list_id = []
+        for track in self.trackedList:
+            detections_position_list.append([track.x, track.y, self.min_size, self.min_size, math.radians(0)])
+            detections_position_list_id.append(track.id)
+        matches = []
+        remove = []
+        if len(detections_position_list) > 0:
+            if len(self.trackedList) > 0:
+                numpy_formatted = np.array(detections_position_list).reshape(len(detections_position_list), 5)
+                thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
+
+                # Need to check the tree size here in order to figure out if we can even do this
+                length = len(numpy_formatted)
+                if length > 0:
+                    for trackedListIdx, track in enumerate(self.trackedList):
+                        # The only difference between this and our other version is that
+                        # the below line is commented out
+                        # track.calcEstimatedPos(timestamp - self.prev_time)
+                        tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(self.prev_time)), k=length,
+                                                         return_distance=True)
+                        first = True
+                        for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
+                            # 100% match is ourself! Look for IOU > .75 for now to delete
+                            if .75 >= IOUVsDetection > 0.001:
+                                # Only grab the first match
+                                # Before determining if this is a match check if this detection has been matched already
+                                if first:
+                                    try:
+                                        index = [i[0] for i in matches].index(detectionIdx)
+                                        # We have found the detection index, lets see which track is a better match
+                                        if matches[index][2] > IOUVsDetection:
+                                            # We are better so add ourselves
+                                            matches.append([detectionIdx, trackedListIdx, IOUVsDetection])
+                                            # Now unmatch the other one because we are better
+                                            # This essentiall eliminates double matching
+                                            matches[index][2] = 1
+                                            matches[index][1] = -99
+                                            # Now break the loop
+                                            first = False
+                                    except:
+                                        # No matches in the list, go ahead and add
+                                        matches.append([detectionIdx, trackedListIdx, IOUVsDetection])
+                                        first = False
+                                else:
+                                    # The other matches need to be marked so they arent made into a new track
+                                    # Set distance to 1 so we know this wasn't the main match
+                                    if detectionIdx not in [i[0] for i in matches]:
+                                        # No matches in the list, go ahead and add
+                                        matches.append([detectionIdx, -99, 1])
+
+                # update the tracks that made it through
+                for match in matches:
+                    if match[1] != -99:
+                        if match[0] != match[1]:
+                            if match[1] not in remove and match[0] not in remove:
+                                # Check which track is older and keep that one
+                                check0 = self.trackedList[match[0]].lastTracked
+                                check1 = self.trackedList[match[1]].lastTracked
+                                # Arbitrary tie break towards earlier in the list
+                                if check0 > check1:
+                                    remove.append(match[1])
+                                elif check0 < check1:
+                                    remove.append(match[0])
+                                else:
+                                    check0 = self.trackedList[match[0]].fusion_steps
+                                    check1 = self.trackedList[match[1]].fusion_steps  
+                                    if check0 > 4 and check1 > 4:
+                                        if check0 >= check1:
+                                            remove.append(match[1])
+                                        else:
+                                            remove.append(match[0])
+                                        
+
+        for delete in reversed(remove):
+            print( "Cleaning track ", delete)
+            self.trackedList.pop(delete)
+        #print(len(self.trackedList), len(remove), remove)
