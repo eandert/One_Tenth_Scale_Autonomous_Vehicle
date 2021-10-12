@@ -55,7 +55,8 @@ class Planner:
         self.lastTargetWithinTL = 0
         self.distance_pid_control_en = False
         self.distance_pid_control_overide = False
-        self.followDistance = self.length + self.Lfc
+        self.followDistance = self.Lfc
+        self.followDistanceGain = .5
         self.targetFollowDistance = 1
 
         self.id = None
@@ -219,7 +220,7 @@ class Planner:
     def update_pid(self):
         if self.distance_pid_control_en and not self.distance_pid_control_overide:
             # print("TD", self.targetFollowDistance, "FD", self.followDistance)
-            self.d_pid.setpoint = self.targetFollowDistance
+            self.d_pid.setpoint = self.targetFollowDistance + self.followDistanceGain * self.velocity
             self.motorAcceleration = self.d_pid(self.followDistance)
         else:
             # Default to velocity PID cotnrol
@@ -296,7 +297,7 @@ class Planner:
                 #if self.targetVelocity > each[3]:
                 #    self.targetVelocity = each[3]
                 # For distance control
-                targetFollowDistance = self.Lfc
+                targetFollowDistance = self.Lfc + self.followDistanceGain * self.velocity
                 #followDistance = math.hypot(each[0]+((each[5]/2.0+self.arbitrary_buffer)*math.cos(each[2]))-self.rearAxlePositionX, each[1]+((each[5]/2.0+self.arbitrary_buffer)*math.sin(each[2]))-self.rearAxlePositionY)
                 followDistance = math.hypot(self.localizationPositionX - (x3+x4)/2.0, self.localizationPositionY - (y3+y4)/2.0)
                 if self.followDistance > followDistance:

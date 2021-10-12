@@ -7,6 +7,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+import threading
 
 # For simulation
 from connected_autonomous_vehicle.src import lidar_recognition
@@ -112,6 +113,9 @@ class MainWindow(QMainWindow):
         self.global_under_detection_miss = 0
         self.global_differences = []
 
+        self.localization_differences = []
+        self.localization_velocity = []
+
         self.real_lidar = True
 
         # Parameters of test
@@ -126,6 +130,11 @@ class MainWindow(QMainWindow):
         # Draw params
         self.drawTrafficLight = False
         self.display_localization = True
+
+        # Threading
+        self.useThreading = False
+        self.threads = [None] * ( len(self.vehicles) + len(self.cis) )
+        self.threads_results = [None] * ( len(self.vehicles) + len(self.cis) )
 
         QMainWindow.__init__(self)
 
@@ -369,6 +378,213 @@ class MainWindow(QMainWindow):
 
     def on_end_clicked(self):
         sys.exit()
+
+    def updateVehicleInSim(self, idx, full_simulation, vehicleList, thread_idx):
+        # Update ourself
+        vehicle = self.vehicles[idx]
+        vehicle.update_localization()
+        vehicle.recieve_coordinate_group_commands(self.trafficLightArray)
+        vehicle.pure_pursuit_control()
+
+        # Filter out ourself
+        tempList = vehicleList.copy()
+        tempList.pop(idx)
+
+        localization_error = [0.0, 0.0]
+
+        if full_simulation:
+            # Create that fake LIDAR
+            if self.lidarRecognitionList[idx] != None:
+                localization_error_gaussian, localization_error = vehicle.localization.getErrorParamsAtVelocity(abs(vehicle.velocity), vehicle.theta)
+                if self.estimate_covariance:
+                    temp_covariance = localization_error_gaussian
+                else:
+                    temp_covariance = sensor.BivariateGaussian(0.05, 0.05, 0)
+                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(vehicle, tempList, [], 15.0, 15.0, 0.0, 160.0, l_error = localization_error, l_error_gauss = temp_covariance)
+                if self.simulate_error:
+                    vehicle.cameraDetections = camera_error_array
+                    vehicle.localizationError = localization_error_gaussian
+                    if self.real_lidar:
+                        lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
+                            vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
+                        vehicle.rawLidarDetections = point_cloud_error
+                        vehicle.lidarDetections = lidarcoordinates
+                    else:
+                        vehicle.lidarDetections = lidar_detected_error
+                else:
+                    vehicle.cameraDetections = camera_array
+                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0,
+                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
+                    vehicle.rawLidarDetections = point_cloud
+                    vehicle.lidarDetections = lidarcoordinates
+                vehicle.groundTruth = camera_array
+
+                # Vehicle position can be the map centroid in sim
+                # because we are generating the detection WRT the centroid
+                #pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
+                #pos = [0,0,0]
+
+                # Lets add the detections to the vehicle class
+                # vehicle.lidarDetections = []
+                # for each in lidarcoordinates:
+                #     new = rotate((0, 0), (float(each[1]), float(each[2])), pos[2])
+                #     sensed_x = new[0] + pos[0]
+                #     sensed_y = new[1] + pos[1]
+                #     vehicle.lidarDetections.append((sensed_x, sensed_y, each[6]))
+
+                # Raw LIDAR for debug
+                vehicle.lidarPoints = point_cloud
+
+                # Do the local fusion like we would on the vehicle
+                self.localFusionCAV[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, vehicle.cameraDetections, .25, self.estimate_covariance)
+                self.localFusionCAV[idx].processDetectionFrame(local_fusion.LIDAR, self.time/1000.0, vehicle.lidarDetections, .25, self.estimate_covariance)
+                results = self.localFusionCAV[idx].fuseDetectionFrame(self.estimate_covariance, vehicle)
+
+                # Add to the GUI
+                vehicle.fusionDetections = []
+                for each in results:
+                    sensed_x = each[1]
+                    sensed_y = each[2]
+                    vehicle.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
+                # Add ourself to this
+                vehicle.fusionDetections.append((vehicle.localizationPositionX + localization_error[0],
+                                                vehicle.localizationPositionY + localization_error[1],
+                                                localization_error_gaussian.covariance, 0, 0, -1))
+
+        else:
+            # Quick fake of sensor values
+            vehicle.fusionDetections = []
+            for each in tempList:
+                sensed_x = each[0]
+                sensed_y = each[1]
+                vehicle.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
+
+        # Now update our current PID with respect to other vehicles
+        vehicle.check_positions_of_other_vehicles_adjust_velocity(tempList)
+
+        # We can't update the PID controls until after all positions are known
+        vehicle.update_pid()
+
+        # Ground truth to the original dataset
+        testSet = []
+        groundTruth = []
+        for each in vehicle.fusionDetections:
+            sensed_x = each[0]
+            sensed_y = each[1]
+            testSet.append([sensed_x, sensed_y])
+        for each in vehicle.groundTruth:
+            sensed_x = each[0]
+            sensed_y = each[1]
+            groundTruth.append([sensed_x, sensed_y])
+
+        local_differences = []
+        local_over_detection_miss = 0
+        local_under_detection_miss = 0
+
+        if len(testSet) >= 1 and len(groundTruth) >= 1:
+            nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
+            distances, indices = nbrs.kneighbors(np.array(groundTruth))
+
+            # Now calculate the score
+            for dist in distances:
+                local_differences.append(dist)
+
+        # Check how much large the test set is from the ground truth and add that as well
+        if len(testSet) > len(groundTruth):
+            # Overdetection case
+            local_over_detection_miss += len(testSet) - len(groundTruth)
+        elif len(testSet) < len(groundTruth):
+            # Underdetection case, we count this differently because it may be from obstacle blocking
+            local_under_detection_miss += len(groundTruth) - len(testSet)
+
+        if self.useThreading:
+            self.threads_results[thread_idx] = [local_differences, local_over_detection_miss, local_under_detection_miss, localization_error]
+        else:
+            return local_differences, local_over_detection_miss, local_under_detection_miss, localization_error
+
+    def updateCISInSim(self, idx, full_simulation, vehicleList, thread_idx):
+        cis = self.cis[idx]
+        # Don't filter the list at all
+        tempList = vehicleList.copy()
+        if full_simulation:
+            # Create that fake camera
+            if self.lidarRecognitionList[idx] != None:
+                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(cis, tempList, [], 15.0, 15.0, 0.0, 160.0)
+                if self.simulate_error:
+                    cis.cameraDetections = camera_error_array
+                else:
+                    cis.cameraDetections = camera_array
+                cis.groundTruth = camera_array
+                
+                # f = open("data_" + str(idx) + ".txt", "a")
+                # f.write(str(idx) + "," + str(self.time))
+                # for each in cis.cameraDetections:
+                #     f.write("," + str(each[0]) + "," + str(each[1]))
+                # f.write("\n")
+                # f.close()
+
+                # CIS position can be the map centroid in sim
+                # because we are generating the detection WRT the centroid
+                # pos = [cis.localizationPositionX - cis.positionX_offset, cis.localizationPositionY - cis.positionY_offset, cis.theta - cis.theta_offset]
+                pos = [0, 0, 0]
+
+                # Fusion detection frame is the same as single camera (for now)
+                # Add to the GUI
+                # Do the local fusion like we would on the vehicle
+                self.localFusionCIS[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, cis.cameraDetections, .25, self.estimate_covariance)
+                results = self.localFusionCIS[idx].fuseDetectionFrame(self.estimate_covariance, cis)
+
+                # Add to the GUI
+                cis.fusionDetections = []
+                for each in results:
+                    sensed_x = each[1]
+                    sensed_y = each[2]
+                    cis.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
+        else:
+            # Quick fake of sensor values
+            cis.fusionDetections = []
+            cis.groundTruth = []
+            for each in vehicleList:
+                sensed_x = each[0]
+                sensed_y = each[1]
+                cis.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
+
+        # Ground truth to the original dataset
+        testSet = []
+        groundTruth = []
+        for each in cis.fusionDetections:
+            sensed_x = each[0]
+            sensed_y = each[1]
+            testSet.append([sensed_x, sensed_y])
+        for each in cis.groundTruth:
+            sensed_x = each[0]
+            sensed_y = each[1]
+            groundTruth.append([sensed_x, sensed_y])
+
+        local_differences = []
+        local_over_detection_miss = 0
+        local_under_detection_miss = 0
+
+        if len(testSet) >= 1 and len(groundTruth) >= 1:
+            nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
+            distances, indices = nbrs.kneighbors(np.array(groundTruth))
+
+            # Now calculate the score
+            for dist in distances:
+                local_differences.append(dist)
+
+        # Check how much large the test set is from the ground truth and add that as well
+        if len(testSet) > len(groundTruth):
+            # Overdetection case
+            local_over_detection_miss += len(testSet) - len(groundTruth)
+        elif len(testSet) < len(groundTruth):
+            # Underdetection case, we count this differently because it may be from obstacle blocking
+            local_under_detection_miss += len(groundTruth) - len(testSet)
+
+        if self.useThreading:
+            self.threads_results[thread_idx] = [local_differences, local_over_detection_miss, local_under_detection_miss, [0.0, 0.0]]
+        else:
+            return local_differences, local_over_detection_miss, local_under_detection_miss
 
     def stepTime(self):
         if self.unit_test:
@@ -663,7 +879,10 @@ class MainWindow(QMainWindow):
                     lightTimePeriod = 5 * 8
             else:
                 self.lightTime += 1
-            self.vehiclesLock.acquire()
+
+            #self.vehiclesLock.acquire()
+
+            start_vehicles = time.time()
 
             # Make the vehicle list before we move the vehicles
             # Get the last known location of all other vehicles
@@ -687,118 +906,16 @@ class MainWindow(QMainWindow):
                         vehicle.targetVelocity = 0.0
                         vehicle.update_pid()
                     else:
-                        # Update ourself
-                        vehicle.update_localization()
-                        vehicle.recieve_coordinate_group_commands(self.trafficLightArray)
-                        vehicle.pure_pursuit_control()
-
-                        # Filter out ourself
-                        tempList = vehicleList.copy()
-                        tempList.pop(idx)
-
-                        if self.full_simulation:
-                            # Create that fake LIDAR
-                            if self.lidarRecognitionList[idx] != None:
-                                localization_error_gaussian, localization_error = vehicle.localization.getErrorParamsAtVelocity(vehicle.velocity, vehicle.theta)
-                                if self.estimate_covariance:
-                                    temp_covariance = localization_error_gaussian
-                                else:
-                                    temp_covariance = sensor.BivariateGaussian(0.05, 0.05, 0)
-                                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(vehicle, tempList, [], 15.0, 15.0, 0.0, 160.0, l_error = localization_error, l_error_gauss = temp_covariance)
-                                if self.simulate_error:
-                                    vehicle.cameraDetections = camera_error_array
-                                    vehicle.localizationError = localization_error_gaussian
-                                    if self.real_lidar:
-                                        lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
-                                            vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
-                                        vehicle.rawLidarDetections = point_cloud_error
-                                        vehicle.lidarDetections = lidarcoordinates
-                                    else:
-                                        vehicle.lidarDetections = lidar_detected_error
-                                else:
-                                    vehicle.cameraDetections = camera_array
-                                    lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0,
-                                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
-                                    vehicle.rawLidarDetections = point_cloud
-                                    vehicle.lidarDetections = lidarcoordinates
-                                vehicle.groundTruth = camera_array
-
-                                # Vehicle position can be the map centroid in sim
-                                # because we are generating the detection WRT the centroid
-                                #pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
-                                #pos = [0,0,0]
-
-                                # Lets add the detections to the vehicle class
-                                # vehicle.lidarDetections = []
-                                # for each in lidarcoordinates:
-                                #     new = rotate((0, 0), (float(each[1]), float(each[2])), pos[2])
-                                #     sensed_x = new[0] + pos[0]
-                                #     sensed_y = new[1] + pos[1]
-                                #     vehicle.lidarDetections.append((sensed_x, sensed_y, each[6]))
-
-                                # Raw LIDAR for debug
-                                vehicle.lidarPoints = point_cloud
-
-                                # Do the local fusion like we would on the vehicle
-                                self.localFusionCAV[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, vehicle.cameraDetections, .25, self.estimate_covariance)
-                                self.localFusionCAV[idx].processDetectionFrame(local_fusion.LIDAR, self.time/1000.0, vehicle.lidarDetections, .25, self.estimate_covariance)
-                                results = self.localFusionCAV[idx].fuseDetectionFrame(self.estimate_covariance, vehicle)
-
-                                # Add to the GUI
-                                vehicle.fusionDetections = []
-                                for each in results:
-                                    sensed_x = each[1]
-                                    sensed_y = each[2]
-                                    vehicle.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
-                                # Add ourself to this
-                                vehicle.fusionDetections.append((vehicle.localizationPositionX + localization_error[0],
-                                                                vehicle.localizationPositionY + localization_error[1],
-                                                                localization_error_gaussian.covariance, 0, 0, -1))
-
+                        if self.useThreading:
+                            self.threads[idx] = threading.Thread(target=self.updateVehicleInSim, args=(idx, self.full_simulation, vehicleList, idx))      
+                            self.threads[idx].start() # start the thread we just created
                         else:
-                            # Quick fake of sensor values
-                            vehicle.fusionDetections = []
-                            for each in tempList:
-                                sensed_x = each[0]
-                                sensed_y = each[1]
-                                vehicle.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
-
-                        # Now update our current PID with respect to other vehicles
-                        vehicle.check_positions_of_other_vehicles_adjust_velocity(tempList)
-
-                        # We can't update the PID controls until after all positions are known
-                        vehicle.update_pid()
-
-                        # Ground truth to the original dataset
-                        testSet = []
-                        groundTruth = []
-                        for each in vehicle.fusionDetections:
-                            sensed_x = each[0]
-                            sensed_y = each[1]
-                            testSet.append([sensed_x, sensed_y])
-                        for each in vehicle.groundTruth:
-                            sensed_x = each[0]
-                            sensed_y = each[1]
-                            groundTruth.append([sensed_x, sensed_y])
-
-                        if len(testSet) >= 1 and len(groundTruth) >= 1:
-                            nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
-                            distances, indices = nbrs.kneighbors(np.array(groundTruth))
-
-                            # Now calculate the score
-                            for dist in distances:
-                                self.local_differences.append(dist)
-
-                        # Check how much large the test set is from the ground truth and add that as well
-                        if len(testSet) > len(groundTruth):
-                            # Overdetection case
-                            self.local_over_detection_miss += len(testSet) - len(groundTruth)
-                        elif len(testSet) < len(groundTruth):
-                            # Underdetection case, we count this differently because it may be from obstacle blocking
-                            self.local_under_detection_miss += len(groundTruth) - len(testSet)
-
-                        # Add to the global sensor fusion
-                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
+                            local_differences_c, local_over_detection_miss_c, local_under_detection_miss_c, localization_error_c = self.updateVehicleInSim(idx, self.full_simulation, vehicleList, idx)
+                            self.local_under_detection_miss += local_under_detection_miss_c
+                            self.local_over_detection_miss += local_over_detection_miss_c
+                            self.local_differences += local_differences_c
+                        # self.localization_differences.append(math.hypot(localization_error_c[0], localization_error_c[1]))
+                        # self.localization_velocity.append(vehicle.velocity)
 
             for idx, cis in self.cis.items():
                 #print ( " CIS:", idx )
@@ -813,84 +930,42 @@ class MainWindow(QMainWindow):
                         # Update ourself
                         cis.update_localization()
 
-                        # Don't filter the list at all
-                        tempList = vehicleList.copy()
-
-                        if self.full_simulation:
-                            # Create that fake camera
-                            if self.lidarRecognitionList[idx] != None:
-                                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(cis, tempList, [], 15.0, 15.0, 0.0, 160.0)
-                                if self.simulate_error:
-                                    cis.cameraDetections = camera_error_array
-                                else:
-                                    cis.cameraDetections = camera_array
-                                cis.groundTruth = camera_array
-                                
-                                # f = open("data_" + str(idx) + ".txt", "a")
-                                # f.write(str(idx) + "," + str(self.time))
-                                # for each in cis.cameraDetections:
-                                #     f.write("," + str(each[0]) + "," + str(each[1]))
-                                # f.write("\n")
-                                # f.close()
-
-                                # CIS position can be the map centroid in sim
-                                # because we are generating the detection WRT the centroid
-                                # pos = [cis.localizationPositionX - cis.positionX_offset, cis.localizationPositionY - cis.positionY_offset, cis.theta - cis.theta_offset]
-                                pos = [0, 0, 0]
-
-                                # Fusion detection frame is the same as single camera (for now)
-                                # Add to the GUI
-                                # Do the local fusion like we would on the vehicle
-                                self.localFusionCIS[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, cis.cameraDetections, .25, self.estimate_covariance)
-                                results = self.localFusionCIS[idx].fuseDetectionFrame(self.estimate_covariance, cis)
-
-                                # Add to the GUI
-                                cis.fusionDetections = []
-                                for each in results:
-                                    sensed_x = each[1]
-                                    sensed_y = each[2]
-                                    cis.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
+                        if self.useThreading:
+                            thread_num = len(self.vehicles) + idx
+                            self.threads[thread_num] = threading.Thread(target=self.updateCISInSim, args=(idx, self.full_simulation, vehicleList, thread_num))
+                            self.threads[thread_num].start() # start the thread we just created  
                         else:
-                            # Quick fake of sensor values
-                            cis.fusionDetections = []
-                            cis.groundTruth = []
-                            for each in vehicleList:
-                                sensed_x = each[0]
-                                sensed_y = each[1]
-                                cis.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
+                            local_differences_c, local_over_detection_miss_c, local_under_detection_miss_c = self.updateCISInSim(idx, self.full_simulation, vehicleList, idx)
 
-                        # Ground truth to the original dataset
-                        testSet = []
-                        groundTruth = []
-                        for each in cis.fusionDetections:
-                            sensed_x = each[0]
-                            sensed_y = each[1]
-                            testSet.append([sensed_x, sensed_y])
-                        for each in cis.groundTruth:
-                            sensed_x = each[0]
-                            sensed_y = each[1]
-                            groundTruth.append([sensed_x, sensed_y])
+                            self.local_under_detection_miss += local_under_detection_miss_c
+                            self.local_over_detection_miss += local_over_detection_miss_c
+                            self.local_differences += local_differences_c
 
-                        if len(testSet) >= 1 and len(groundTruth) >= 1:
-                            nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
-                            distances, indices = nbrs.kneighbors(np.array(groundTruth))
+            if self.useThreading:
+                # wait for all threads to finish                                            
+                for idx, t in enumerate(self.threads):                                                           
+                    t.join()
+                    if self.threads_results[idx] != None:
+                        local_differences_c, local_over_detection_miss_c, local_under_detection_miss_c, localization_error_c = self.threads_results[idx]
+                        self.local_under_detection_miss += local_under_detection_miss_c
+                        self.local_over_detection_miss += local_over_detection_miss_c
+                        self.local_differences += local_differences_c
+                    #self.localization_differences.append(math.hypot(localization_error_c[0], localization_error_c[1]))
+                    #self.localization_velocity.append(vehicle.velocity)
 
-                            # Now calculate the score
-                            for dist in distances:
-                                self.local_differences.append(dist)
+            print ( "v:", time.time() - start_vehicles )
 
-                        # Check how much large the test set is from the ground truth and add that as well
-                        if len(testSet) > len(groundTruth):
-                            # Overdetection case
-                            self.local_over_detection_miss += len(testSet) - len(groundTruth)
-                        elif len(testSet) < len(groundTruth):
-                            # Underdetection case, we count this differently because it may be from obstacle blocking
-                            self.local_under_detection_miss += len(groundTruth) - len(testSet)
+            #self.vehiclesLock.release()
 
-                        # Add to the global sensor fusion
-                        self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
+            start_global = time.time()
 
-            self.vehiclesLock.release()
+            for idx, vehicle in self.vehicles.items():
+                # Add to the global sensor fusion
+                self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
+
+            for idx, cis in self.cis.items(): 
+                # Add to the global sensor fusion
+                self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
 
             self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
@@ -901,7 +976,7 @@ class MainWindow(QMainWindow):
                 sensed_x = each[1]
                 sensed_y = each[2]
                 testSetGlobal.append([sensed_x, sensed_y])
-            for each in tempList:
+            for each in vehicleList:
                 sensed_x = each[0]
                 sensed_y = each[1]
                 groundTruthGlobal.append([sensed_x, sensed_y])
@@ -920,10 +995,18 @@ class MainWindow(QMainWindow):
                 # Underdetection case, we count this differently because it may be from obstacle blocking
                 self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
 
+            print ( "g:", time.time() - start_global )
+
             #print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
             #print ( " over misses: ", self.global_over_detection_miss, " under misses: ", self.global_under_detection_miss )
 
             self.drawTrafficLight = True
+
+            # if self.time == 599875:
+            #     f = open("localization.txt", "a")
+            #     for d, v in zip(self.localization_differences, self.localization_velocity):
+            #         f.write(str(v) + "," + str(d) + "\n")
+            #     f.close()
 
         QApplication.processEvents()
         self.update()

@@ -599,19 +599,28 @@ class GlobalFUSION:
                     # Before we add anything, let's check back against the list to make sure there is no IOU match over .5 with this new item and another new item
                     tuple = thisFrameTrackTree.query((np.array([detections_list_positions[add]])), k=length,
                                                      return_distance=True)
-                    first = True
+                    add_this = False
+                    # for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
+                    #     # Check to make sure thie IOU match is high
+                    #     if .75 >= IOUsDetection >= 0:
+                    #         # Make sure this is not ourself
+                    #         if add != detectionIdx:
+                    #             # If this is not ourself, add ourself only if none of our matches has been added yet
+                    #             if detectionIdx in added:
+                    #                 first = False
+                    #                 break
                     for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                        # Check to make sure thie IOU match is high
-                        if .75 >= IOUsDetection >= 0:
+                        # Check to make sure thie IOU match is low with existing added
+                        if .99 <= IOUsDetection:
                             # Make sure this is not ourself
                             if add != detectionIdx:
                                 # If this is not ourself, add ourself only if none of our matches has been added yet
-                                if detectionIdx in added:
-                                    first = False
+                                if detectionIdx not in added:
+                                    add_this = True
                                     break
 
                     # We are the best according to arbitrarily broken tie and can be added
-                    if first:
+                    if add_this:
                         added.append(add)
                         new = GlobalTracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
                                       detection_list[add][3], detection_list[add][4], detection_list[add][5],

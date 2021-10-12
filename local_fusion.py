@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 from filterpy.kalman import UnscentedKalmanFilter as UKF
 from filterpy.kalman import MerweScaledSigmaPoints
+from stonesoup.types.track import Track
 
 import shared_math
 
@@ -617,6 +618,44 @@ class FUSION:
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
 
+    # def matchDetectionJPDAF(self, detections_list_positions, detection_list, timestamp, cleanupTime):
+    #     measurements = []
+    #     for each in detections_list_positions:
+    #         measurement = measurement_model.function([detections_list_positions[0],detections_list_positions[1]], noise=False)
+    #         tracks.append(Track())
+
+    #     hypotheses = data_associator.associate(tracks,
+    #                                        measurements,
+    #                                        timestamp)
+        
+    #     # Loop through each track, performing the association step with weights adjusted according to
+    #     # JPDA.
+    #     for track in detections_list_positions:
+    #         track_hypotheses = hypotheses[track]
+
+    #         posterior_states = []
+    #         posterior_state_weights = []
+    #         for hypothesis in track_hypotheses:
+    #             if not hypothesis:
+    #                 posterior_states.append(hypothesis.prediction)
+    #             else:
+    #                 posterior_state = updater.update(hypothesis)
+    #                 posterior_states.append(posterior_state)
+    #             posterior_state_weights.append(hypothesis.probability)
+
+    #         means = StateVectors([state.state_vector for state in posterior_states])
+    #         covars = np.stack([state.covar for state in posterior_states], axis=2)
+    #         weights = np.asarray(posterior_state_weights)
+
+    #         # Reduce mixture of states to one posterior estimate Gaussian.
+    #         post_mean, post_covar = gm_reduce_single(means, covars, weights)
+
+    #         # Add a Gaussian state approximation to the track.
+    #         track.append(GaussianStateUpdate(
+    #             post_mean, post_covar,
+    #             track_hypotheses,
+    #             track_hypotheses[0].measurement.timestamp))
+
     def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime):
         try:
             matches = []
@@ -696,19 +735,29 @@ class FUSION:
                         # Before we add anything, let's check back against the list to make sure there is no IOU match over .5 with this new item and another new item
                         tuple = thisFrameTrackTree.query((np.array([detections_list_positions[add]])), k=length,
                                                         return_distance=True)
-                        first = True
+                        # first = True
+                        # for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
+                        #     # Check to make sure thie IOU match is high
+                        #     if .75 >= IOUsDetection >= 0:
+                        #         # Make sure this is not ourself
+                        #         if add != detectionIdx:
+                        #             # If this is not ourself, add ourself only if none of our matches has been added yet
+                        #             if detectionIdx in added:
+                        #                 first = False
+                        #                 break
+                        add_this = False
                         for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                            # Check to make sure thie IOU match is high
-                            if .75 >= IOUsDetection >= 0:
+                            # Check to make sure thie IOU match is low with existing added
+                            if .99 <= IOUsDetection:
                                 # Make sure this is not ourself
                                 if add != detectionIdx:
                                     # If this is not ourself, add ourself only if none of our matches has been added yet
-                                    if detectionIdx in added:
-                                        first = False
+                                    if detectionIdx not in added:
+                                        add_this = True
                                         break
 
                         # We are the best according to arbitrarily broken tie and can be added
-                        if first:
+                        if add_this:
                             added.append(add)
                             new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
                                         detection_list[add][3], timestamp, self.id, self.fusion_mode)
