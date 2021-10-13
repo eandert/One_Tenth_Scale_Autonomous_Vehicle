@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 from filterpy.kalman import UnscentedKalmanFilter as UKF
 from filterpy.kalman import MerweScaledSigmaPoints
-from stonesoup.types.track import Track
+#from stonesoup.types.track import Track
 
 import shared_math
 
@@ -298,19 +298,19 @@ class Tracked:
             if self.fusion_mode == 0:
                 # Store so that next fusion is better
                 self.X_hat_t = np.array([[x_out], [y_out], [0], [0]], dtype = 'float')
-                if self.ukf_mode:
-                    self.F_t = np.array([[1, 0, self.dt, 0],
-                                        [0, 1, 0, self.dt],
-                                        [0, 0, 1, 0],
-                                        [0, 0, 0, 1]], dtype = 'float')
-                    self.tempH_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
-                                    [0., lidarMeasureH[1], 0., 0.],
-                                    [camMeasureH[0], 0., 0., 0.],
-                                    [0., camMeasureH[1], 0., 0.]], dtype = 'float')
-                    sigmas = MerweScaledSigmaPoints(4, alpha=.1, beta=2., kappa=0.)
-                    self.ukf = UKF(dim_x=4, dim_z=4, fx=self.fx, hx=self.hx, dt=self.dt, points=sigmas)
-                    self.ukf.Q = self.Q_t
-                    self.ukf.x = self.X_hat_t
+                # if self.ukf_mode:
+                #     self.F_t = np.array([[1, 0, self.dt, 0],
+                #                         [0, 1, 0, self.dt],
+                #                         [0, 0, 1, 0],
+                #                         [0, 0, 0, 1]], dtype = 'float')
+                #     self.tempH_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
+                #                     [0., lidarMeasureH[1], 0., 0.],
+                #                     [camMeasureH[0], 0., 0., 0.],
+                #                     [0., camMeasureH[1], 0., 0.]], dtype = 'float')
+                #     sigmas = MerweScaledSigmaPoints(4, alpha=.1, beta=2., kappa=0.)
+                #     self.ukf = UKF(dim_x=4, dim_z=4, fx=self.fx, hx=self.hx, dt=self.dt, points=sigmas)
+                #     self.ukf.Q = self.Q_t
+                #     self.ukf.x = self.X_hat_t
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
                 self.X_hat_t = np.array([[x_out], [y_out], [0], [0], [0], [0]], dtype = 'float')
@@ -335,6 +335,7 @@ class Tracked:
             #try:
             # We have valid data
             # Transition matrix
+            # Prediction step!
             elapsed = self.lastTracked - self.prev_time
             if elapsed <= 0.0:
                 #print( "Error time elapsed is incorrect! " + str(elapsed) )
@@ -346,20 +347,6 @@ class Tracked:
                                     [0, 1, 0, elapsed],
                                     [0, 0, 1, 0],
                                     [0, 0, 0, 1]], dtype = 'float')
-
-                self.tempH_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
-                                [0., lidarMeasureH[1], 0., 0.],
-                                [camMeasureH[0], 0., 0., 0.],
-                                [0., camMeasureH[1], 0., 0.]], dtype = 'float')
-
-                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
-            
-                # Measurment cov
-                self.R_t = np.array(
-                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                    [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                    [0, 0, camCov[0][0], camCov[0][1]],
-                    [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
                 self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
@@ -368,21 +355,6 @@ class Tracked:
                                     [0, 0, 0, 1, 0, elapsed],
                                     [0, 0, 0, 0, 1, 0],
                                     [0, 0, 0, 0, 0, 1]], dtype = 'float')
-
-                self.tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0, 0, 0],
-                                    [camMeasureH[0], 0, 0, 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0, 0, 0]], dtype = 'float')
-
-                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
-                
-                # Measurment cov
-                self.R_t = np.array(
-                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                    [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                    [0, 0, camCov[0][0], camCov[0][1]],
-                    [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
-
             else:
                 # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
                 v_1 = self.X_hat_t[2]
@@ -412,57 +384,79 @@ class Tracked:
                                     [0, 0, 1, 0, 0],
                                     [0, 0, 0, 1, elapsed],
                                     [0, 0, 0, 0, 1]], dtype = 'float')
-
-                self.tempH_t = np.array([[lidarMeasureH[0], 0, 0, 0, 0],
-                                    [0, lidarMeasureH[1], 0, 0, 0],
-                                    [camMeasureH[0], 0, 0, 0, 0],
-                                    [0, camMeasureH[1], 0, 0, 0]], dtype = 'float')
-
-                measure = np.array([lidarMeasure[0], lidarMeasure[1], camMeasure[0], camMeasure[1]], dtype = 'float')
-                
-                # Measurment cov
-                self.R_t = np.array(
-                    [[lidarCov[0][0], lidarCov[0][1], 0, 0],
-                    [lidarCov[1][0], lidarCov[1][1], 0, 0],
-                    [0, 0, camCov[0][0], camCov[0][1]],
-                    [0, 0, camCov[1][0], camCov[1][1]]], dtype = 'float')
             
-            if self.ukf_mode:
-                self.ukf.R = self.R_t
-                #print ( self.ukf.z )
-                print ( 1 )
-                #self.ukf.fx = self.F_t
-                print ( 2 )
-                #self.ukf.hx = self.tempH_t
-                print ( 3 )
-                self.ukf.predict()
-                #print ( self.ukf.z )
-                print ( 4 )
-                self.ukf.update(self.measure)
-                print ( 5 )
-                X_t = self.ukf.x
-                self.P_t = self.ukf.P
-                print(X_t, self.P_t)
+            # if self.ukf_mode:
+            #     self.ukf.R = self.R_t
+            #     #print ( self.ukf.z )
+            #     print ( 1 )
+            #     #self.ukf.fx = self.F_t
+            #     print ( 2 )
+            #     #self.ukf.hx = self.tempH_t
+            #     print ( 3 )
+            #     self.ukf.predict()
+            #     #print ( self.ukf.z )
+            #     print ( 4 )
+            #     self.ukf.update(self.measure)
+            #     print ( 5 )
+            #     X_t = self.ukf.x
+            #     self.P_t = self.ukf.P
+            #     print(X_t, self.P_t)
+            # else:
+            X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+
+            # print ( "m ", measure )
+            #print ( self.tempH_t )
+            # print ( self.R_t )
+
+            #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
+
+            # Time to run our predictions!
+            # Fist lets do the camera update
+            # Fist lets do the camera update
+            if lidar_added:
+                if self.fusion_mode == 0:
+                    H_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
+                                        [0., lidarMeasureH[1], 0., 0.]], dtype = 'float')
+                elif self.fusion_mode == 1:
+                    H_t = np.array([[lidarMeasureH[0], 0., 0., 0., 0., 0.],
+                                        [0., lidarMeasureH[1], 0., 0., 0., 0.]], dtype = 'float')
+                elif self.fusion_mode == 2:
+                    H_t = np.array([[lidarMeasureH[0], 0., 0., 0., 0.],
+                                        [0., lidarMeasureH[1], 0., 0., 0.]], dtype = 'float')
+                measure = np.array([lidarMeasure[0], lidarMeasure[1]], dtype = 'float')
+                covariance = lidarCov
+            elif cam_added:
+                if self.fusion_mode == 0:
+                    H_t = np.array([[camMeasureH[0], 0., 0., 0.],
+                                        [0., camMeasureH[1], 0., 0.]], dtype = 'float')
+                elif self.fusion_mode == 1:
+                    H_t = np.array([[camMeasureH[0], 0., 0., 0., 0., 0.],
+                                        [0., camMeasureH[1], 0., 0., 0., 0.]], dtype = 'float')
+                elif self.fusion_mode == 2:
+                    H_t = np.array([[camMeasureH[0], 0., 0., 0., 0.],
+                                        [0., camMeasureH[1], 0., 0., 0.]], dtype = 'float')
+                measure = np.array([camMeasure[0], camMeasure[1]], dtype = 'float')
+                covariance = camCov
             else:
-                X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+                if self.fusion_mode == 0:
+                    H_t = np.array([[0., 0., 0., 0.],
+                                        [0., 0., 0., 0.]], dtype = 'float')
+                elif self.fusion_mode == 1:
+                    H_t = np.array([[0., 0., 0., 0., 0., 0.],
+                                        [0., 0., 0., 0., 0., 0.]], dtype = 'float')
+                elif self.fusion_mode == 2:
+                    H_t = np.array([[0., 0., 0., 0., 0.],
+                                        [0., 0., 0., 0., 0.]], dtype = 'float')
+                measure = np.array([.0, .0], dtype = 'float')
+                covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
 
-                # print ( "m ", measure )
-                #print ( self.tempH_t )
-                # print ( self.R_t )
+            Z_t = (measure).transpose()
+            Z_t = Z_t.reshape(Z_t.shape[0], -1)
+            # print ( "z_t2", Z_t )
+            X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, covariance, H_t)
+            self.X_hat_t = X_t
 
-                #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
-
-                Z_t = (measure).transpose()
-                Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                # print ( "z_t2", Z_t )
-                X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.tempH_t)
-                self.X_hat_t = X_t
-
-                #print ( X_t )
-
-                #print ( "P_hat2: ", self.P_hat_t, " P_t2: ", self.P_t )
-
-                self.P_hat_t = self.P_t
+            self.P_hat_t = self.P_t
 
             self.prev_time = self.lastTracked
 

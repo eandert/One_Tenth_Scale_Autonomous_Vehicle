@@ -14,7 +14,7 @@ class BivariateGaussian:
         if cov is None:
             # Create the bivariate gaussian matrix
             self.mu = np.array([0.0, 0.0])
-            self.covariance = np.array([[a*a, 0], [0, b*b]])
+            self.covariance = np.array([[a, 0], [0, b]])
 
             # RΣR^T to rotate the ellipse where Σ is the original covariance matrix
             rotate = np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
