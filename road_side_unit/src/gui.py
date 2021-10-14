@@ -55,12 +55,14 @@ class MainWindow(QMainWindow):
             #                  [0,0,0],
             #                  [0,0,0],
             #                  [0,0,1]]
-            self.unitTest = [[0,0,0],
+            self.unitTest = [[2,2,0],
+                             [2,2,1],
+                             [0,0,0],
                              [0,0,1],
                              #[1,1,0],
                              #[1,1,1],
-                             [2,2,0],
-                             [2,2,1],
+                             #[2,2,0],
+                             #[2,2,1],
                              #[0,2,1],
                              [0,0,0]]
             # self.unitTest = [[0,0],
@@ -710,7 +712,7 @@ class MainWindow(QMainWindow):
 
     def stepTime(self):
         if self.unit_test:
-            test_time = 600000
+            test_time = 60000
             test_time_print = 10000
             if self.time % test_time_print == 0:
                 print("Test: ", 100 * (self.time % test_time)/test_time, "% num:", self.unit_test_idx)
@@ -741,7 +743,7 @@ class MainWindow(QMainWindow):
                     self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
                     self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
                     self.estimate_covariance = self.unitTest[self.unit_test_idx][2]
-                    self.globalFusion.fusion_mode = self.global_fusion_mode
+                    self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
                     for idx, veh in self.vehicles.items():
                         if veh.simVehicle:
                             self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode
@@ -801,7 +803,7 @@ class MainWindow(QMainWindow):
                     self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
                     self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
                     self.estimate_covariance = self.unitTest[self.unit_test_idx][2]
-                    self.globalFusion.fusion_mode = self.global_fusion_mode
+                    self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
                     for idx, veh in self.vehicles.items():
                         if veh.simVehicle:
                             self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode

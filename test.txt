@@ -236,6 +236,27 @@ Test:  3  g_mode: 0  l_mode: 0  est_cov: 1
   onboard_rmse_val:  0.8546758311931146  variance:  0.635587096851288  over misses:  5400  under misses:  324
   global_rmse_val:  0.24553547007295384  variance:  0.02166250658554418  over misses:  118  under misses:  272
 
+Test:  0  g_mode: 0  l_mode: 0  est_cov: 0
+  localization_rmse_val:  0.2975213429103661  variance:  0.02899305512943953
+  onboard_rmse_val:  1.2848797411505661  variance:  1.428087249247884  over misses:  5028  under misses:  950
+  global_rmse_val:  0.26113270411137185  variance:  0.022803041548246333  over misses:  750  under misses:  303
+Test:  1  g_mode: 0  l_mode: 0  est_cov: 1
+  localization_rmse_val:  0.29766119906254496  variance:  0.02881858466632304
+  onboard_rmse_val:  0.8837918481758895  variance:  0.6872676949734445  over misses:  5299  under misses:  345
+  global_rmse_val:  0.2256448787212239  variance:  0.015962943944953675  over misses:  41  under misses:  8
+Test:  2  g_mode: 2  l_mode: 2  est_cov: 0
+  localization_rmse_val:  0.2954916747761584  variance:  0.02813324397492422
+  onboard_rmse_val:  1.4062547712301106  variance:  1.6480460561058514  over misses:  4781  under misses:  1401
+  global_rmse_val:  0.34330472239338866  variance:  0.03470766162568397  over misses:  1319  under misses:  586
+Test:  3  g_mode: 2  l_mode: 2  est_cov: 1
+  localization_rmse_val:  0.2957123165125713  variance:  0.028543972673631332
+  onboard_rmse_val:  0.8714193114139998  variance:  0.6268856261436955  over misses:  5374  under misses:  372
+  global_rmse_val:  0.3735745977549484  variance:  0.04173406130168273  over misses:  152  under misses:  543
+Test:  4  g_mode: 0  l_mode: 0  est_cov: 0
+  localization_rmse_val:  0.2950082716300668  variance:  0.02814462496743909
+  onboard_rmse_val:  1.2614448364403248  variance:  1.3827031525025946  over misses:  5096  under misses:  789
+  global_rmse_val:  0.24978247347303248  variance:  0.020129313729828208  over misses:  701  under misses:  176
+
 big, 2,4
  Test:  0  g_mode: 0  l_mode: 0  local_rmse_val:  0.8604098146583226  local_variance:  0.636573842844579  over misses:  39385  under misses:  2237
  Test:  0  g_mode: 0  l_mode: 0  global_rmse_val:  0.2839317254053142  global_variance:  0.02105322657372028  over misses:  10978  under misses:  29

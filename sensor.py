@@ -101,13 +101,14 @@ class Localization:
     def getErrorParamsAtVelocity(self, velocity, theta):
         elipse_a_expected = self.longitudinal_error_x * velocity + self.longitudinal_error_b
         elipse_b_expected = self.lateral_error_x * velocity + self.lateral_error_b
-        if elipse_a_expected > elipse_b_expected:
-            elipse_angle_expected = theta
-        else:                
-            elipse_temp = elipse_a_expected
-            elipse_a_expected = elipse_b_expected
-            elipse_b_expected = elipse_temp
-            elipse_angle_expected = theta + math.radians(90)
+        elipse_angle_expected = theta
+        # if elipse_a_expected > elipse_b_expected:
+        #     elipse_angle_expected = theta
+        # else:                
+        #     elipse_temp = elipse_a_expected
+        #     elipse_a_expected = elipse_b_expected
+        #     elipse_b_expected = elipse_temp
+        #     elipse_angle_expected = theta + math.radians(90)
         expected_error_gaussian = BivariateGaussian(elipse_a_expected,
                                     elipse_b_expected,
                                     elipse_angle_expected)
@@ -154,13 +155,14 @@ class Sensor:
             # Calculate our expected elipse error bounds
             elipse_a_expected = distal_error
             elipse_b_expected = object_distance * math.sin(radial_error)
-            if elipse_a_expected > elipse_b_expected:
-                elipse_angle_expected = target_line_angle
-            else:                
-                elipse_temp = elipse_a_expected
-                elipse_a_expected = elipse_b_expected
-                elipse_b_expected = elipse_temp
-                elipse_angle_expected = target_line_angle + math.radians(90)
+            elipse_angle_expected = target_line_angle
+            # if elipse_a_expected > elipse_b_expected:
+            #     elipse_angle_expected = target_line_angle
+            # else:                
+            #     elipse_temp = elipse_a_expected
+            #     elipse_a_expected = elipse_b_expected
+            #     elipse_b_expected = elipse_temp
+            #     elipse_angle_expected = target_line_angle + math.radians(90)
             expected_error_gaussian = BivariateGaussian(elipse_a_expected,
                                       elipse_b_expected,
                                       elipse_angle_expected)

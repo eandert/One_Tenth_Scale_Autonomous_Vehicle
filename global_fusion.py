@@ -200,13 +200,13 @@ class ResizableKalman:
         if h_t_type == 0:
             if self.fusion_mode == 0:
                 return np.array([[1, 0., 0., 0.],
-                        [0., 1, 0., 0.]], dtype = 'float')
+                                [0., 1, 0., 0.]], dtype = 'float')
             elif self.fusion_mode == 1:
                 return np.array([[1, 0., 0., 0., 0., 0.],
-                        [0., 1, 0., 0., 0., 0.]], dtype = 'float')
+                                [0., 1, 0., 0., 0., 0.]], dtype = 'float')
             elif self.fusion_mode == 2:
                 return np.array([[1, 0., 0., 0., 0.],
-                        [0., 1, 0., 0., 0.]], dtype = 'float')
+                                [0., 1, 0., 0., 0.]], dtype = 'float')
         else:
             # TODO: implement radar type
             return np.array([[0, 0., 0., 0.],
@@ -342,13 +342,13 @@ class ResizableKalman:
                     measure = np.array([.0, .0], dtype = 'float')
                     if self.fusion_mode == 0:
                         nothing_Ht = np.array([[0, 0., 0., 0.],
-                                            [0., 0, 0., 0.]], dtype = 'float')
-                    elif self.fusion_mode == 2:
+                                              [0., 0, 0., 0.]], dtype = 'float')
+                    elif self.fusion_mode == 1:
                         nothing_Ht = np.array([[0, 0., 0., 0., 0., 0.],
-                                            [0., 0, 0., 0., 0., 0.]], dtype = 'float')
+                                              [0., 0, 0., 0., 0., 0.]], dtype = 'float')
                     elif self.fusion_mode == 2:
                         nothing_Ht = np.array([[0, 0., 0., 0., 0.],
-                                            [0., 0, 0., 0., 0.]], dtype = 'float')
+                                              [0., 0, 0., 0., 0.]], dtype = 'float')
 
                     Z_t = (measure).transpose()
                     Z_t = Z_t.reshape(Z_t.shape[0], -1)
@@ -689,7 +689,7 @@ class GlobalFUSION:
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
                             # 100% match is ourself! Look for IOU > .75 for now to delete
-                            if .75 >= IOUVsDetection > 0.001:
+                            if .50 >= IOUVsDetection > 0.001:
                                 # Only grab the first match
                                 # Before determining if this is a match check if this detection has been matched already
                                 if first:
