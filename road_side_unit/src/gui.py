@@ -57,6 +57,8 @@ class MainWindow(QMainWindow):
             #                  [0,0,1]]
             self.unitTest = [[2,2,0],
                              [2,2,1],
+                             [1,1,0],
+                             [1,1,1],
                              [0,0,0],
                              [0,0,1],
                              #[1,1,0],
@@ -712,7 +714,7 @@ class MainWindow(QMainWindow):
 
     def stepTime(self):
         if self.unit_test:
-            test_time = 60000
+            test_time = 600000
             test_time_print = 10000
             if self.time % test_time_print == 0:
                 print("Test: ", 100 * (self.time % test_time)/test_time, "% num:", self.unit_test_idx)

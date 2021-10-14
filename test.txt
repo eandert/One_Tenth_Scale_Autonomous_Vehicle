@@ -257,6 +257,36 @@ Test:  4  g_mode: 0  l_mode: 0  est_cov: 0
   onboard_rmse_val:  1.2614448364403248  variance:  1.3827031525025946  over misses:  5096  under misses:  789
   global_rmse_val:  0.24978247347303248  variance:  0.020129313729828208  over misses:  701  under misses:  176
 
+Test:  0  g_mode: 2  l_mode: 2  est_cov: 0
+  localization_rmse_val:  0.2983170851571958  variance:  0.028877565164401205
+  onboard_rmse_val:  1.0847506754874188  variance:  1.0038790935370774  over misses:  4586  under misses:  658
+  global_rmse_val:  0.2580932172222388  variance:  0.01956687035789049  over misses:  1440  under misses:  115
+Test:  1  g_mode: 2  l_mode: 2  est_cov: 1
+  localization_rmse_val:  0.296037679862205  variance:  0.028453114572826385
+  onboard_rmse_val:  0.8581710058975659  variance:  0.6332936414127507  over misses:  5268  under misses:  326
+  global_rmse_val:  0.2270609238214195  variance:  0.01642170242955539  over misses:  19  under misses:  8
+Test:  2  g_mode: 1  l_mode: 1  est_cov: 0
+  localization_rmse_val:  0.2944943625587677  variance:  0.028096424263716353
+  onboard_rmse_val:  0.9659463634211635  variance:  0.8063216625424388  over misses:  4721  under misses:  533
+  global_rmse_val:  0.21363472264664157  variance:  0.013786535299818485  over misses:  924  under misses:  26
+Test:  3  g_mode: 1  l_mode: 1  est_cov: 1
+  localization_rmse_val:  0.296478296033888  variance:  0.02876762067421944
+  onboard_rmse_val:  0.7867021248035116  variance:  0.5432118076614034  over misses:  5326  under misses:  301
+  global_rmse_val:  0.15662352187889975  variance:  0.006391806115522522  over misses:  2  under misses:  8
+Test:  4  g_mode: 0  l_mode: 0  est_cov: 0
+  localization_rmse_val:  0.29882787833393987  variance:  0.028780948966272785
+  onboard_rmse_val:  1.0283786060172622  variance:  0.9413572518242483  over misses:  4854  under misses:  483
+  global_rmse_val:  0.18481958071463195  variance:  0.010903829290425323  over misses:  682  under misses:  24
+Test:  5  g_mode: 0  l_mode: 0  est_cov: 1
+  localization_rmse_val:  0.2953284215381868  variance:  0.02806978288290098
+  onboard_rmse_val:  0.82215965564439  variance:  0.6053168612278649  over misses:  5262  under misses:  323
+  global_rmse_val:  0.1346930753359514  variance:  0.0046361229028151355  over misses:  0  under misses:  8
+Test:  6  g_mode: 0  l_mode: 0  est_cov: 0
+  localization_rmse_val:  0.29857089897602646  variance:  0.029496535808003967
+  onboard_rmse_val:  1.0136780616705146  variance:  0.9112549359023266  over misses:  4826  under misses:  531
+  global_rmse_val:  0.19086208176431751  variance:  0.011978211132356122  over misses:  764  under misses:  52
+PS C:\Users\edwar\Documents\GitHub\scale_rc_car_local_controller> 
+
 big, 2,4
  Test:  0  g_mode: 0  l_mode: 0  local_rmse_val:  0.8604098146583226  local_variance:  0.636573842844579  over misses:  39385  under misses:  2237
  Test:  0  g_mode: 0  l_mode: 0  global_rmse_val:  0.2839317254053142  global_variance:  0.02105322657372028  over misses:  10978  under misses:  29

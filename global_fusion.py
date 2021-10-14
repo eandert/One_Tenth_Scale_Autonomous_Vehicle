@@ -334,7 +334,7 @@ class ResizableKalman:
                 # print ( self.H_t )
                 # print ( self.measure)
 
-                X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+                self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 if len(self.localTrackersMeasurementList) == 0:
                     nothing_cov = np.array([[1.0, 0.],
@@ -352,23 +352,17 @@ class ResizableKalman:
 
                     Z_t = (measure).transpose()
                     Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                    X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, nothing_cov, nothing_Ht)
+                    X_t, self.P_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, nothing_cov, nothing_Ht)
                     self.X_hat_t = X_t
+                    self.P_hat_t = self.P_t
                 else:
                     for mu, cov, h_t_type in zip(self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
                         Z_t = (mu).transpose()
                         Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                        X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, cov, self.h_t(h_t_type))
+                        X_t, self.P_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, cov, self.h_t(h_t_type))
                         self.X_hat_t = X_t
-                    
-                # Z_t = (self.measure).transpose()
-                # Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                # X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, self.R_t, self.H_t)
-                # self.X_hat_t = X_t
+                        self.P_hat_t = self.P_t
 
-                #print ( "P_hat2: ", self.P_hat_t, " P_t2: ", self.P_t )
-
-                self.P_hat_t = self.P_t
                 self.prev_time = self.lastTracked
                 self.x = X_t[0][0]
                 self.y = X_t[1][0]
