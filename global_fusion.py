@@ -154,10 +154,17 @@ class ResizableKalman:
                 
                 # All should be in the tracked list now, continue building the lists
                 # Add the current covariance to the R matrix
-                self.localTrackersCovarainceList .append(match.covariance)
+                cov = np.array([[match.covariance[0][0], match.covariance[0][1], 0., 0.],
+                         [match.covariance[1][0], match.covariance[1][1], 0., 0.],
+                         [0., 0, match.velocity_confidence[0][0], match.velocity_confidence[0][1]],
+                         [0., 0, match.velocity_confidence[1][0], match.velocity_confidence[1][1]]], dtype = 'float')
+                self.localTrackersCovarainceList.append(cov)
 
                 # Add the current measurments to the measurement matrix
-                self.localTrackersMeasurementList.append(np.array([match.x, match.y]))
+                if self.fusion_mode == 2:
+                    self.localTrackersMeasurementList.append(np.array([match.x, match.y, math.hypot(match.dx, match.dy), math.atan2(match.dy, match.dx)]))
+                else:
+                    self.localTrackersMeasurementList.append(np.array([match.x, match.y, match.dx, match.dy]))
 
                 # The H matrix is different for radar (type 1), the rest are type 0
                 self.localTrackersHList.append(0)
@@ -200,13 +207,19 @@ class ResizableKalman:
         if h_t_type == 0:
             if self.fusion_mode == 0:
                 return np.array([[1, 0., 0., 0.],
-                                [0., 1, 0., 0.]], dtype = 'float')
+                                [0., 1, 0., 0.],
+                                [0., 0, 1., 0.],
+                                [0., 0, 0., 1.]], dtype = 'float')
             elif self.fusion_mode == 1:
                 return np.array([[1, 0., 0., 0., 0., 0.],
-                                [0., 1, 0., 0., 0., 0.]], dtype = 'float')
+                                [0., 1, 0., 0., 0., 0.],
+                                [0., 0, 1., 0., 0., 0.],
+                                [0., 0, 0., 1., 0., 0.]], dtype = 'float')
             elif self.fusion_mode == 2:
                 return np.array([[1, 0., 0., 0., 0.],
-                                [0., 1, 0., 0., 0.]], dtype = 'float')
+                                [0., 1, 0., 0., 0.],
+                                [0, 0., 1., 0., 0.],
+                                [0, 0., 0., 1., 0.]], dtype = 'float')
         else:
             # TODO: implement radar type
             return np.array([[0, 0., 0., 0.],
@@ -337,17 +350,25 @@ class ResizableKalman:
                 self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 if len(self.localTrackersMeasurementList) == 0:
-                    nothing_cov = np.array([[1.0, 0.],
-                                            [0., 1.0]], dtype = 'float')
-                    measure = np.array([.0, .0], dtype = 'float')
+                    nothing_cov = np.array([[1.0, 0., 0., 0.],
+                                            [0., 1.0, 0., 0.],
+                                            [0., 0., 1.0, 0.],
+                                            [0., 0., 0., 1.0]], dtype = 'float')
+                    measure = np.array([.0, .0, .0, .0], dtype = 'float')
                     if self.fusion_mode == 0:
                         nothing_Ht = np.array([[0, 0., 0., 0.],
+                                              [0., 0, 0., 0.],
+                                              [0., 0, 0., 0.],
                                               [0., 0, 0., 0.]], dtype = 'float')
                     elif self.fusion_mode == 1:
                         nothing_Ht = np.array([[0, 0., 0., 0., 0., 0.],
+                                              [0., 0, 0., 0., 0., 0.],
+                                              [0., 0, 0., 0., 0., 0.],
                                               [0., 0, 0., 0., 0., 0.]], dtype = 'float')
                     elif self.fusion_mode == 2:
                         nothing_Ht = np.array([[0, 0., 0., 0., 0.],
+                                              [0., 0, 0., 0., 0.],
+                                              [0., 0, 0., 0., 0.],
                                               [0., 0, 0., 0., 0.]], dtype = 'float')
 
                     Z_t = (measure).transpose()
@@ -507,23 +528,23 @@ class GlobalFUSION:
         detections_position_list = []
         detections_list = []
         for det in observations:
-            # Create a rotated rectangle for IOU of 2 ellipses
-            # [cx, cy, w, h, angle]
-            if estimateCovariance and len(det) >= 3:
-                # Calculate our 3 sigma std deviation to create a bounding box for matching
-                try:
-                    a, b, phi = shared_math.ellipsify(det[2], 3.0)
-                    # Enforce a minimum size so matching doesn't fail
-                    a += self.min_size
-                    b += self.min_size
-                    detections_position_list.append([det[0], det[1], a, b, phi])
-                except Exception as e:
-                    print ( " Failed! ", str(e))
-                    # Use an arbitrary size if we have no covariance estimate
-                    detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            else:
-                # Use an arbitrary size if we have no covariance estimate
-                detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            # # Create a rotated rectangle for IOU of 2 ellipses
+            # # [cx, cy, w, h, angle]
+            # if estimateCovariance and len(det) >= 3:
+            #     # Calculate our 3 sigma std deviation to create a bounding box for matching
+            #     try:
+            #         a, b, phi = shared_math.ellipsify(det[2], 3.0)
+            #         # Enforce a minimum size so matching doesn't fail
+            #         a += self.min_size
+            #         b += self.min_size
+            #         detections_position_list.append([det[0], det[1], a, b, phi])
+            #     except Exception as e:
+            #         print ( " Failed! ", str(e))
+            #         # Use an arbitrary size if we have no covariance estimate
+            #         detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            # else:
+            #     # Use an arbitrary size if we have no covariance estimate
+            detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             #detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             detections_list.append([0, det[0], det[1], det[2], det[3], det[4], det[5], sensor_id])
 
