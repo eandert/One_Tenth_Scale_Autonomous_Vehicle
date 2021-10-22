@@ -7,6 +7,7 @@ import lidar_recognition
 import planning_control
 import communication
 import motors
+import local_fusion
 
 pipeFromC = "/home/jetson/Projects/slamware/fifo_queues/fifopipefromc"
 pipeToC = "/home/jetson/Projects/slamware/fifo_queues/fifopipetoc"
@@ -41,7 +42,7 @@ def sourceImagesThread(out_queue, settings, camSpecs, start_time, interval):
                 time.sleep(wait_until_next)
 
 
-def sourceLIDARThread(out_queue, actuation_queue, pipeFromC, pipeToC, network_send_queue, start_time, interval):
+def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, start_time, interval):
     # Start the connection with the LIDAR through pipes
     lidarDevice = communication.connectLIDAR(pipeFromC, pipeToC)
     target = interval
@@ -53,7 +54,12 @@ def sourceLIDARThread(out_queue, actuation_queue, pipeFromC, pipeToC, network_se
     time.sleep(2)
 
     start, end = lidarDevice.getFromC()
-    lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(), start)
+    lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(),
+                                                                          start, 
+                                                                          lidarDevice.localizationX,
+                                                                          lidarDevice.localizationY, 
+                                                                          lidarDevice.localizationYaw,
+                                                                          lidarSensor)
 
     index = 0
 
@@ -70,18 +76,17 @@ def sourceLIDARThread(out_queue, actuation_queue, pipeFromC, pipeToC, network_se
             start, end = lidarDevice.getFromC()
             #print ( "LIDAR got " + str(time.time()))
 
-            lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(), start)
+            lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(),
+                                                                                  start,
+                                                                                  lidarDevice.localizationX,
+                                                                                  lidarDevice.localizationY, 
+                                                                                  lidarDevice.localizationYaw,
+                                                                                  lidarSensor)
             localization = [lidarDevice.localizationX, lidarDevice.localizationY, lidarDevice.localizationYaw, index, start]
             #print ( "LIDAR detect " + str(time.time()))
 
             # Send the localization and coordinate results to the fusion function
             out_queue.put([localization, lidarcoordinates, lidartimestamp])
-
-            # Prep value to be sent to the part of the program
-            output_tag = Tag.Tag('actuate', 'response', start, end)
-            output_token = Token.Token(output_tag, [localization, None])
-            recipient_name = 'CAV1'
-            network_send_queue.put((output_token, recipient_name)) #send to named device, e.g. CAV1, RSU
 
             # Log this to a file
             index += 1
@@ -104,6 +109,8 @@ def processCommunicationsThread(comm_q, v_id, init, response):
     init["route_x"] = init_returned["route_x"]
     init["route_y"] = init_returned["route_y"]
     init["route_TFL"] = init_returned["route_TFL"]
+    init["start_time"] = init_returned["start_time"]
+    init["interval"] = init_returned["interval"]
 
     # Fails keeps track of how many tries to connect with the RSU
     fails = 0
@@ -152,18 +159,24 @@ settings.darknetPath = '../darknet/'
 camSpecs = camera_recognition.CameraSpecifications()
 camSpecs.cameraHeight = .2
 camSpecs.cameraAdjustmentAngle = 0.0
-frameID = 1
+
+# Set up the timing
+start_time = time.time() + 2
+interval = 0.125
+fallthrough_delay = 0.100
+
+# Initialize the planner
+planner = planning_control.Planner()
 
 # Spawn the camera processing thread
-oq = Queue()
-cameraThread = Process(target=sourceImagesThread, args=(oq, settings, camSpecs, start_time, interval))
+cam_out_queue = Queue()
+cameraThread = Process(target=sourceImagesThread, args=(cam_out_queue, settings, camSpecs, start_time, interval))
 cameraThread.start()
 
 # Wait to make sure that we have started YOLO
-time.sleep(10)
-
-# Init the LIDAR processing class
-lidarRecognition = lidar_recognition.LIDAR(time.time())
+lidar_out_queue = Queue()
+cameraThread = Process(target=sourceImagesThread, args=(lidar_out_queue, pipeFromC, pipeToC, planner.lidarSensor, start_time, interval))
+cameraThread.start()
 
 # Spawn the communication thread
 manager = Manager()
@@ -179,104 +192,100 @@ while 'route_x' not in init:
     time.sleep(.01)
 
 # Now that we have chatted with the RSU server, we should know where we are going
-planner = planning_control.Planner()
 planner.initialVehicleAtPosition(init["t_x"], init["t_y"], init["t_yaw"], init["route_x"], init["route_y"],
                                  init["route_TFL"], vehicle_id, False)
 
+# Start the sensor fusion pipeline
+fusion = local_fusion.FUSION(0, vehicle_id)
+
 while True:
-    # This will block until our LIDAR data is available on the pipes
+    # Now get the result from the LIDAR
+    lidar_recieved = False
+    camera_recieved = False
+
+    # Get the camera
     try:
-        lidarDevice.checkFromC()
-        # Log this to a file
-        with open("timing.txt", 'a') as file1:
-            file1.write(index, time.time())
-    except Exception as e:
-        print(" Lidar timed out, ", str(e))
-        # If we timed out we need to reconect to the LIDAR and try everything again
-        # Make sure we run an emergency stop to make sure we dont keep driving blind
-        egoVehicle.emergencyStop()
-        lidarDevice = communication.connectLIDAR(pipeFromC, pipeToC)
-        continue
+        lidar_returned = lidar_out_queue.get(timeout = fallthrough_delay - .01)
+        if len(lidar_returned) == 3:
+            lidar_recieved = True
+    except TimeoutError:
+        print("LIDAR not recieved")
 
-    # Now that we have LDIAR data, signal the process to start the camera processing
-    q.put([frameID])
+    try:
+        cam_returned = cam_out_queue.get(timeout = .01)
+        if len(cam_returned) == 3:
+            camera_recieved = True
+    except TimeoutError:
+        print("Cam not recieved")
+    
+    if lidar_recieved and camera_recieved:
+        localization = lidar_returned[0]
+        lidarcoordinates = lidar_returned[1]
+        lidartimestamp = lidar_returned[2]
+        camcoordinates = cam_returned[0]
+        camtimestamp = cam_returned[1]
+        # TODO: check the timestamps are close
 
-    # Process the LIDAR while we are processign the camera in the background
-    lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(index),
-                                                                          lidarDevice.time)
+        # Fusion
+        fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
+        fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
+        results = fusion.fuseDetectionFrame(1, planner)
 
-    # Now get the result from the other thread and check it is valid
-    returned = oq.get()
-    if len(returned) == 3:
-        camcoordinates = returned[0]
-        camtimestamp = returned[1]
-        frameIDSent = returned[2]
-        # Check that the order has been kept and that we processed the correct frame
-        if frameID != frameIDSent:
-            print(" Error, mismatched camera frame returned ", frameID, " != ", frameIDSent)
-            # Cut the engine to make sure that we don't hit anything since we are blind
+        # Message the RSU, for now we must do this before our control loop
+        # as the RSU has the traffic light state information
+        objectPackage = {
+            "lidar_t": lidartimestamp,
+            "lidar_obj": lidarcoordinates,
+            "cam_t": camtimestamp,
+            "cam_obj": camcoordinates,
+            "fused_t": time.time(),
+            "fused_obj": results
+        }
+
+        comm_q.put(
+            [localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
+                objectPackage])
+
+        if response["error"] != 0:
+            # Cut the engine to make sure that we don't hit anything since the central controller is down
             egoVehicle.emergencyStop()
+            # Log this to a file
+            # with open("timing.txt", 'a') as file1:
+            #     file1.write(None, start)
+            #     index += 1
         else:
-            # vehicleObservations = fusion.KalmanFilter(lidarcoordinates, lidartimestamp, camcoordinates, camtimestamp)
+            # Update our various pieces
+            planner.targetVelocityGeneral = float(response["v_t"])
+            planner.update_localization([localization[0], localization[1], localization[2]])
+            planner.recieve_coordinate_group_commands(response["tfl_state"])
+            planner.pure_pursuit_control()
 
-            # Message the RSU, for now we must do this before our control loop
-            # as the RSU has the traffic light state information
-            objectPackage = {
-                "lidar_t": lidartimestamp,
-                "lidar_obj": lidarcoordinates,
-                "cam_t": camtimestamp,
-                "cam_obj": camcoordinates,
-                "fused_t": "null",
-                "fused_obj": "null"
-            }
+            # Now update our current PID with respect to other vehicles
+            planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
+            # We can't update the PID controls until after all positions are known
+            planner.update_pid()
 
-            comm_q.put(
-                [lidarDevice.localizationX, lidarDevice.localizationY, 0.0, 0.0, 0.0, lidarDevice.localizationYaw,
-                 objectPackage])
+            # Finally, issue the commands to the motors
+            steering_ppm, motor_pid = planner.return_command_package()
+            egoVehicle.setControlMotors(steering_ppm, motor_pid)
 
-            if response["error"] != 0:
-                # Cut the engine to make sure that we don't hit anything since the central controller is down
-                egoVehicle.emergencyStop()
-                # Log this to a file
-                with open("timing.txt", 'a') as file1:
-                    file1.write(None, start)
-                    index += 1
-            else:
-                # Update our various pieces
-                planner.targetVelocityGeneral = float(response["v_t"])
-                planner.update_localization(
-                    [lidarDevice.localizationX, lidarDevice.localizationY, lidarDevice.localizationYaw])
-                planner.recieve_coordinate_group_commands(response["tfl_state"])
-                planner.pure_pursuit_control()
-
-                # Now update our current PID with respect to other vehicles
-                planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"], vehicle_id)
-                # We can't update the PID controls until after all positions are known
-                planner.update_pid()
-
-                # Finally, issue the commands to the motors
-                steering_ppm, motor_pid = planner.return_command_package()
-                egoVehicle.setControlMotors(steering_ppm, motor_pid)
-
-                with open("timing.txt", 'a') as file1:
-                    file1.write(lidarDevice.localizationIdx, time.time())
-                    index += 1
-                if debug:
-                    plt.cla()
-                    # Create plot for lidar and camera points
-                    for i, data in enumerate(lidarcoordinates[:]):
-                        plt.plot(data[1], data[2], 'go')
-                        plt.annotate(data[0], (data[1], data[2]))
-                    for i, data in enumerate(camcoordinates):
-                        plt.plot(data[1], data[2], 'ro')
-                        plt.annotate(data[0], (data[1], data[2]))
-                    plt.title("Sensors")
-                    plt.pause(0.001)
-
-            print(" Time taken: ", time.time() - lidartimestamp, time.time())
-
+            # with open("timing.txt", 'a') as file1:
+            #     file1.write(lidarDevice.localizationIdx, time.time())
+            #     index += 1
+            # if debug:
+            #     plt.cla()
+            #     # Create plot for lidar and camera points
+            #     for i, data in enumerate(lidarcoordinates[:]):
+            #         plt.plot(data[1], data[2], 'go')
+            #         plt.annotate(data[0], (data[1], data[2]))
+            #     for i, data in enumerate(camcoordinates):
+            #         plt.plot(data[1], data[2], 'ro')
+            #         plt.annotate(data[0], (data[1], data[2]))
+            #     plt.title("Sensors")
+            #     plt.pause(0.001)
+        print(" Time taken: ", time.time() - lidartimestamp, time.time())
     else:
-        print(" Error, no camera frame returned ")
+        print(" Error, no camera/lidar frame returned ")
         # Cut the engine to make sure that we don't hit anything since we are blind
         egoVehicle.emergencyStop()
 

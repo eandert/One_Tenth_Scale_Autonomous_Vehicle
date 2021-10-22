@@ -402,7 +402,7 @@ class Tracked:
             #     self.P_t = self.ukf.P
             #     print(X_t, self.P_t)
             # else:
-            self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+            X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             # print ( "m ", measure )
             #print ( self.tempH_t )
@@ -411,60 +411,52 @@ class Tracked:
             #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
 
             # Time to run our predictions!
-            # Fist lets do the lidar update
+            # Fist lets do the camera update
+            # Fist lets do the camera update
             if lidar_added:
                 if self.fusion_mode == 0:
                     H_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
-                                        [0., lidarMeasureH[1], 0., 0.]], dtype = 'float')
+                                   [0., lidarMeasureH[1], 0., 0.]], dtype = 'float')
                 elif self.fusion_mode == 1:
                     H_t = np.array([[lidarMeasureH[0], 0., 0., 0., 0., 0.],
-                                        [0., lidarMeasureH[1], 0., 0., 0., 0.]], dtype = 'float')
+                                   [0., lidarMeasureH[1], 0., 0., 0., 0.]], dtype = 'float')
                 elif self.fusion_mode == 2:
                     H_t = np.array([[lidarMeasureH[0], 0., 0., 0., 0.],
-                                        [0., lidarMeasureH[1], 0., 0., 0.]], dtype = 'float')
+                                   [0., lidarMeasureH[1], 0., 0., 0.]], dtype = 'float')
                 measure = np.array([lidarMeasure[0], lidarMeasure[1]], dtype = 'float')
                 covariance = lidarCov
-                Z_t = (measure).transpose()
-                Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                X_t, self.P_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, covariance, H_t)
-                self.P_hat_t = self.P_t
-                self.X_hat_t = X_t
-
-            if cam_added:
+            elif cam_added:
                 if self.fusion_mode == 0:
                     H_t = np.array([[camMeasureH[0], 0., 0., 0.],
-                                        [0., camMeasureH[1], 0., 0.]], dtype = 'float')
+                                   [0., camMeasureH[1], 0., 0.]], dtype = 'float')
                 elif self.fusion_mode == 1:
                     H_t = np.array([[camMeasureH[0], 0., 0., 0., 0., 0.],
-                                        [0., camMeasureH[1], 0., 0., 0., 0.]], dtype = 'float')
+                                   [0., camMeasureH[1], 0., 0., 0., 0.]], dtype = 'float')
                 elif self.fusion_mode == 2:
                     H_t = np.array([[camMeasureH[0], 0., 0., 0., 0.],
-                                        [0., camMeasureH[1], 0., 0., 0.]], dtype = 'float')
+                                   [0., camMeasureH[1], 0., 0., 0.]], dtype = 'float')
                 measure = np.array([camMeasure[0], camMeasure[1]], dtype = 'float')
                 covariance = camCov
-                Z_t = (measure).transpose()
-                Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                X_t, self.P_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, covariance, H_t)
-                self.P_hat_t = self.P_t
-                self.X_hat_t = X_t
-
-            if not cam_added and not lidar_added:
+            else:
                 if self.fusion_mode == 0:
                     H_t = np.array([[0., 0., 0., 0.],
-                                        [0., 0., 0., 0.]], dtype = 'float')
+                                   [0., 0., 0., 0.]], dtype = 'float')
                 elif self.fusion_mode == 1:
                     H_t = np.array([[0., 0., 0., 0., 0., 0.],
-                                        [0., 0., 0., 0., 0., 0.]], dtype = 'float')
+                                   [0., 0., 0., 0., 0., 0.]], dtype = 'float')
                 elif self.fusion_mode == 2:
                     H_t = np.array([[0., 0., 0., 0., 0.],
-                                        [0., 0., 0., 0., 0.]], dtype = 'float')
+                                   [0., 0., 0., 0., 0.]], dtype = 'float')
                 measure = np.array([.0, .0], dtype = 'float')
                 covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
-                Z_t = (measure).transpose()
-                Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                X_t, self.P_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, covariance, H_t)
-                self.P_hat_t = self.P_t
-                self.X_hat_t = X_t
+
+            Z_t = (measure).transpose()
+            Z_t = Z_t.reshape(Z_t.shape[0], -1)
+            # print ( "z_t2", Z_t )
+            X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, covariance, H_t)
+            self.X_hat_t = X_t
+
+            self.P_hat_t = self.P_t
 
             self.prev_time = self.lastTracked
 
