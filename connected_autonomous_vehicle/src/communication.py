@@ -82,7 +82,7 @@ class connectServer:
   
         try:
             # sending post request
-            r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = .25)
+            r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = .01)
             # extracting response text
             response = r.json()
 

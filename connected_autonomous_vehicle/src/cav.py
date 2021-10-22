@@ -198,96 +198,105 @@ planner.initialVehicleAtPosition(init["t_x"], init["t_y"], init["t_yaw"], init["
 # Start the sensor fusion pipeline
 fusion = local_fusion.FUSION(0, vehicle_id)
 
+# Sleep until test start time
+wait_until_start = start_time - time.time() - .01
+if wait_until_start > 0:
+    time.sleep(start_time)
+
 while True:
-    # Now get the result from the LIDAR
-    lidar_recieved = False
-    camera_recieved = False
+    if (round(time.time(),3) % interval) == 0.000:
+        # Now get the result from the LIDAR
+        lidar_recieved = False
+        camera_recieved = False
 
-    # Get the camera
-    try:
-        lidar_returned = lidar_out_queue.get(timeout = fallthrough_delay - .01)
-        if len(lidar_returned) == 3:
-            lidar_recieved = True
-    except TimeoutError:
-        print("LIDAR not recieved")
+        # Get the camera
+        try:
+            lidar_returned = lidar_out_queue.get(timeout = fallthrough_delay - .01)
+            if len(lidar_returned) == 3:
+                lidar_recieved = True
+        except TimeoutError:
+            print("LIDAR not recieved")
 
-    try:
-        cam_returned = cam_out_queue.get(timeout = .01)
-        if len(cam_returned) == 3:
-            camera_recieved = True
-    except TimeoutError:
-        print("Cam not recieved")
-    
-    if lidar_recieved and camera_recieved:
-        localization = lidar_returned[0]
-        lidarcoordinates = lidar_returned[1]
-        lidartimestamp = lidar_returned[2]
-        camcoordinates = cam_returned[0]
-        camtimestamp = cam_returned[1]
-        # TODO: check the timestamps are close
+        try:
+            cam_returned = cam_out_queue.get(timeout = .01)
+            if len(cam_returned) == 3:
+                camera_recieved = True
+        except TimeoutError:
+            print("Cam not recieved")
+        
+        if lidar_recieved and camera_recieved:
+            localization = lidar_returned[0]
+            lidarcoordinates = lidar_returned[1]
+            lidartimestamp = lidar_returned[2]
+            camcoordinates = cam_returned[0]
+            camtimestamp = cam_returned[1]
+            # TODO: check the timestamps are close
 
-        # Fusion
-        fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
-        fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
-        results = fusion.fuseDetectionFrame(1, planner)
+            # Fusion
+            fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
+            fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
+            results = fusion.fuseDetectionFrame(1, planner)
 
-        # Message the RSU, for now we must do this before our control loop
-        # as the RSU has the traffic light state information
-        objectPackage = {
-            "lidar_t": lidartimestamp,
-            "lidar_obj": lidarcoordinates,
-            "cam_t": camtimestamp,
-            "cam_obj": camcoordinates,
-            "fused_t": time.time(),
-            "fused_obj": results
-        }
+            # Message the RSU, for now we must do this before our control loop
+            # as the RSU has the traffic light state information
+            objectPackage = {
+                "lidar_t": lidartimestamp,
+                "lidar_obj": lidarcoordinates,
+                "cam_t": camtimestamp,
+                "cam_obj": camcoordinates,
+                "fused_t": time.time(),
+                "fused_obj": results
+            }
 
-        comm_q.put(
-            [localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
-                objectPackage])
+            comm_q.put(
+                [localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
+                    objectPackage])
 
-        if response["error"] != 0:
-            # Cut the engine to make sure that we don't hit anything since the central controller is down
-            egoVehicle.emergencyStop()
-            # Log this to a file
-            # with open("timing.txt", 'a') as file1:
-            #     file1.write(None, start)
-            #     index += 1
+            # This should not take lon gbut we will delay just a bit
+            time.sleep(.01)
+
+            if response["error"] != 0:
+                # Cut the engine to make sure that we don't hit anything since the central controller is down
+                egoVehicle.emergencyStop()
+                # Log this to a file
+                # with open("timing.txt", 'a') as file1:
+                #     file1.write(None, start)
+                #     index += 1
+            else:
+                # Update our various pieces
+                planner.targetVelocityGeneral = float(response["v_t"])
+                planner.update_localization([localization[0], localization[1], localization[2]])
+                planner.recieve_coordinate_group_commands(response["tfl_state"])
+                planner.pure_pursuit_control()
+
+                # Now update our current PID with respect to other vehicles
+                planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
+                # We can't update the PID controls until after all positions are known
+                planner.update_pid()
+
+                # Finally, issue the commands to the motors
+                steering_ppm, motor_pid = planner.return_command_package()
+                egoVehicle.setControlMotors(steering_ppm, motor_pid)
+
+                # with open("timing.txt", 'a') as file1:
+                #     file1.write(lidarDevice.localizationIdx, time.time())
+                #     index += 1
+                # if debug:
+                #     plt.cla()
+                #     # Create plot for lidar and camera points
+                #     for i, data in enumerate(lidarcoordinates[:]):
+                #         plt.plot(data[1], data[2], 'go')
+                #         plt.annotate(data[0], (data[1], data[2]))
+                #     for i, data in enumerate(camcoordinates):
+                #         plt.plot(data[1], data[2], 'ro')
+                #         plt.annotate(data[0], (data[1], data[2]))
+                #     plt.title("Sensors")
+                #     plt.pause(0.001)
+            print(" Time taken: ", time.time() - lidartimestamp, time.time())
         else:
-            # Update our various pieces
-            planner.targetVelocityGeneral = float(response["v_t"])
-            planner.update_localization([localization[0], localization[1], localization[2]])
-            planner.recieve_coordinate_group_commands(response["tfl_state"])
-            planner.pure_pursuit_control()
-
-            # Now update our current PID with respect to other vehicles
-            planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
-            # We can't update the PID controls until after all positions are known
-            planner.update_pid()
-
-            # Finally, issue the commands to the motors
-            steering_ppm, motor_pid = planner.return_command_package()
-            egoVehicle.setControlMotors(steering_ppm, motor_pid)
-
-            # with open("timing.txt", 'a') as file1:
-            #     file1.write(lidarDevice.localizationIdx, time.time())
-            #     index += 1
-            # if debug:
-            #     plt.cla()
-            #     # Create plot for lidar and camera points
-            #     for i, data in enumerate(lidarcoordinates[:]):
-            #         plt.plot(data[1], data[2], 'go')
-            #         plt.annotate(data[0], (data[1], data[2]))
-            #     for i, data in enumerate(camcoordinates):
-            #         plt.plot(data[1], data[2], 'ro')
-            #         plt.annotate(data[0], (data[1], data[2]))
-            #     plt.title("Sensors")
-            #     plt.pause(0.001)
-        print(" Time taken: ", time.time() - lidartimestamp, time.time())
-    else:
-        print(" Error, no camera/lidar frame returned ")
-        # Cut the engine to make sure that we don't hit anything since we are blind
-        egoVehicle.emergencyStop()
+            print(" Error, no camera/lidar frame returned ")
+            # Cut the engine to make sure that we don't hit anything since we are blind
+            egoVehicle.emergencyStop()
 
 egoVehicle.emergencyStop()
 

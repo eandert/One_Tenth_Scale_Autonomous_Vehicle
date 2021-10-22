@@ -140,40 +140,41 @@ class ResizableKalman:
             self.U_t = 0
 
     def addFrames(self, measurement_list):
-        try:
-            # Rebuild the lists every time because measurements come and go
-            self.localTrackersCovarainceList = []
-            self.localTrackersMeasurementList = []
-            self.localTrackersHList= []
-            # Check if there are more sensors in the area that have not been added
-            for match in measurement_list:
-                measurment_index = binarySearch(self.localTrackersIDList, match.id)
-                if measurment_index < 0:
-                    # This is not in the tracked list, needs to be added
-                    self.addTracker(match.id)
-                
-                # All should be in the tracked list now, continue building the lists
-                # Add the current covariance to the R matrix
-                cov = np.array([[match.covariance[0][0], match.covariance[0][1], 0., 0.],
-                         [match.covariance[1][0], match.covariance[1][1], 0., 0.],
-                         [0., 0, match.velocity_confidence[0][0], match.velocity_confidence[0][1]],
-                         [0., 0, match.velocity_confidence[1][0], match.velocity_confidence[1][1]]], dtype = 'float')
-                self.localTrackersCovarainceList.append(cov)
+        # try:
+        # Rebuild the lists every time because measurements come and go
+        self.localTrackersCovarainceList = []
+        self.localTrackersMeasurementList = []
+        self.localTrackersHList= []
+        # Check if there are more sensors in the area that have not been added
+        for match in measurement_list:
+            measurment_index = binarySearch(self.localTrackersIDList, match.id)
+            if measurment_index < 0:
+                # This is not in the tracked list, needs to be added
+                self.addTracker(match.id)
+            
+            # All should be in the tracked list now, continue building the lists
+            # Add the current covariance to the R matrix
+            cov = match.covariance
+            # cov = np.array([[match.covariance[0][0], match.covariance[0][1], 0., 0.],
+            #             [match.covariance[1][0], match.covariance[1][1], 0., 0.],
+            #             [0., 0, match.velocity_confidence[0][0], match.velocity_confidence[0][1]],
+            #             [0., 0, match.velocity_confidence[1][0], match.velocity_confidence[1][1]]], dtype = 'float')
+            self.localTrackersCovarainceList.append(cov)
 
-                # Add the current measurments to the measurement matrix
-                if self.fusion_mode == 2:
-                    self.localTrackersMeasurementList.append(np.array([match.x, match.y, math.hypot(match.dx, match.dy), math.atan2(match.dy, match.dx)]))
-                else:
-                    self.localTrackersMeasurementList.append(np.array([match.x, match.y, match.dx, match.dy]))
+            # Add the current measurments to the measurement matrix
+            if self.fusion_mode == 2:
+                self.localTrackersMeasurementList.append(np.array([match.x, match.y]))#, math.hypot(match.dx, match.dy), math.atan2(match.dy, match.dx)]))
+            else:
+                self.localTrackersMeasurementList.append(np.array([match.x, match.y]))#, match.dx, match.dy]))
 
-                # The H matrix is different for radar (type 1), the rest are type 0
-                self.localTrackersHList.append(0)
+            # The H matrix is different for radar (type 1), the rest are type 0
+            self.localTrackersHList.append(0)
 
-                # Mark this measurements as having been used recently
-                self.localTrackersTimeAliveList.append(self.lastTracked)
+            # Mark this measurements as having been used recently
+            self.localTrackersTimeAliveList.append(self.lastTracked)
 
-        except Exception as e:
-            print ( " Exception: " + str(e) )
+        # except Exception as e:
+        #     print ( " Exception: " + str(e) )
 
     def addTracker(self, id):
         # Make sure we have something, if not create the array here
@@ -207,19 +208,28 @@ class ResizableKalman:
         if h_t_type == 0:
             if self.fusion_mode == 0:
                 return np.array([[1, 0., 0., 0.],
-                                [0., 1, 0., 0.],
-                                [0., 0, 1., 0.],
-                                [0., 0, 0., 1.]], dtype = 'float')
+                                [0., 1, 0., 0.]], dtype = 'float')
             elif self.fusion_mode == 1:
                 return np.array([[1, 0., 0., 0., 0., 0.],
-                                [0., 1, 0., 0., 0., 0.],
-                                [0., 0, 1., 0., 0., 0.],
-                                [0., 0, 0., 1., 0., 0.]], dtype = 'float')
+                                [0., 1, 0., 0., 0., 0.]], dtype = 'float')
             elif self.fusion_mode == 2:
                 return np.array([[1, 0., 0., 0., 0.],
-                                [0., 1, 0., 0., 0.],
-                                [0, 0., 1., 0., 0.],
-                                [0, 0., 0., 1., 0.]], dtype = 'float')
+                                [0., 1, 0., 0., 0.]], dtype = 'float')
+            # if self.fusion_mode == 0:
+            #     return np.array([[1, 0., 0., 0.],
+            #                     [0., 1, 0., 0.],
+            #                     [0., 0, 1., 0.],
+            #                     [0., 0, 0., 1.]], dtype = 'float')
+            # elif self.fusion_mode == 1:
+            #     return np.array([[1, 0., 0., 0., 0., 0.],
+            #                     [0., 1, 0., 0., 0., 0.],
+            #                     [0., 0, 1., 0., 0., 0.],
+            #                     [0., 0, 0., 1., 0., 0.]], dtype = 'float')
+            # elif self.fusion_mode == 2:
+            #     return np.array([[1, 0., 0., 0., 0.],
+            #                     [0., 1, 0., 0., 0.],
+            #                     [0, 0., 1., 0., 0.],
+            #                     [0, 0., 0., 1., 0.]], dtype = 'float')
         else:
             # TODO: implement radar type
             return np.array([[0, 0., 0., 0.],
@@ -350,25 +360,17 @@ class ResizableKalman:
                 self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 if len(self.localTrackersMeasurementList) == 0:
-                    nothing_cov = np.array([[1.0, 0., 0., 0.],
-                                            [0., 1.0, 0., 0.],
-                                            [0., 0., 1.0, 0.],
-                                            [0., 0., 0., 1.0]], dtype = 'float')
-                    measure = np.array([.0, .0, .0, .0], dtype = 'float')
+                    nothing_cov = np.array([[1.0, 0.],
+                                            [0., 1.0]], dtype = 'float')
+                    measure = np.array([.0, .0], dtype = 'float')
                     if self.fusion_mode == 0:
                         nothing_Ht = np.array([[0, 0., 0., 0.],
-                                              [0., 0, 0., 0.],
-                                              [0., 0, 0., 0.],
                                               [0., 0, 0., 0.]], dtype = 'float')
                     elif self.fusion_mode == 1:
                         nothing_Ht = np.array([[0, 0., 0., 0., 0., 0.],
-                                              [0., 0, 0., 0., 0., 0.],
-                                              [0., 0, 0., 0., 0., 0.],
-                                              [0., 0, 0., 0., 0., 0.]], dtype = 'float')
+                                              [0., 0., 0., 0., 0., 0.]], dtype = 'float')
                     elif self.fusion_mode == 2:
                         nothing_Ht = np.array([[0, 0., 0., 0., 0.],
-                                              [0., 0, 0., 0., 0.],
-                                              [0., 0, 0., 0., 0.],
                                               [0., 0, 0., 0., 0.]], dtype = 'float')
 
                     Z_t = (measure).transpose()
@@ -742,21 +744,20 @@ class GlobalFUSION:
                                 # Arbitrary tie break towards earlier in the list
                                 if check0 > check1:
                                     if self.trackedList[match[0]].fusion_steps >= self.trackShowThreshold:
-                                        remove.append(match[1])
+                                        bisect.insort(remove, match[1])
                                 elif check0 < check1:
                                     if self.trackedList[match[1]].fusion_steps >= self.trackShowThreshold:
-                                        remove.append(match[0])
+                                        bisect.insort(remove, match[0])
                                 else:
                                     check0 = self.trackedList[match[0]].fusion_steps
                                     check1 = self.trackedList[match[1]].fusion_steps  
                                     if check0 >= check1:
                                         if check0 >= self.trackShowThreshold:
-                                            remove.append(match[1])
+                                            bisect.insort(remove, match[1])
                                     else:
                                         if check1 >= self.trackShowThreshold:
-                                            remove.append(match[0])
-                                        
-
+                                            bisect.insort(remove, match[0])
+                      
         for delete in reversed(remove):
             print( "Cleaning track ", delete)
             self.trackedList.pop(delete)

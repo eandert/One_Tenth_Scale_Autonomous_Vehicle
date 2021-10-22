@@ -21,62 +21,51 @@ class RSU():
         self.vehiclesLock.acquire()
 
         # Lets create some simulation vehicles, this would be done automatically as vehicles are added if this is not a simulation
-        if isSimulation:
-            newvehicle1 = vehicle_planning.Planner()
-            newvehicle1.initialVehicleAtPosition(
-                (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
-                0,
-                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 0, True)
+        newvehicle1 = vehicle_planning.Planner()
+        newvehicle1.initialVehicleAtPosition(
+            (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
+            0,
+            mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 0, isSimulation)
 
-            newvehicle2 = vehicle_planning.Planner()
-            newvehicle2.initialVehicleAtPosition(0, (
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-                                                 270,
-                                                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
-                                                 True)
+        newvehicle2 = vehicle_planning.Planner()
+        newvehicle2.initialVehicleAtPosition(0, (
+                (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+                                                270,
+                                                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
+                                                isSimulation)
 
-            newvehicle3 = vehicle_planning.Planner()
-            newvehicle3.initialVehicleAtPosition(
-                2.0 * (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 
-                0,
-                0,
-                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, True)
+        newvehicle3 = vehicle_planning.Planner()
+        newvehicle3.initialVehicleAtPosition(
+            2.0 * (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 
+            0,
+            0,
+            mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, isSimulation)
 
-            newvehicle4 = vehicle_planning.Planner()
-            newvehicle4.initialVehicleAtPosition(0, 2.0 * (
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-                                                 270,
-                                                 mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
-                                                 True)
+        newvehicle4 = vehicle_planning.Planner()
+        newvehicle4.initialVehicleAtPosition(0, 2.0 * (
+                (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
+                                                270,
+                                                mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
+                                                isSimulation)
 
-            newSensor = cam_planning.Planner()
-            newSensor.initialVehicleAtPosition(
-                (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 100) / mapSpecs.meters_to_print_scale, (
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale,
-                -45, 2, True)
+        newSensor = cam_planning.Planner()
+        newSensor.initialVehicleAtPosition(
+            (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 100) / mapSpecs.meters_to_print_scale, (
+                (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale,
+            -45, 2, isSimulation)
 
-            newSensor2 = cam_planning.Planner()
-            newSensor2.initialVehicleAtPosition(
-                (+ (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale, -(
-                    (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale,
-                -45 + 180, 2, True)
+        newSensor2 = cam_planning.Planner()
+        newSensor2.initialVehicleAtPosition(
+            (+ (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale, -(
+                (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale,
+            -45 + 180, 2, isSimulation)
 
-            self.vehicles[0] = newvehicle1
-            self.vehicles[1] = newvehicle2
-            self.vehicles[2] = newvehicle3
-            self.vehicles[3] = newvehicle4
-            self.sensors[0] = newSensor
-            self.sensors[1] = newSensor2
-
-            # print("Pos veh 0: ", (- (
-            #             mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
-            #       0, 0)
-            # print("Pos veh 1: ", 2*(- (
-            #             mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale,
-            #       0, 0)
-            # print("Pos sens 0: ", (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, (
-            #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-            #     -45)
+        self.vehicles[0] = newvehicle1
+        #self.vehicles[1] = newvehicle2
+        #self.vehicles[2] = newvehicle3
+        #self.vehicles[3] = newvehicle4
+        #self.sensors[0] = newSensor
+        #self.sensors[1] = newSensor2
 
         self.vehiclesLock.release()
 
@@ -320,7 +309,7 @@ q = Queue()
 # Start up the Flask back end processor as it's own thread
 t2 = Thread(target=BackendProcessor, args=(q, vehicles, sensors, trafficLightArray))
 t2.daemon = True
-t2.start()
+t2.start() 
 
 # Startup the web service
 communication.flask_app.config['RSUClass'] = sim
