@@ -35,8 +35,8 @@ class connectServer:
     # SEND: pk_CAV
     def __init__(self):
         self.key = secrets.token_urlsafe(32)
-        self.rsu_ip_address = 'http://192.168.100.198:5000'
-        #self.rsu_ip_address = 'http://192.168.1.162:5000'
+        #self.rsu_ip_address = 'http://192.168.100.198:5000'
+        self.rsu_ip_address = 'http://192.168.0.103:5000'
 
     def register(self, vehicle_id, x, y, z, roll, pitch, yaw):
         # data to be sent to api 
@@ -82,7 +82,7 @@ class connectServer:
   
         try:
             # sending post request
-            r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = .01)
+            r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = 1)
             # extracting response text
             response = r.json()
 

@@ -4,8 +4,8 @@ from numpy.testing._private.utils import measure
 from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
-from filterpy.kalman import UnscentedKalmanFilter as UKF
-from filterpy.kalman import MerweScaledSigmaPoints
+#from filterpy.kalman import UnscentedKalmanFilter as UKF
+#from filterpy.kalman import MerweScaledSigmaPoints
 #from stonesoup.types.track import Track
 
 import shared_math

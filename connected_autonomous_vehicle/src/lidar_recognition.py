@@ -387,13 +387,7 @@ class LIDAR:
         result = []
         for track in self.trackedList:
             if track.lastHistory >= 5:
-                # Create the error component of the lidar detection
-                relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
-                    vehicle_x, vehicle_y, vehicle_theta, track.x, track.y)
-                success, expected_error_gaussian, actual_sim_error = lidar_sensor.calculateErrorGaussian(
-                    relative_angle_to_detector, target_line_angle, relative_distance, True)
-                # track.id, track.x, track.y, track.crossSection, track.velocity, "L", expected_error_gaussian
-                result.append([track.x, track.y, expected_error_gaussian])
+                result.append([track.x, track.y])
 
         return result, timestamp
 

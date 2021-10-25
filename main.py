@@ -64,7 +64,7 @@ class RSU():
         #self.vehicles[1] = newvehicle2
         #self.vehicles[2] = newvehicle3
         #self.vehicles[3] = newvehicle4
-        #self.sensors[0] = newSensor
+        self.sensors[0] = newSensor
         #self.sensors[1] = newSensor2
 
         self.vehiclesLock.release()
@@ -75,7 +75,7 @@ class RSU():
             if id in self.vehicles:
                 print ( " Warning: Vehicle ID already in use!")
 
-            # TODO: replace this with somethign better, this is the init funciton that arbitrarily locates the vehicles at positions
+            # TODO: replace this with something better, this is the init funciton that arbitrarily locates the vehicles at positions
             # and if the vehicle is not at the correct location this will not work
             if id == 0:
                 init_x = ( - (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale
@@ -93,7 +93,7 @@ class RSU():
             self.vehicles[id].key = key
 
             # Now init the vehicle at a location
-            self.vehicles[id].update_localization(x, y, yaw, 0.0)
+            self.vehicles[id].update_localization([x, y, yaw, 0.0])
             self.vehicles[id].recieve_coordinate_group_commands(self.trafficLightArray)
 
             # We update this just for the visualizer
@@ -102,10 +102,11 @@ class RSU():
             # Get the last known location of all other vehicles
             vehicleList = []
             for idx, vehicle in self.vehicles.items():
-                vehicleList.append(vehicle.get_location())
+                if idx != id:
+                    vehicleList.append(vehicle.get_location())
 
             # Now update our current PID with respect to other vehicles
-            self.vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList, id)
+            self.vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList)
 
             # We can't update the PID controls until after all positions are known
             # We still do this here just for debugging as it should match the PID controls
@@ -149,7 +150,7 @@ class RSU():
             self.sensors[id].key = key
 
             # Now init the vehicle at a location
-            self.sensors[id].update_localization(x, y, yaw, 0.0)
+            self.sensors[id].update_localization([x, y, yaw, 0.0])
 
             # Finally we can create the return messages
             registerResponse = dict(
@@ -172,42 +173,42 @@ class RSU():
     def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
         if type == 0:
             # Double check our security, this is pretty naive at this point
-            if self.vehicles[id].key == key:
-                # TODO: possibly do these calculation after responding to increase response time
+            #if self.vehicles[id].key == key:
+            # TODO: possibly do these calculation after responding to increase response time
 
-                # Calculate our velocity using our last position
-                velocity = self.calc_velocity(self.vehicles[id].localizationPositionX, self.vehicles[id].localizationPositionY, x, y, yaw)
+            # Calculate our velocity using our last position
+            velocity = self.calc_velocity(self.vehicles[id].localizationPositionX, self.vehicles[id].localizationPositionY, x, y, yaw)
 
-                # Update ourself
-                self.vehicles[id].update_localization(x, y, yaw, velocity)
-                #self.vehicles[vehicle_id].recieve_coordinate_group_commands(trafficLightArray)
+            # Update ourself
+            self.vehicles[id].update_localization([x, y, yaw, velocity])
+            #self.vehicles[vehicle_id].recieve_coordinate_group_commands(trafficLightArray)
 
-                # Get the last known location of all other vehicles
-                vehicleList = []
-                for idx, vehicle in self.vehicles.items():
-                    vehicleList.append(vehicle.get_location())
+            # Get the last known location of all other vehicles
+            vehicleList = []
+            for idx, vehicle in self.vehicles.items():
+                vehicleList.append(vehicle.get_location())
 
-                # Finally we can create the return messages
-                registerResponse = dict(
-                    v_t=self.vehicles[id].targetVelocity,
-                    tfl_state=self.trafficLightArray,
-                    veh_locations=vehicleList,
-                    timestep=time.time()
-                )
+            # Finally we can create the return messages
+            registerResponse = dict(
+                v_t=self.vehicles[id].targetVelocity,
+                tfl_state=self.trafficLightArray,
+                veh_locations=vehicleList,
+                timestep=time.time()
+            )
 
-                # Finally we can create the return message
-                return registerResponse
+            # Finally we can create the return message
+            return registerResponse
         elif type == 1:
             # Double check our security, this is pretty naive at this point
-            if self.sensors[id].key == key:
-                # Finally we can create the return messages
-                registerResponse = dict(
-                    tfl_state=self.trafficLightArray,
-                    timestep=time.time()
-                )
+            #if self.sensors[id].key == key:
+            # Finally we can create the return messages
+            registerResponse = dict(
+                tfl_state=self.trafficLightArray,
+                timestep=time.time()
+            )
 
-                # Finally we can create the return message
-                return registerResponse
+            # Finally we can create the return message
+            return registerResponse
 
     def calc_velocity(self, x1, y1, x2, y2, theta):
         velocity = math.hypot(x2 - x1, y2 - y1) * (1/8)
@@ -254,10 +255,11 @@ def BackendProcessor(q, vehicles, sensors, trafficLightArray):
                 # Get the last known location of all other vehicles
                 vehicleList = []
                 for idx, vehicle in vehicles.items():
-                    vehicleList.append(vehicle.get_location())
+                    if idx != id:
+                        vehicleList.append(vehicle.get_location())
 
                 # Now update our current PID with respect to other vehicles
-                vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList, id)
+                vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList)
 
                 # We can't update the PID controls until after all positions are known
                 # We still do this here just for debugging as it should match the PID controls
@@ -283,8 +285,8 @@ def main(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test
 
 #for each in range(9):
 # Unit test stuff
-simulation = True
-unit_test = True
+simulation = False
+unit_test = False
 
 # Setup the thread lock
 vehiclesLock = Lock()
@@ -314,4 +316,4 @@ t2.start()
 # Startup the web service
 communication.flask_app.config['RSUClass'] = sim
 communication.flask_app.config['RSUQueue'] = q
-communication.flask_app.run(host="localhost") #host='192.168.0.103')
+communication.flask_app.run(host='192.168.0.103') #localhost

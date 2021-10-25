@@ -7,12 +7,12 @@ import lidar_recognition
 import planning_control
 import communication
 import motors
-import local_fusion
+#import local_fusion
 
 pipeFromC = "/home/jetson/Projects/slamware/fifo_queues/fifopipefromc"
 pipeToC = "/home/jetson/Projects/slamware/fifo_queues/fifopipetoc"
 
-vehicle_id = 1
+vehicle_id = 0
 dump_to_file = False
 
 
@@ -23,23 +23,28 @@ def sourceImagesThread(out_queue, settings, camSpecs, start_time, interval):
     # Sleep until test start time
     wait_until_start = start_time - time.time() - .01
     if wait_until_start > 0:
-        time.sleep(start_time)
+        time.sleep(wait_until_start)
 
     # Now wait and ask for input
     while 1:
         if (round(time.time(),3) % interval) == 0.000:
+            #print( "camera")
             now = time.time()
 
             # Take the camera frame and process
             camcoordinates, camtimestamp_start, camtimestamp_end = cameraRecognition.takeCameraFrame()
+            print ( "CAM got " + str(time.time()))
 
             # Prep value to be sent to the part of the program
+	    # Clear the queue of old data
+            while not out_queue.empty():
+                out_queue.get()
             out_queue.put([camcoordinates, camtimestamp_start, now])
 
             # Sleep to reduce busy wait
-            wait_until_next = round(time.time(),3) % interval - .001
-            if wait_until_next > 0:
-                time.sleep(wait_until_next)
+            #wait_until_next = round(time.time(),3) % interval - .001
+            #if wait_until_next > 0:
+            #    time.sleep(wait_until_next)
 
 
 def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, start_time, interval):
@@ -66,7 +71,7 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, start_time, in
     # Sleep until test start time
     wait_until_start = start_time - time.time() - .01
     if wait_until_start > 0:
-        time.sleep(start_time)
+        time.sleep(wait_until_start)
 
     # Now wait for input
     while 1:
@@ -74,7 +79,7 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, start_time, in
             # Take the LIDAR frame and process
             #print ( "LIDAR start " + str(time.time()))
             start, end = lidarDevice.getFromC()
-            #print ( "LIDAR got " + str(time.time()))
+            print ( "LIDAR got " + str(time.time()))
 
             lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(),
                                                                                   start,
@@ -86,15 +91,18 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, start_time, in
             #print ( "LIDAR detect " + str(time.time()))
 
             # Send the localization and coordinate results to the fusion function
+	    # Clear the queue of old data
+            while not out_queue.empty():
+                out_queue.get()
             out_queue.put([localization, lidarcoordinates, lidartimestamp])
 
             # Log this to a file
             index += 1
 
             # Sleep to reduce busy wait
-            wait_until_next = round(time.time(), 3) % interval - .001
-            if wait_until_next > 0:
-                time.sleep(wait_until_next)
+            #wait_until_next = round(time.time(), 3) % interval - .001
+            #if wait_until_next > 0:
+            #    time.sleep(wait_until_next)
 
 
 def processCommunicationsThread(comm_q, v_id, init, response):
@@ -109,8 +117,6 @@ def processCommunicationsThread(comm_q, v_id, init, response):
     init["route_x"] = init_returned["route_x"]
     init["route_y"] = init_returned["route_y"]
     init["route_TFL"] = init_returned["route_TFL"]
-    init["start_time"] = init_returned["start_time"]
-    init["interval"] = init_returned["interval"]
 
     # Fails keeps track of how many tries to connect with the RSU
     fails = 0
@@ -161,8 +167,9 @@ camSpecs.cameraHeight = .2
 camSpecs.cameraAdjustmentAngle = 0.0
 
 # Set up the timing
-start_time = time.time() + 2
+start_time = time.time() + 10.0
 interval = 0.125
+interval_offset = 0.000
 fallthrough_delay = 0.100
 
 # Initialize the planner
@@ -175,7 +182,7 @@ cameraThread.start()
 
 # Wait to make sure that we have started YOLO
 lidar_out_queue = Queue()
-cameraThread = Process(target=sourceImagesThread, args=(lidar_out_queue, pipeFromC, pipeToC, planner.lidarSensor, start_time, interval))
+cameraThread = Process(target=sourceLIDARThread, args=(lidar_out_queue, pipeFromC, pipeToC, planner.lidarSensor, start_time, interval))
 cameraThread.start()
 
 # Spawn the communication thread
@@ -196,33 +203,35 @@ planner.initialVehicleAtPosition(init["t_x"], init["t_y"], init["t_yaw"], init["
                                  init["route_TFL"], vehicle_id, False)
 
 # Start the sensor fusion pipeline
-fusion = local_fusion.FUSION(0, vehicle_id)
+#fusion = local_fusion.FUSION(0, vehicle_id)
 
 # Sleep until test start time
+print( time.time(), start_time )
 wait_until_start = start_time - time.time() - .01
 if wait_until_start > 0:
-    time.sleep(start_time)
+    time.sleep(wait_until_start)
+
+next_time = start_time + interval_offset
 
 while True:
-    if (round(time.time(),3) % interval) == 0.000:
+    if time.time() > next_time:
         # Now get the result from the LIDAR
         lidar_recieved = False
         camera_recieved = False
 
-        # Get the camera
-        try:
-            lidar_returned = lidar_out_queue.get(timeout = fallthrough_delay - .01)
-            if len(lidar_returned) == 3:
+        fallthrough = time.time() + fallthrough_delay
+        while(time.time() < fallthrough and not (lidar_recieved and camera_recieved)):
+            # Get the lidar
+            if not lidar_out_queue.empty():
+                lidar_returned = lidar_out_queue.get()
+                #print( " Got LIDAR " )
                 lidar_recieved = True
-        except TimeoutError:
-            print("LIDAR not recieved")
 
-        try:
-            cam_returned = cam_out_queue.get(timeout = .01)
-            if len(cam_returned) == 3:
+            # Get the camera
+            if not cam_out_queue.empty():
+                cam_returned = cam_out_queue.get()
+                #print( " Got camera " )
                 camera_recieved = True
-        except TimeoutError:
-            print("Cam not recieved")
         
         if lidar_recieved and camera_recieved:
             localization = lidar_returned[0]
@@ -233,9 +242,10 @@ while True:
             # TODO: check the timestamps are close
 
             # Fusion
-            fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
-            fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
-            results = fusion.fuseDetectionFrame(1, planner)
+            results = []
+            #fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
+            #fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
+            #results = fusion.fuseDetectionFrame(1, planner)
 
             # Message the RSU, for now we must do this before our control loop
             # as the RSU has the traffic light state information
@@ -292,11 +302,18 @@ while True:
                 #         plt.annotate(data[0], (data[1], data[2]))
                 #     plt.title("Sensors")
                 #     plt.pause(0.001)
-            print(" Time taken: ", time.time() - lidartimestamp, time.time())
+            print(" Time taken: ", time.time() - lidartimestamp, time.time() - camtimestamp, time.time())
         else:
-            print(" Error, no camera/lidar frame returned ")
+            print(" Error, no camera/lidar frame returned ", lidar_recieved, camera_recieved)
             # Cut the engine to make sure that we don't hit anything since we are blind
             egoVehicle.emergencyStop()
+
+        last_next_time = next_time
+        while next_time <= time.time():
+            next_time = last_next_time + interval
+            last_next_time = next_time
+
+        #time.sleep(last_next_time - .01)
 
 egoVehicle.emergencyStop()
 
