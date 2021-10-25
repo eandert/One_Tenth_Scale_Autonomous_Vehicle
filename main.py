@@ -61,7 +61,7 @@ class RSU():
             -45 + 180, 2, isSimulation)
 
         self.vehicles[0] = newvehicle1
-        #self.vehicles[1] = newvehicle2
+        self.vehicles[1] = newvehicle2
         #self.vehicles[2] = newvehicle3
         #self.vehicles[3] = newvehicle4
         self.sensors[0] = newSensor
@@ -285,7 +285,7 @@ def main(mapSpecs, vehiclesLock, vehicles, sensors, trafficLightArray, unit_test
 
 #for each in range(9):
 # Unit test stuff
-simulation = False
+simulation = True
 unit_test = False
 
 # Setup the thread lock
@@ -316,4 +316,4 @@ t2.start()
 # Startup the web service
 communication.flask_app.config['RSUClass'] = sim
 communication.flask_app.config['RSUQueue'] = q
-communication.flask_app.run(host='192.168.0.103') #localhost
+communication.flask_app.run(host='localhost')#'192.168.0.103') #localhost
