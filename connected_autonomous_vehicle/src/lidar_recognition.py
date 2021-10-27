@@ -4,7 +4,7 @@ from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 
-import shared_math
+from shared_library import shared_math
 
 
 '''This object tracks a single object that has been detected in a LIDAR frame.

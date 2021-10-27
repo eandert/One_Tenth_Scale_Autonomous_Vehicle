@@ -5,9 +5,9 @@ import math
 a simple figure 8 intersection and this is done using some parameters. Later this 
 class will be ammended to work with SUMO and allow more complex maps to be generated. '''
 class MapSpecs():
-    def __init__(self, map=0):
+    def __init__(self, map=0, map_length=1.0):
         # Intersection Params
-        self.intersectionStraightLength = 1.0
+        self.intersectionStraightLength = map_length
         self.intersectionWidth = .5
         self.centerX = 500
         self.centerY = 500

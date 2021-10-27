@@ -2,9 +2,10 @@ import time
 import math
 import sys
 
-from road_side_unit.src import rsu
+import rsu
 
 # Import our config file
+sys.path.append("../../../")
 import config
 
 #global mainWin
@@ -24,5 +25,3 @@ sim = rsu.RSU(config)
 while(True):
     time.sleep(.1)
     print ( "sleep" )
-
-sys.exit()

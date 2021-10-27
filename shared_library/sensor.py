@@ -4,7 +4,7 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from shapely.geometry.linestring import LineString
 
-import shared_math
+from shared_library import shared_math
 
 
 class BivariateGaussian:

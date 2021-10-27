@@ -1,4 +1,5 @@
 import math
+import sys
 import numpy as np
 from simple_pid import PID
 from shapely.geometry import Point
@@ -7,8 +8,8 @@ from shapely.geometry.linestring import LineString
 
 
 # Global imports
-import sensor
-import shared_math
+sys.path.append("../../../")
+from shared_library import sensor, shared_math
 
 
 ''' This class contains the parameters of a RC car platform like wheelbase, etc. as

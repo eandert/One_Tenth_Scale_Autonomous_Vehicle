@@ -78,6 +78,26 @@ RSUVehicleRegisterResponse = app.model('RSUVehicleRegisterResponse', {
                                                         example=1.01)
 })
 
+RSUVehicleGetSimPositions = app.model('RSUVehicleGetSimPositions', {
+                                'veh_locations': fields.Float(required=True,
+                                                        description="Lets us set velocity target from the app, 0 Simulation is paused.",
+                                                        example=0.1,
+                                                        help="Target velocity cannot be blank.")
+})
+
+RSUVehicleGetSimTime = app.model('RSUVehicleGetSimTime', {
+                                'time': fields.Float(required=True,
+                                                        description="Simulation time",
+                                                        example=0.1,
+                                                        help="Time cannot be blank.")
+})
+
+RSUVehicleSendSimPosition = app.model('RSUVehicleSendSimPosition', {
+                                'returned': fields.Boolean(required=True,
+                                                        description="Returned",
+                                                        example=True,
+                                                        help="Returned cannot be blank.")
+})
 
 @name_space.route("/register/", methods=['GET'])
 class MainClass(Resource):
@@ -165,5 +185,86 @@ class MainClass(Resource):
                 return jsonify(
                     returnObject
                 )
+        except Exception as e:
+            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+
+@name_space.route("/getsimpositions/", methods=['GET'])
+class MainClass(Resource):
+
+    @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
+             params={})
+    @app.doc(description="This method is called during simulation to get the locations of other vehicels within the simulation..")
+    @app.response(200, 'Success', RSUVehicleGetSimPositions)
+    def get(self):
+        #print("got request")
+        #print(request.is_json)
+        request_data = request.get_json()
+        try:
+            #print("data:", request_data)
+            if request_data:
+                key = request_data['key']
+                id = int(request_data['id'])
+                type = int(request_data['type'])
+
+                returnObject = flask_app.config['RSUClass'].getSimPositions(key, id, type)
+
+                return jsonify(
+                    returnObject
+                )
+        except Exception as e:
+            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+
+@name_space.route("/getsimtime/", methods=['GET'])
+class MainClass(Resource):
+
+    @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
+             params={})
+    @app.doc(description="This method is called during simulation to get the locations of other vehicels within the simulation..")
+    @app.response(200, 'Success', RSUVehicleGetSimTime)
+    def get(self):
+        #print("got request")
+        #print(request.is_json)
+        try:
+            returnObject = flask_app.config['RSUClass'].getSimTime()
+
+            return jsonify(
+                returnObject
+            )
+        except Exception as e:
+            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+
+@name_space.route("/sendsimposition/", methods=['GET'])
+class MainClass(Resource):
+
+    @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'},
+             params={})
+    @app.doc(description="This method is called during simulation to get the locations of other vehicels within the simulation.")
+    @app.response(200, 'Success', RSUVehicleSendSimPosition)
+    def get(self):
+        time1 = time.time()
+        #print("got request")
+        #print(request.is_json)
+        request_data = request.get_json()
+        try:
+            #print("data:", request_data)
+            if request_data:
+                key = request_data['key']
+                id = int(request_data['id'])
+                type = int(request_data['type'])
+                x = float(request_data['x'])
+                y = float(request_data['y'])
+                z = float(request_data['z'])
+                roll = float(request_data['roll'])
+                pitch = float(request_data['pitch'])
+                yaw = float(request_data['yaw'])
+                velocity = request_data['velocity']
+                try:
+                    returnObject = flask_app.config['RSUClass'].sendSimPositions(key, id, type, x, y, z, roll, pitch, yaw, velocity)
+
+                    return jsonify(
+                        returnObject
+                    )
+                except Exception as e:
+                    name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
         except Exception as e:
             name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")

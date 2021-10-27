@@ -1,9 +1,7 @@
 import math
 import numpy as np
 
-import local_fusion
-import shared_math
-import sensor
+from shared_library import sensor
 
 
 ''' This class contains the parameters of a RC car platform like wheelbase, etc. as
