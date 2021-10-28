@@ -157,7 +157,7 @@ class MainClass(Resource):
         #print(request.is_json)
         request_data = request.get_json()
         try:
-            #print("data:", request_data)
+            print("data:", request_data)
             if request_data:
                 key = request_data['key']
                 id = int(request_data['id'])

@@ -32,35 +32,18 @@ class RSU():
             self.sensors[idx] = new_sensor
 
         # Queue to talk with backend processor so fast replies can be made while results are computed
-        q = Queue()
-
-        # Start up the Flask front end processor as it's own thread
-        self.frontend = Thread(target=FlaskProccess, args=(q, self, config.rsu_ip))
-        self.frontend.daemon = True
-        self.frontend.start()
+        self.q = Queue()
 
         # Sleep for a second while we let flask get up and running
         time.sleep(1)
 
         # Start up the Flask back end processor as it's own thread
-        self.backend = Thread(target=BackendProcessor, args=(q, self.vehicles, self.sensors, self.trafficLightArray))
+        self.backend = Thread(target=BackendProcessor, args=(self.q, self.vehicles, self.sensors, self.trafficLightArray))
         self.backend.daemon = True
         self.backend.start()
 
         # Sleep for a second while we let flask get up and running
         time.sleep(1)
-
-        # If this is a simulation, we need to start up the CAVs and CISs as threads
-        if config.simulation:
-            self.sim_time = 0.0
-            self.thread = {}
-            self.continue_blocker = True
-            self.continue_blocker_tracker = []
-            for idx, vehicle in self.vehicles.items():
-                self.thread[idx] = Thread(target=cav.cav, args=(config, ))
-                self.thread[idx].daemon = True
-                self.thread[idx].start()
-                self.continue_blocker_tracker.append(True)
 
         # newvehicle1 = vehicle_planning.Planner()
         # newvehicle1.initialVehicleAtPosition(
@@ -107,6 +90,19 @@ class RSU():
         # #self.vehicles[3] = newvehicle4
         # self.sensors[0] = newSensor
         # #self.sensors[1] = newSensor2
+
+    def initSimulation(self, config):
+         # If this is a simulation, we need to start up the CAVs and CISs as threads
+        if config.simulation:
+            self.sim_time = 0.0
+            self.thread = {}
+            self.continue_blocker = True
+            self.continue_blocker_tracker = []
+            for idx, vehicle in self.vehicles.items():
+                self.thread[idx] = Thread(target=cav.cav, args=(config, ))
+                self.thread[idx].daemon = True
+                self.thread[idx].start()
+                self.continue_blocker_tracker.append(True)
 
     def register(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
         if type == 0:
@@ -279,13 +275,6 @@ class RSU():
         return velocity
 
     #def check_state(self):
-
-
-def FlaskProccess(q, rsu, rsu_ip):
-    # Startup the web service
-    communication.flask_app.config['RSUClass'] = rsu
-    communication.flask_app.config['RSUQueue'] = q
-    communication.flask_app.run(host=rsu_ip, debug = True, use_reloader=False)
 
 
 def BackendProcessor(q, vehicles, sensors, trafficLightArray):
