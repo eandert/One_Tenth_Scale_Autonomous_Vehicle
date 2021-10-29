@@ -518,7 +518,7 @@ class GlobalFUSION:
             track.fusion(estimate_covariance)
             if track.fusion_steps >= self.trackShowThreshold:
                 #print ( track.id, track.x, track.y, track.error_covariance )
-                result.append([track.id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
+                result.append([track.id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
             # Clear the previous detection list
             track.clearLastFrame()
             # Clean up the tracks for next time
@@ -549,7 +549,7 @@ class GlobalFUSION:
             #     # Use an arbitrary size if we have no covariance estimate
             detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             #detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([0, det[0], det[1], det[2], det[3], det[4], det[5], sensor_id])
+            detections_list.append([0, det[0], det[1], np.array(det[2]), det[3], det[4], np.array(det[5]), sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)

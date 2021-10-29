@@ -70,9 +70,10 @@ class Planner:
         self.cameraDetections = []
         self.lidarDetections = []
         self.fusionDetections = []
-        self.fusionDetectionsCovariance = []
         self.rawLidarDetections = []
         self.groundTruth = []
+        self.localizationCovariance = np.array([[1.0, 0.0],
+                                                [0.0, 1.0]])
 
         # Raw LIDAR for gui debug
         self.lidarPoints = []
@@ -131,8 +132,8 @@ class Planner:
         self.theta += ( self.velocity / self.wheelbaseLength ) * math.tan(self.steeringAcceleration) * timestep
         self.velocity += self.motorAcceleration * timestep
 
-    def update_localization(self, localization = None):
-        if self.simVehicle:
+    def update_localization(self, use_localization, localization = None):
+        if not use_localization:
             # Update the localization, we could inject errors here if we want
             reverse_theta = self.theta-math.radians(180)
             self.rearAxlePositionX = self.positionX_sim + (self.axleFromCenter * math.cos(reverse_theta))

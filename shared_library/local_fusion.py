@@ -579,7 +579,7 @@ class FUSION:
             if track.fusion_steps >= 5:
                 # Calculate a custom ID that encodes the sensorid and local fusion track number
                 universal_id = self.id * MAX_ID + track.id
-                result.append([universal_id, track.x, track.y, track.error_covariance, track.dx, track.dy, track.d_covariance])
+                result.append([universal_id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
             # Clear the previous detection list
             track.clearLastFrame()
 

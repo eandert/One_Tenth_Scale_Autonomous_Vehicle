@@ -1,6 +1,8 @@
 import time
 import math
 import sys
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
 from threading import Lock, Thread
 from queue import Queue
 
@@ -19,12 +21,15 @@ class RSU():
         self.vehicles = {}
         self.sensors = {}
         self.trafficLightArray = [0, 2, 0]
+        self.lightTime = 0
 
         # Settings for the simulation
         self.continue_blocker = False
         self.estimate_covariance = False
         self.simulate_error = False
         self.real_lidar = False
+        self.simulation = config.simulation
+        self.time = 0.0
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -42,6 +47,7 @@ class RSU():
 
         # init global fusion
         self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
+        self.globalFusionList = []
 
         # Lets create the vehicles
         for idx, vehicle in enumerate(config.cav):
@@ -152,6 +158,12 @@ class RSU():
         self.localization_differences = []
         self.localization_velocity = []
 
+    def getTime(self):
+        if self.simulation:
+            return self.time
+        else:
+            return time.time()
+
     def initFlask(self, rsu_ip):
         # Start up the Flask front end processor as it's own thread
         frontend = Thread(target=self.FlaskProccess, args=(self.q, self, rsu_ip, ))
@@ -187,7 +199,7 @@ class RSU():
             self.vehicles[id].key = key
 
             # Now init the vehicle at a location
-            self.vehicles[id].update_localization([x, y, yaw, 0.0])
+            self.vehicles[id].update_localization(True, [x, y, yaw, 0.0])
             self.vehicles[id].recieve_coordinate_group_commands(self.trafficLightArray)
 
             # We update this just for the visualizer
@@ -221,7 +233,7 @@ class RSU():
                 route_TFL=self.mapSpecs.vCoordinates,
                 tfl_state=self.trafficLightArray,
                 veh_locations=vehicleList,
-                timestep=time.time()
+                timestep=self.getTime()
             )
 
             return registerResponse
@@ -235,7 +247,7 @@ class RSU():
             self.sensors[id].key = key
 
             # Now init the vehicle at a location
-            self.sensors[id].update_localization([x, y, yaw, 0.0])
+            self.sensors[id].update_localization(False,[x, y, yaw, 0.0])
 
             # Finally we can create the return messages
             registerResponse = dict(
@@ -249,7 +261,7 @@ class RSU():
                 route_y=self.mapSpecs.yCoordinates,
                 route_TFL=self.mapSpecs.vCoordinates,
                 tfl_state=self.trafficLightArray,
-                timestep=time.time()
+                timestep=self.getTime()
             )
 
             return registerResponse
@@ -269,11 +281,12 @@ class RSU():
             # Lets add the detections to the vehicle class
             self.vehicles[id].cameraDetections = detections["cam_obj"]
             self.vehicles[id].lidarDetections = detections["lidar_obj"]
-            self.vehicles[id].fusion_result = detections["fused_obj"]
+            self.vehicles[id].fusionDetections = detections["fused_obj"]
 
             # Update the location of this vehicle
             self.vehicles[id].localizationPositionX = detections["localization"][0]
             self.vehicles[id].localizationPositionY = detections["localization"][1]
+            self.vehicles[id].localizationCovariance = detections["localization"][4]
             self.vehicles[id].velocity = detections["localization"][3]
             self.vehicles[id].theta = detections["localization"][2]
 
@@ -296,7 +309,7 @@ class RSU():
                 v_t=self.vehicles[id].targetVelocity,
                 tfl_state=self.trafficLightArray,
                 veh_locations=vehicleList,
-                timestep=time.time()
+                timestep=self.getTime()
             )
 
             # Finally we can create the return message
@@ -307,7 +320,7 @@ class RSU():
             # Finally we can create the return messages
             response = dict(
                 tfl_state=self.trafficLightArray,
-                timestep=time.time()
+                timestep=self.getTime()
             )
 
             # Finally we can create the return message
@@ -336,7 +349,7 @@ class RSU():
     def getSimTime(self):
         # Finally we can create the return messages
         response = dict(
-            time=self.sim_time
+            time=self.getTime()
         )
 
         # Finally we can create the return message
@@ -345,7 +358,7 @@ class RSU():
     def sendSimPositions(self, key, id, type, x, y, z, roll, pitch, yaw, velocity):
         if type == 0:
             # Udpate the location of this vehicle
-            self.vehicles[id].update_localization([x, y, yaw, velocity])
+            self.vehicles[id].update_localization(False,[x, y, yaw, velocity])
             self.continue_blocker_tracker[id] = False
 
         # Finally we can create the return messages
@@ -371,24 +384,32 @@ class RSU():
             if each == True:
                 continue_blocker_check = True
 
-        print ( "bcheck ", continue_blocker_check )
-
         if continue_blocker_check == False:
             # Fusion time!
             # First we need to add the localization frame, since it should be the basis
-            self.globalFusion.processDetectionFrame(-1, self.time, self.localizationsList, .25, self.estimate_covariance)
+            localizationsList = []
+            for idx, vehicle in self.vehicles.items():
+                # Add to the global sensor fusion
+                localizationsList.append((vehicle.localizationPositionX,
+                                                vehicle.localizationPositionY,
+                                                vehicle.localizationCovariance, 0, 0, -1))
+            self.globalFusion.processDetectionFrame(-1, self.getTime(), localizationsList, .25, self.estimate_covariance)
 
             for idx, vehicle in self.vehicles.items():
                 # Add to the global sensor fusion
-                self.globalFusion.processDetectionFrame(idx, self.time, vehicle.fusionDetections, .25, self.estimate_covariance)
+                self.globalFusion.processDetectionFrame(idx, self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
 
-            for idx, cis in self.cis.items():
-                # Add to the global sensor fusion
-                self.globalFusion.processDetectionFrame(idx, self.time, cis.fusionDetections, .25, self.estimate_covariance)
+            # for idx, cis in self.cis.items():
+            #     # Add to the global sensor fusion
+            #     self.globalFusion.processDetectionFrame(idx, self.getTime(), cis.fusionDetections, .25, self.estimate_covariance)
 
             self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
             # Ground truth to the original dataset
+            # Get the last known location of all other vehicles
+            vehicleList = []
+            for idx, vehicle in self.vehicles.items():
+                vehicleList.append(vehicle.get_location())
             testSetGlobal = []
             groundTruthGlobal = []
             for each in self.globalFusionList:
@@ -421,6 +442,80 @@ class RSU():
             # We have completed fusion, unblock
             self.continue_blocker = False
 
+    def getGuiValues(self, coordinates):
+        vehicle_export = []
+        camera = []
+        camera_fov = []
+        camera_center = []
+        traffic_light_green = []
+        mapSpecs = None
+        lidar_detection_centroid = []
+        lidar_detection_raw = []
+        camera_detection_centroid = []
+        sensor_fusion_centroid = []
+        localization_error = []
+        global_sensor_fusion_centroid = []
+
+        if coordinates:
+            map_specs = [self.mapSpecs.map, self.mapSpecs.intersectionStraightLength]
+        else:
+            map_specs = None
+
+        for idx, vehicle in self.vehicles.items():
+            # Add to the global sensor fusion
+            vehicle.targetVelocity = 0.5
+            vehicle.targetVelocityGeneral = 0.5
+            vehicle_export.append([vehicle.localizationPositionX,
+                            vehicle.localizationPositionY,
+                            vehicle.theta,
+                            vehicle.velocity,
+                            vehicle.wheelbaseWidth,
+                            vehicle.wheelbaseLength,
+                            vehicle.steeringAcceleration,
+                            vehicle.targetIndexX,
+                            vehicle.targetIndexY,
+            ])
+            camera_fov.append(vehicle.cameraSensor.field_of_view)
+            camera_center.append(vehicle.cameraSensor.center_angle)
+            lidar_detection_centroid.append(vehicle.lidarDetections)
+            camera_detection_centroid.append(vehicle.cameraDetections)
+            sensor_fusion_centroid.append(vehicle.fusionDetections)
+            localization_error.append(vehicle.localizationError)
+            
+        # Finally we can create the return messages
+        response = dict(
+            map_specs=map_specs,
+            vehicle=vehicle_export,
+            camera_fov=camera_fov,
+            camera_center=camera_center,
+            lidar_detection_centroid=lidar_detection_centroid,
+            camera_detection_centroid=camera_detection_centroid,
+            sensor_fusion_centroid=sensor_fusion_centroid,
+            localization_error=localization_error,
+            global_sensor_fusion_centroid=self.globalFusionList,
+            traffic_light=self.trafficLightArray,
+            returned=True
+        )
+
+        return response
+
+    def update_traffic_lights(self):
+        if self.lightTime > self.mapSpecs.lightTimePeriod:
+            self.lightTime = 0
+            if self.trafficLightArray[1] == 2:
+                self.trafficLightArray[1] = 1
+                self.trafficLightArray[2] = 0
+            elif self.trafficLightArray[2] == 2:
+                self.trafficLightArray[1] = 0
+                self.trafficLightArray[2] = 1
+            elif self.trafficLightArray[1] == 1:
+                self.trafficLightArray[1] = 0
+                self.trafficLightArray[2] = 2
+            elif self.trafficLightArray[2] == 1:
+                self.trafficLightArray[1] = 2
+                self.trafficLightArray[2] = 0
+        else:
+            self.lightTime += 1
 
 # def BackendProcessor(q, vehicles, sensors, trafficLightArray):
 #     while True:

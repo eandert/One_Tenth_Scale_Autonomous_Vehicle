@@ -1,7 +1,7 @@
-cav = [[-0.75, 0.0, 270, True]]
+# cav = [[-0.75, 0.0, 270, True]]
 # 2 CAV 1 CIS settings, simulation
-# cav = [[-0.75, 0.0, 270, True],
-#        [0.0, 0.75, 0, True]]
+cav = [[-0.75, 0.0, 0, True],
+       [0.0, 0.75, 270, True]]
 # cis = [[-0.75, 0.75, -45, True]]
 # 4 CAV 2 CIS settings, simulation
 # cav = [[-0.75, 0.0, 270, True],

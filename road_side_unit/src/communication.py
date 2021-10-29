@@ -157,7 +157,7 @@ class MainClass(Resource):
         #print(request.is_json)
         request_data = request.get_json()
         try:
-            print("data:", request_data)
+            #print("data:", request_data)
             if request_data:
                 key = request_data['key']
                 id = int(request_data['id'])
@@ -180,7 +180,7 @@ class MainClass(Resource):
                 elif type == 1:
                     print("Sensor: " + str(id) + " updated at " + str(timestamp))
 
-                print ( "Response took: ", time.time() - time1)
+                #print ( "Response took: ", time.time() - time1)
 
                 return jsonify(
                     returnObject
@@ -241,7 +241,7 @@ class MainClass(Resource):
     @app.doc(description="This method is called during simulation to get the locations of other vehicels within the simulation.")
     @app.response(200, 'Success', RSUVehicleSendSimPosition)
     def get(self):
-        time1 = time.time()
+        #time1 = flask_app.config['RSUClass'].getTime()
         #print("got request")
         #print(request.is_json)
         request_data = request.get_json()
@@ -266,5 +266,32 @@ class MainClass(Resource):
                     )
                 except Exception as e:
                     name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+        except Exception as e:
+            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+
+@name_space.route("/guiread/", methods=['GET'])
+class MainClass(Resource):
+
+    @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'}, params={})
+    @app.doc(description="This method is called during simulation to get the locations of other vehicels within the simulation..")
+    @app.response(200, 'Success', RSUVehicleGetSimTime)
+    def get(self):
+        #print("got request")
+        #print(request.is_json)
+        request_data = request.get_json()
+        try:
+            #print("data:", request_data)
+            if request_data:
+                coordinates = request_data['coordinates']
+            else:
+                coordinates = False
+
+            returnObject = flask_app.config['RSUClass'].getGuiValues(coordinates)
+
+            #print ( returnObject )
+
+            return jsonify(
+                returnObject
+            )
         except Exception as e:
             name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")

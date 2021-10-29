@@ -22,7 +22,8 @@ class MapSpecs():
         self.lightTimePeriod = 8 * 5  # 5 seconds * 8 hz
 
         # Generating a figure 8 for now TODO: incorporate SUMO/ATLAS
-        if map == 0:
+        self.map = map
+        if self.map == 0:
             self.xCoordinates, self.yCoordinates, self.vCoordinates = self.generateFigureEight(
                 self.intersectionStraightLength, self.intersectionWidth, self.distanceInterval)
         else:

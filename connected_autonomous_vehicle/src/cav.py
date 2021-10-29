@@ -22,7 +22,7 @@ def fetch_time():
     if simulation_time:
         global_time = rsu_sim_check.getSimTime()
         # Sleep so we dont overwhelm the server
-        time.sleep(.1)
+        #time.sleep(.01)
         return global_time
     else:
         return time.time()
@@ -261,17 +261,17 @@ def cav(config, vid):
                 # Special simulation setup where we do not use the source threads
                 # Update the localization first because we use it here
                 planner.updatePosition(interval)
-                planner.update_localization()
+                planner.update_localization(use_localization = False)
                 if debug: print( " Vehicle ", vehicle_id, " posiiton and localization updated" )
                 
                 # Send the lolcailzation values to the RSU
-                rsu_sim_check.sendSimPosition(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
+                rsu_sim_check.sendSimPosition(vehicle_id, planner.positionX_sim, planner.positionY_sim, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
                 if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
 
                 # Recieve positions of other vehicles from RSU so we can fake the sensor values
                 sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                 while(sim_values['continue_blocker'] == True):
-                    time.sleep(.1)
+                    #time.sleep(.01)
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                 
                 tempList = sim_values['veh_locations']
@@ -286,7 +286,7 @@ def cav(config, vid):
                     temp_covariance = sensor.BivariateGaussian(0.175, 0.175, 0)
                 point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(planner, tempList, [], 15.0, 15.0, 0.0, 160.0, l_error = localization_error, l_error_gauss = temp_covariance)
                 lidar_returned[0] = [planner.localizationPositionX + localization_error[0], planner.localizationPositionY + localization_error[1],
-                                    planner.theta, planner.velocity, temp_covariance.covariance]
+                                    planner.theta, planner.velocity, temp_covariance.covariance.tolist()]
                 if sim_values["simulate_error"]:
                     cam_returned[0] = camera_error_array
                     cam_returned[1] = fetch_time()
@@ -339,7 +339,7 @@ def cav(config, vid):
                 # TODO: check the timestamps are close
 
                 # Update the steering here while we wait for sensor fusion results and the reply from the RSU about the plan
-                planner.update_localization([localization[0], localization[1], localization[2]])
+                planner.update_localization(True, [localization[0], localization[1], localization[2]])
                 planner.pure_pursuit_control()
 
                 # Now update our current PID with respect to other vehicles
@@ -396,8 +396,8 @@ def cav(config, vid):
                         [localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
                             objectPackage])
 
-                # This should not take long but we will delay just a bit
-                time.sleep(.01)
+                    # This should not take long but we will delay just a bit
+                    time.sleep(.01)
 
                 if response["error"] != 0:
                     # Cut the engine to make sure that we don't hit anything since the central controller is down
@@ -410,7 +410,6 @@ def cav(config, vid):
                 else:
                     # Update our various pieces
                     planner.targetVelocityGeneral = float(response["v_t"])
-                    planner.update_localization([localization[0], localization[1], localization[2]])
                     planner.recieve_coordinate_group_commands(response["tfl_state"])
                     planner.pure_pursuit_control()
 
