@@ -9,15 +9,39 @@ sys.path.append("../../../")
 from connected_autonomous_vehicle.src import cav
 from connected_autonomous_vehicle.src import planning_control as vehicle_planning
 from connected_infrastructure_sensor.src import planning_control as cam_planning
-from shared_library import sensor
+from shared_library import sensor, global_fusion
 from road_side_unit.src import mapGenerator, communication
 
 class RSU():
     def __init__(self, config):
+        # Trackers for varios things in the simulation
         self.mapSpecs = mapGenerator.MapSpecs(config.map, config.map_length)
         self.vehicles = {}
         self.sensors = {}
         self.trafficLightArray = [0, 2, 0]
+
+        # Settings for the simulation
+        self.continue_blocker = False
+        self.estimate_covariance = False
+        self.simulate_error = False
+        self.real_lidar = False
+
+        # Init parameters for unit testing
+        self.initUnitTestParams()
+
+        # Check the fusion mode from unit tests
+        if config.unit_test:
+            self.unitTest = config.unit_test_config
+            self.local_fusion_mode = self.unitTest[0][0]
+            self.global_fusion_mode = self.unitTest[0][1]
+        else:
+            # Default to 1
+            # TODO: add a button for this
+            self.local_fusion_mode = 0
+            self.global_fusion_mode = 0
+
+        # init global fusion
+        self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
 
         # Lets create the vehicles
         for idx, vehicle in enumerate(config.cav):
@@ -38,12 +62,20 @@ class RSU():
         time.sleep(1)
 
         # Start up the Flask back end processor as it's own thread
-        self.backend = Thread(target=BackendProcessor, args=(self.q, self.vehicles, self.sensors, self.trafficLightArray))
-        self.backend.daemon = True
-        self.backend.start()
+        # self.backend = Thread(target=BackendProcessor, args=(self.q, self.vehicles, self.sensors, self.trafficLightArray))
+        # self.backend.daemon = True
+        # self.backend.start()
 
         # Sleep for a second while we let flask get up and running
-        time.sleep(1)
+        # time.sleep(1)
+
+        # Start the falsk server for communication
+        self.initFlask(config.rsu_ip)
+
+        time.sleep(5)
+
+        # If we are in a simulation, this will start the threads
+        self.initSimulation(config)
 
         # newvehicle1 = vehicle_planning.Planner()
         # newvehicle1.initialVehicleAtPosition(
@@ -91,6 +123,47 @@ class RSU():
         # self.sensors[0] = newSensor
         # #self.sensors[1] = newSensor2
 
+    def initUnitTestParams(self):
+        # Keep track of stats if this is a simulation
+        self.unit_test_state = 0
+        self.unit_test_idx = 0
+        self.unit_test_local_over_detection_miss_results = []
+        self.unit_test_local_under_detection_miss_results = []
+        self.unit_test_local_rmse_results = []
+        self.unit_test_local_variance_results = []
+        self.local_over_detection_miss = 0
+        self.local_under_detection_miss = 0
+        self.local_differences = []
+
+        # localization stats
+        self.unit_test_localization_rmse_results = []
+        self.unit_test_localization_variance_results = []
+        self.localization_differences = []
+
+        # Global stats
+        self.unit_test_global_over_detection_miss_results = []
+        self.unit_test_global_under_detection_miss_results = []
+        self.unit_test_global_rmse_results = []
+        self.unit_test_global_variance_results = []
+        self.global_over_detection_miss = 0
+        self.global_under_detection_miss = 0
+        self.global_differences = []
+
+        self.localization_differences = []
+        self.localization_velocity = []
+
+    def initFlask(self, rsu_ip):
+        # Start up the Flask front end processor as it's own thread
+        frontend = Thread(target=self.FlaskProccess, args=(self.q, self, rsu_ip, ))
+        frontend.daemon = True
+        frontend.start()
+
+    def FlaskProccess(self, q, rsu_instance, rsu_ip):
+        # Startup the web service
+        communication.flask_app.config['RSUClass'] = rsu_instance
+        communication.flask_app.config['RSUQueue'] = q
+        communication.flask_app.run(host=rsu_ip, debug=True, use_reloader=False)
+
     def initSimulation(self, config):
          # If this is a simulation, we need to start up the CAVs and CISs as threads
         if config.simulation:
@@ -99,7 +172,7 @@ class RSU():
             self.continue_blocker = True
             self.continue_blocker_tracker = []
             for idx, vehicle in self.vehicles.items():
-                self.thread[idx] = Thread(target=cav.cav, args=(config, ))
+                self.thread[idx] = Thread(target=cav.cav, args=(config, idx, ))
                 self.thread[idx].daemon = True
                 self.thread[idx].start()
                 self.continue_blocker_tracker.append(True)
@@ -181,23 +254,42 @@ class RSU():
 
             return registerResponse
 
-    def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
+    def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw, detections):
         if type == 0:
             # Double check our security, this is pretty naive at this point
             #if self.vehicles[id].key == key:
             # TODO: possibly do these calculation after responding to increase response time
 
-            # Calculate our velocity using our last position
-            velocity = self.calc_velocity(self.vehicles[id].localizationPositionX, self.vehicles[id].localizationPositionY, x, y, yaw)
+            # We do these calculation after responding to increase response time
+            self.vehicles[id].recieve_coordinate_group_commands(self.trafficLightArray)
 
-            # Update ourself
-            self.vehicles[id].update_localization([x, y, yaw, velocity])
-            #self.vehicles[vehicle_id].recieve_coordinate_group_commands(trafficLightArray)
+            # We update this just for the visualizer
+            self.vehicles[id].pure_pursuit_control()
+
+            # Lets add the detections to the vehicle class
+            self.vehicles[id].cameraDetections = detections["cam_obj"]
+            self.vehicles[id].lidarDetections = detections["lidar_obj"]
+            self.vehicles[id].fusion_result = detections["fused_obj"]
+
+            # Update the location of this vehicle
+            self.vehicles[id].localizationPositionX = detections["localization"][0]
+            self.vehicles[id].localizationPositionY = detections["localization"][1]
+            self.vehicles[id].velocity = detections["localization"][3]
+            self.vehicles[id].theta = detections["localization"][2]
 
             # Get the last known location of all other vehicles
             vehicleList = []
             for idx, vehicle in self.vehicles.items():
-                vehicleList.append(vehicle.get_location())
+                if idx != id:
+                    vehicleList.append(vehicle.get_location())
+
+            # Now update our current PID with respect to other vehicles
+            self.vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList)
+
+            # We can't update the PID controls until after all positions are known
+            # We still do this here just for debugging as it should match the PID controls
+            # on the actual car and then it will be displayed on the UI
+            self.vehicles[id].update_pid()
 
             # Finally we can create the return messages
             response = dict(
@@ -231,7 +323,10 @@ class RSU():
 
         # Finally we can create the return messages
         response = dict(
-            cont_blocker=self.continue_blocker,
+            continue_blocker=self.continue_blocker,
+            estimate_covariance=self.estimate_covariance,
+            simulate_error=self.simulate_error,
+            real_lidar=self.real_lidar,
             veh_locations=vehicleList
         )
 
@@ -253,11 +348,6 @@ class RSU():
             self.vehicles[id].update_localization([x, y, yaw, velocity])
             self.continue_blocker_tracker[id] = False
 
-        self.continue_blocker = False
-        for each in self.continue_blocker_tracker:
-            if each == True:
-                self.continue_blocker = True
-
         # Finally we can create the return messages
         response = dict(
             returned=True
@@ -274,53 +364,115 @@ class RSU():
             velocity = -velocity
         return velocity
 
-    #def check_state(self):
+    def check_state(self):
+        # Check if we are ready for sensor fusion
+        continue_blocker_check = False
+        for each in self.continue_blocker_tracker:
+            if each == True:
+                continue_blocker_check = True
+
+        print ( "bcheck ", continue_blocker_check )
+
+        if continue_blocker_check == False:
+            # Fusion time!
+            # First we need to add the localization frame, since it should be the basis
+            self.globalFusion.processDetectionFrame(-1, self.time, self.localizationsList, .25, self.estimate_covariance)
+
+            for idx, vehicle in self.vehicles.items():
+                # Add to the global sensor fusion
+                self.globalFusion.processDetectionFrame(idx, self.time, vehicle.fusionDetections, .25, self.estimate_covariance)
+
+            for idx, cis in self.cis.items():
+                # Add to the global sensor fusion
+                self.globalFusion.processDetectionFrame(idx, self.time, cis.fusionDetections, .25, self.estimate_covariance)
+
+            self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+
+            # Ground truth to the original dataset
+            testSetGlobal = []
+            groundTruthGlobal = []
+            for each in self.globalFusionList:
+                sensed_x = each[1]
+                sensed_y = each[2]
+                testSetGlobal.append([sensed_x, sensed_y])
+            for each in vehicleList:
+                sensed_x = each[0]
+                sensed_y = each[1]
+                groundTruthGlobal.append([sensed_x, sensed_y])
+            if len(testSetGlobal) >= 1 and len(groundTruthGlobal) >= 1:
+                nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSetGlobal))
+                distances, indices = nbrs.kneighbors(np.array(groundTruthGlobal))
+
+                # Now calculate the score
+                for dist in distances:
+                    if dist > 1.0:
+                        # Too far away to be considered a match, add as a miss instead
+                        self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+                    else:
+                        self.global_differences.append(dist)
+            # Check how much large the test set is from the ground truth and add that as well
+            if len(testSetGlobal) > len(groundTruthGlobal):
+                # Overdetection case
+                self.global_over_detection_miss += len(testSetGlobal) - len(groundTruthGlobal)
+            elif len(testSetGlobal) < len(groundTruthGlobal):
+                # Underdetection case, we count this differently because it may be from obstacle blocking
+                self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+
+            # We have completed fusion, unblock
+            self.continue_blocker = False
 
 
-def BackendProcessor(q, vehicles, sensors, trafficLightArray):
-    while True:
-        message = q.get()
-        #print ( message )
-        key, id, type, timestamp, x, y, yaw, detections = message
+# def BackendProcessor(q, vehicles, sensors, trafficLightArray):
+#     while True:
+#         message = q.get()
+#         #print ( message )
+#         key, id, type, timestamp, x, y, yaw, detections = message
 
-        # See if we are dealing with a sensor or a vehicle
-        if type == 1:
-            # Double check our security, this is pretty naive at this point
-            if sensors[id].key == key:
-                # Lets add the detections to the sensor class
-                sensors[id].cameraDetections = detections["cam_obj"]
-                # with open("output.csv", "a") as file:
-                #     file.write("cam," + str(id) + "," + str(x)
-                #                + "," + str(y)
-                #                + "," + str(yaw)
-                #                + "," + str(detections)
-                #                + "\n")
-        elif type == 0:
-            # Double check our security, this is pretty naive at this point
-            if vehicles[id].key == key:
-                # We do these calculation after responding to increase response time
-                vehicles[id].recieve_coordinate_group_commands(trafficLightArray)
+#         # See if we are dealing with a sensor or a vehicle
+#         if type == 1:
+#             # Double check our security, this is pretty naive at this point
+#             if sensors[id].key == key:
+#                 # Lets add the detections to the sensor class
+#                 sensors[id].cameraDetections = detections["cam_obj"]
+#                 # with open("output.csv", "a") as file:
+#                 #     file.write("cam," + str(id) + "," + str(x)
+#                 #                + "," + str(y)
+#                 #                + "," + str(yaw)
+#                 #                + "," + str(detections)
+#                 #                + "\n")
+#         elif type == 0:
+#             # Double check our security, this is pretty naive at this point
+#             if vehicles[id].key == key:
+#                 # We do these calculation after responding to increase response time
+#                 vehicles[id].recieve_coordinate_group_commands(trafficLightArray)
 
-                # We update this just for the visualizer
-                vehicles[id].pure_pursuit_control()
+#                 # We update this just for the visualizer
+#                 vehicles[id].pure_pursuit_control()
 
-                # Lets add the detections to the vehicle class
-                vehicles[id].cameraDetections = detections["cam_obj"]
-                vehicles[id].lidarDetections = detections["lidar_obj"]
+#                 # Lets add the detections to the vehicle class
+#                 vehicles[id].cameraDetections = detections["cam_obj"]
+#                 vehicles[id].lidarDetections = detections["lidar_obj"]
+#                 vehicles[id].fusion_result = detections["fused_obj"]
 
-                # Get the last known location of all other vehicles
-                vehicleList = []
-                for idx, vehicle in vehicles.items():
-                    if idx != id:
-                        vehicleList.append(vehicle.get_location())
+#                 # Update the location of this vehicle
+#                 vehicles[id].localizationPositionX = detections["localization"][0]
+#                 vehicles[id].localizationPositionY = detections["localization"][1]
+#                 vehicles[id].velocity = detections["localization"][3]
+#                 vehicles[id].theta = detections["localization"][2]
 
-                # Now update our current PID with respect to other vehicles
-                vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList)
+#                 # Get the last known location of all other vehicles
+#                 vehicleList = []
+#                 for idx, vehicle in vehicles.items():
+#                     if idx != id:
+#                         vehicleList.append(vehicle.get_location())
 
-                # We can't update the PID controls until after all positions are known
-                # We still do this here just for debugging as it should match the PID controls
-                # on the actual car and then it will be displayed on the UI
-                vehicles[id].update_pid()
+#                 # Now update our current PID with respect to other vehicles
+#                 vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList)
+
+#                 # We can't update the PID controls until after all positions are known
+#                 # We still do this here just for debugging as it should match the PID controls
+#                 # on the actual car and then it will be displayed on the UI
+#                 vehicles[id].update_pid()
 
                 # with open("output.csv", "a") as file:
                 #     file.write("cav," + str(id) + "," + str(x)

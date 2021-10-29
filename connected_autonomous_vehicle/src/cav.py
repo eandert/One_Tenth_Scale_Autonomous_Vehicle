@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from multiprocessing import Process, Queue, Manager
 
 from connected_autonomous_vehicle.src import lidar_recognition, planning_control, communication
+from shared_library import local_fusion, sensor
 
 #import local_fusion
 
@@ -14,6 +15,7 @@ dump_to_file = False
 simulation_time = False
 rsu_sim_check = None
 global_time = -99
+debug = False
 
 # This function is for controlling the time function in case of simulation
 def fetch_time():
@@ -153,10 +155,15 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
                 response["error"] = 0
                 fails = 0
 
-def cav(config):
+def cav(config, vid):
     # The first thing we should always do is initialize the control module
     # This is important to make sure a rogue signal doesn't drive us away
     # We do not need this if this is simulation
+    global vehicle_id, debug, global_time
+    vehicle_id = vehicle_id
+    debug = config.debug
+    last_response = []
+
     if not config.simulation:
         from connected_autonomous_vehicle.src import motors
         egoVehicle = motors.Motors()
@@ -202,15 +209,19 @@ def cav(config):
         fails = 0        
         simulation_time = True
         global_time = 0.0
+        init = {}
+        response = {}
         lidarRecognition = lidar_recognition.LIDAR(0.0)
 
-        # Manually do what the thread would normall do
+        # Manually do what the thread would normally do
+        if debug: print( " Vehicle ", vehicle_id, " connecting to RSU ", config.rsu_ip)
         # Start the connection with the RSU (Road Side Unit) server through sockets
         rsu_sim_check = communication.connectServer(config.rsu_ip)
+        if debug: print( " Vehicle ", vehicle_id, " connected to RSU ", config.rsu_ip)
         init_returned = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        if debug: print( " Vehicle ", vehicle_id, " registered with RSU ", config.rsu_ip)
 
-        manager = Manager()
-        init = manager.dict()
+        # Store the init values for continuous use
         init["t_x"] = init_returned["t_x"]
         init["t_y"] = init_returned["t_y"]
         init["t_yaw"] = init_returned["t_yaw"]
@@ -224,22 +235,25 @@ def cav(config):
 
     # Now that we have chatted with the RSU server, we should know where we are going
     planner.initialVehicleAtPosition(init["t_x"], init["t_y"], init["t_yaw"], init["route_x"], init["route_y"],
-                                    init["route_TFL"], vehicle_id, False)
+                                    init["route_TFL"], vehicle_id, config.simulation)
+    if debug: print( " Vehicle ", vehicle_id, " planner initialized" )
 
     # If this is a simulation we need a second communication class to get some ideal positions
     if config.simulation:
-        global_time = rsu_sim_check.getSimTime()
+        global_time = rsu_sim_check.getSimTime()['time']
+        if debug: print( " Vehicle ", vehicle_id, " got sim time from server ", global_time )
 
     # Start the sensor fusion pipeline
-    #fusion = local_fusion.FUSION(0, vehicle_id)
+    fusion = local_fusion.FUSION(0, vehicle_id)
+    if debug: print( " Vehicle ", vehicle_id, " started fusion node" )
 
     # Sleep until test start time
-    print( fetch_time(), start_time )
     wait_until_start = start_time - fetch_time() - .01
     if wait_until_start > 0:
         time.sleep(wait_until_start)
 
     next_time = start_time + interval_offset
+    if debug: print( " Vehicle ", vehicle_id, " start time is ", next_time)
 
     while True:
         if fetch_time() > next_time:
@@ -248,16 +262,19 @@ def cav(config):
                 # Update the localization first because we use it here
                 planner.updatePosition(interval)
                 planner.update_localization()
+                if debug: print( " Vehicle ", vehicle_id, " posiiton and localization updated" )
                 
                 # Send the lolcailzation values to the RSU
-                rsu_sim_check.sendSimPosition([planner.localizationPositionX, planner.localizationPositionY, planner.theta, planner.velocity])
+                rsu_sim_check.sendSimPosition(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
+                if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
 
                 # Recieve positions of other vehicles from RSU so we can fake the sensor values
-                sim_values = rsu_sim_check.getSimPositions(id)
-                while(sim_values['cont_blocker'] == True):
+                sim_values = rsu_sim_check.getSimPositions(vehicle_id)
+                while(sim_values['continue_blocker'] == True):
                     time.sleep(.1)
-                    sim_values = rsu_sim_check.getSimPositions(id)
+                    sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                 
+                tempList = sim_values['veh_locations']
                 lidar_returned = [[], [], None]
                 cam_returned = [[], None]
                 
@@ -266,10 +283,10 @@ def cav(config):
                 if sim_values["estimate_covariance"]:
                     temp_covariance = localization_error_gaussian
                 else:
-                    temp_covariance = sensor.BivariateGaussivelocity
+                    temp_covariance = sensor.BivariateGaussian(0.175, 0.175, 0)
                 point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(planner, tempList, [], 15.0, 15.0, 0.0, 160.0, l_error = localization_error, l_error_gauss = temp_covariance)
-                lidar_returned[0] = [[planner.localizationPositionX + localization_error[0], planner.localizationPositionY + localization_error[1],
-                                    planner.theta, planner.velocity], temp_covariance.covariance]
+                lidar_returned[0] = [planner.localizationPositionX + localization_error[0], planner.localizationPositionY + localization_error[1],
+                                    planner.theta, planner.velocity, temp_covariance.covariance]
                 if sim_values["simulate_error"]:
                     cam_returned[0] = camera_error_array
                     cam_returned[1] = fetch_time()
@@ -326,7 +343,7 @@ def cav(config):
                 planner.pure_pursuit_control()
 
                 # Now update our current PID with respect to other vehicles
-                planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
+                planner.check_positions_of_other_vehicles_adjust_velocity(last_response)
                 # We can't update the PID controls until after all positions are known
                 planner.update_pid()
 
@@ -337,29 +354,27 @@ def cav(config):
 
                 # Fusion
                 results = []
-                #fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
-                #fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
-                #results = fusion.fuseDetectionFrame(1, planner)
+                fusion_start = fetch_time()
+                fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
+                fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
+                fusion_result = fusion.fuseDetectionFrame(1, planner)
 
                 # Message the RSU, for now we must do this before our control loop
                 # as the RSU has the traffic light state information
                 objectPackage = {
+                    "localization_t": lidartimestamp,
+                    "localization": localization,
                     "lidar_t": lidartimestamp,
                     "lidar_obj": lidarcoordinates,
                     "cam_t": camtimestamp,
                     "cam_obj": camcoordinates,
-                    "fused_t": fetch_time(),
-                    "fused_obj": results
+                    "fused_t": fusion_start,
+                    "fused_obj": fusion_result
                 }
 
                 if config.simulation:
-                    comm_q.put(
-                        [localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
-                            objectPackage])
-                else:
                     response_message = rsu_sim_check.checkin(vehicle_id, localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
                             objectPackage)
-
                     # Check if our result is valid
                     if response_message == None:
                         response["error"] = 1
@@ -376,6 +391,10 @@ def cav(config):
                         response["veh_locations"] = response_message["veh_locations"]
                         response["error"] = 0
                         fails = 0
+                else:
+                    comm_q.put(
+                        [localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
+                            objectPackage])
 
                 # This should not take long but we will delay just a bit
                 time.sleep(.01)
@@ -397,6 +416,7 @@ def cav(config):
 
                     # Now update our current PID with respect to other vehicles
                     planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
+                    last_response = response["veh_locations"]
                     # We can't update the PID controls until after all positions are known
                     planner.update_pid()
 

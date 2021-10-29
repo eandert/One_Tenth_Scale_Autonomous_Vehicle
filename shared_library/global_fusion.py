@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 from shapely.geometry import Polygon
 import bisect
-import shared_math
+
+from shared_library import shared_math
 
 
 max_id = 10000

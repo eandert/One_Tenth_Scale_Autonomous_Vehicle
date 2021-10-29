@@ -171,9 +171,9 @@ class MainClass(Resource):
                 yaw = float(request_data['yaw'])
                 detections = request_data['detections']
 
-                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw)
+                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, detections)
 
-                flask_app.config['RSUQueue'].put([key, id, type, timestamp, x, y, yaw, detections])
+                #flask_app.config['RSUQueue'].put([key, id, type, timestamp, x, y, yaw, detections])
 
                 if type == 0:
                     print("Vehicle: " + str(id) + " updated at " + str(timestamp))

@@ -8,7 +8,7 @@ from sklearn.neighbors import BallTree
 #from filterpy.kalman import MerweScaledSigmaPoints
 #from stonesoup.types.track import Track
 
-import shared_math
+from shared_library import shared_math
 
 CAMERA = 0
 LIDAR = 1

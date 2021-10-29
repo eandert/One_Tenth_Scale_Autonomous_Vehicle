@@ -29,6 +29,7 @@ init_time = 10.0 # Seconds to wait for the system to initialize before starting
 map = 0
 map_length = 1.0
 simulation = True
+debug = True
 unit_test = True
 unit_test_config = [[0,0,0],
                     [0,0,1],
