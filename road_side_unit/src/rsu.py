@@ -312,26 +312,28 @@ class RSU():
     def getSimPositions(self, key, id, type):
         vehicleList = []
 
-        # Get the last known location of all other vehicles
-        for idx, vehicle in self.vehicles.items():
-            if type != 0 or idx != id:
-                vehicleList.append(vehicle.get_location())
-
-        # If step_sim_vehicle
+        # If step_sim_vehicle is false, just send back false
+        print( "simpos: ", id )
         if self.step_sim_vehicle and self.step_sim_vehicle_tracker[id]:
             step_temp = True
             self.step_sim_vehicle_tracker[id] = False
+            # Get the last known location of all other vehicles
+            for idx, vehicle in self.vehicles.items():
+                if type != 0 or idx != id:
+                    vehicleList.append(vehicle.get_location())
+            # Finally we can create the return messages
+            response = dict(
+                step_sim_vehicle=step_temp,
+                estimate_covariance=self.estimate_covariance,
+                simulate_error=self.simulate_error,
+                real_lidar=self.real_lidar,
+                veh_locations=vehicleList
+            )
         else:
             step_temp = False
-
-        # Finally we can create the return messages
-        response = dict(
-            step_sim_vehicle=step_temp,
-            estimate_covariance=self.estimate_covariance,
-            simulate_error=self.simulate_error,
-            real_lidar=self.real_lidar,
-            veh_locations=vehicleList
-        )
+            response = dict(
+                step_sim_vehicle=step_temp
+            )
 
         # Finally we can create the return message
         return response
@@ -348,7 +350,7 @@ class RSU():
     def sendSimPositions(self, key, id, type, x, y, z, roll, pitch, yaw, velocity):
         if type == 0:
             # Udpate the location of this vehicle
-            self.vehicles[id].update_localization(True, [x, y, yaw, velocity])
+            self.vehicles[id].update_localization(True, [x - self.vehicles[id].positionX_offset, y- self.vehicles[id].positionY_offset, yaw- self.vehicles[id].theta_offset, velocity])
 
         # Finally we can create the return messages
         response = dict(
@@ -381,8 +383,8 @@ class RSU():
             for idx, vehicle in self.vehicles.items():
                 # Add to the global sensor fusion
                 localizationsList.append((vehicle.localizationPositionX,
-                                                vehicle.localizationPositionY,
-                                                vehicle.localizationCovariance, 0, 0, -1))
+                                            vehicle.localizationPositionY,
+                                            vehicle.localizationCovariance, 0, 0, -1))
             self.globalFusion.processDetectionFrame(-1, self.getTime(), localizationsList, .25, self.estimate_covariance)
 
             for idx, vehicle in self.vehicles.items():
@@ -433,6 +435,7 @@ class RSU():
             self.startSim()
 
     def startSim(self):
+        self.update_traffic_lights()
         self.step_sim_vehicle = True
         self.time += self.interval
         for idx, thing in enumerate(self.step_sim_vehicle_tracker):
@@ -464,7 +467,7 @@ class RSU():
             vehicle.targetVelocityGeneral = 0.5
             vehicle_export.append([vehicle.localizationPositionX,
                             vehicle.localizationPositionY,
-                            vehicle.theta,
+                            vehicle.theta + vehicle.theta_offset,
                             vehicle.velocity,
                             vehicle.wheelbaseWidth,
                             vehicle.wheelbaseLength,
@@ -503,7 +506,9 @@ class RSU():
         return response
 
     def update_traffic_lights(self):
+        print("checking light", self.lightTime, self.mapSpecs.lightTimePeriod, self.trafficLightArray)
         if self.lightTime > self.mapSpecs.lightTimePeriod:
+            print( "changing light" )
             self.lightTime = 0
             if self.trafficLightArray[1] == 2:
                 self.trafficLightArray[1] = 1

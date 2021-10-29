@@ -147,7 +147,7 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
                 else:
                     print("Attempting to re-register with RSU")
                     # We have failed a lot lets try to re-register but use our known location
-                    response_message = rsu.register(vehicle_id, x, y, z, roll, pitch, yaw)
+                    response_message = rsu.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
             else:
                 response["v_t"] = response_message["v_t"]
                 response["tfl_state"] = response_message["tfl_state"]
@@ -249,7 +249,7 @@ def cav(config, vid):
 
     # Sleep until test start time
     wait_until_start = start_time - fetch_time() - .01
-    if wait_until_start > 0:
+    if wait_until_start > 0 and not config.simulation:
         time.sleep(wait_until_start)
 
     next_time = start_time + interval_offset
@@ -265,7 +265,7 @@ def cav(config, vid):
                 if debug: print( " Vehicle ", vehicle_id, " posiiton and localization updated" )
                 
                 # Send the lolcailzation values to the RSU
-                rsu_sim_check.sendSimPosition(vehicle_id, planner.positionX_sim + planner.positionX_offset, planner.positionY_sim + planner.positionY_offset, 0.0, 0.0, 0.0, planner.theta + planner.theta_offset, planner.velocity)
+                rsu_sim_check.sendSimPosition(vehicle_id, planner.positionX_sim, planner.positionY_sim, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
                 if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
 
                 # Recieve positions of other vehicles from RSU so we can fake the sensor values
@@ -341,12 +341,12 @@ def cav(config, vid):
                 # Update the steering here while we wait for sensor fusion results and the reply from the RSU about the plan
                 if not config.simulation:
                     planner.update_localization(True, [localization[0], localization[1], localization[2]])
-                # planner.pure_pursuit_control()
+                planner.pure_pursuit_control()
 
                 # # Now update our current PID with respect to other vehicles
-                # planner.check_positions_of_other_vehicles_adjust_velocity(last_response)
+                planner.check_positions_of_other_vehicles_adjust_velocity(last_response)
                 # # We can't update the PID controls until after all positions are known
-                # planner.update_pid()
+                planner.update_pid()
 
                 # Finally, issue the commands to the motors
                 steering_ppm, motor_pid = planner.return_command_package()
@@ -354,7 +354,7 @@ def cav(config, vid):
                     egoVehicle.setControlMotors(steering_ppm, motor_pid)
 
                 # Fusion
-                results = []
+                fusion_result = []
                 fusion_start = fetch_time()
                 fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
                 fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
@@ -374,8 +374,8 @@ def cav(config, vid):
                 }
 
                 if config.simulation:
-                    response_message = rsu_sim_check.checkin(vehicle_id, localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
-                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX + planner.positionX_offset, planner.targetIndexY + planner.positionY_offset, objectPackage)
+                    response_message = rsu_sim_check.checkin(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
+                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, objectPackage)
 
                     # Check if our result is valid
                     if response_message == None:
@@ -386,7 +386,7 @@ def cav(config, vid):
                         else:
                             print("Attempting to re-register with RSU")
                             # We have failed a lot lets try to re-register but use our known location
-                            response_message = rsu_sim_check.register(vehicle_id, localization[0], localization[1], 0.0, 0.0, 0.0, localization[2])
+                            response_message = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
                     else:
                         response["v_t"] = response_message["v_t"]
                         response["tfl_state"] = response_message["tfl_state"]
@@ -395,7 +395,7 @@ def cav(config, vid):
                         fails = 0
                 else:
                     comm_q.put(
-                        [localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
+                        [planner.rearAxlePositionX, planner.rearAxlePositionY, 0.0, 0.0, 0.0, planner.theta,
                             planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, objectPackage])
 
                     # This should not take long but we will delay just a bit

@@ -27,12 +27,12 @@ class Planner:
         self.wheelbaseLength = .35
         self.wheelbaseWidth = .245
         self.axleFromCenter = self.wheelbaseLength/2.0
-        self.steeringAngleMax = 30.0
+        self.steeringAngleMax = math.radians(40.0)
         self.velocityMax = 1.0
         
         self.maxTurningRadius = self.wheelbaseLength / math.tan(self.steeringAngleMax)
         
-        self.k = 0.3  # look forward gain
+        self.k = 1.0  # look forward gain
         self.Lfc = 0.5  # look-ahead distance
         
         # Updatable Params
@@ -106,7 +106,6 @@ class Planner:
             self.positionY_sim = self.rearAxlePositionY
             self.velocity = 0
             self.theta = self.theta_offset
-            print( self.localizationPositionX, self.localizationPositionY, self.rearAxlePositionX, self.rearAxlePositionY )
         else:
             # Since this is a real world test we will start the vehicle somewhere random until it connects
             self.rearAxlePositionX = 5 + self.positionX_offset
@@ -120,10 +119,10 @@ class Planner:
         
         # Initialize the controllers\
         if self.simVehicle:
-            self.v_pid = PID(3, 0.00, 0.0, setpoint=self.targetVelocity)
+            self.v_pid = PID(3.0, 0.00, 0.0, setpoint=self.targetVelocity)
             self.d_pid = PID(2, 0.00, 0.0, setpoint=self.Lfc)
         else:
-            self.v_pid = PID(1.5, 0.00, 0.0, setpoint=self.targetVelocity)
+            self.v_pid = PID(2, 0.00, 0.0, setpoint=self.targetVelocity)
             self.d_pid = PID(2, 0.00, 0.0, setpoint=self.Lfc)
 
     def updatePosition(self, timestep):
@@ -149,6 +148,10 @@ class Planner:
             self.rearAxlePositionX = (((localization[0] - self.axleFromCenter) * math.cos(self.theta_offset)) - (localization[1] * math.sin(self.theta_offset))) + self.positionX_offset
             self.rearAxlePositionY = ((localization[1] * math.cos(self.theta_offset)) + (localization[0] * math.sin(self.theta_offset))) + self.positionY_offset
             self.theta = localization[2] + self.theta_offset
+            # Update the localization position correctly
+            reverse_theta = self.theta - math.radians(180)
+            self.localizationPositionX = self.rearAxlePositionX - (self.axleFromCenter * math.cos(reverse_theta))
+            self.localizationPositionY = self.rearAxlePositionY - (self.axleFromCenter * math.sin(reverse_theta))
 
     def calc_velocity(self, x1, y1, x2, y2, theta):
         velocity = math.hypot(x2 - x1, y2 - y1) * (1/8)
@@ -171,10 +174,10 @@ class Planner:
 
         delta = math.atan2(2.0 * self.wheelbaseLength * math.sin(alpha) / Lf, 1.0)
 
-        if delta > math.radians(self.steeringAngleMax):
-            delta = math.radians(self.steeringAngleMax)
-        elif delta < -math.radians(self.steeringAngleMax):
-            delta = -math.radians(self.steeringAngleMax)
+        if delta > self.steeringAngleMax:
+            delta = self.steeringAngleMax
+        elif delta < -self.steeringAngleMax:
+            delta = -self.steeringAngleMax
 
         # Account for the fact that in reverse we should be turning the other way
         #if self.velocity < 0:
@@ -219,18 +222,21 @@ class Planner:
         else:
             turningRadius = 10
 
+        # ( "Target ", self.targetVelocity, self.targetIndexX, self.targetIndexY, self.coordinateGroupVelocities[self.vCoordinates[ind]])
+
     def update_pid(self):
         if self.distance_pid_control_en and not self.distance_pid_control_overide:
-            print("TD", self.targetFollowDistance, "FD", self.followDistance)
+            #print("TD", self.targetFollowDistance, "FD", self.followDistance)
             self.d_pid.setpoint = self.targetFollowDistance + self.followDistanceGain * self.velocity
             self.motorAcceleration = self.d_pid(self.followDistance)
         else:
             # Default to velocity PID cotnrol
-            print("TV", self.targetVelocity)
+            #print("TV, TG ", self.targetVelocity, self.targetVelocityGeneral)
             self.v_pid.setpoint = self.targetVelocity
             self.motorAcceleration = self.v_pid(self.velocity)
+            #print( "motorAcceleration", self.motorAcceleration)
         # Check for pause and we have no reverse
-        if not (self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0)):
+        if self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0 and self.simVehicle):
             self.motorAcceleration = 0.0
         #if self.simVehicle == False:
             #commands[self.id] = [-self.steeringAcceleration, self.motorAcceleration]
@@ -327,6 +333,8 @@ class Planner:
             return True
 
     def search_target_index(self):
+        Lf = self.k * self.velocity + self.Lfc
+
         if self.lastPointIndex is None:
             # Search for the initial point, not reverse
             dx = [self.rearAxlePositionX - icx for icx in self.xCoordinates]
@@ -345,15 +353,13 @@ class Planner:
                 if checkind >= len(self.xCoordinates):
                     checkind = 0
                 distance_next_index = self.calc_distance(self.xCoordinates[checkind], self.yCoordinates[checkind])
-                if distance_this_index < distance_next_index:
+                if distance_next_index > distance_this_index >= Lf:
                     break
                 distance_this_index = distance_next_index
                 ind = checkind
             self.lastPointIndex = ind
 
         L = self.calc_distance(self.xCoordinates[ind], self.yCoordinates[ind])
-
-        Lf = self.k * self.velocity + self.Lfc
 
         # search look ahead target point index
         while Lf > L:

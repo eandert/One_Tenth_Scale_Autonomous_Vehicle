@@ -1008,6 +1008,7 @@ class MainWindow(QMainWindow):
             self.sensor_fusion_centroid = response['sensor_fusion_centroid']
             self.localization_error = response['localization_error']
             self.global_sensor_fusion_centroid = response['global_sensor_fusion_centroid']
+            self.trafficLightArray = response['traffic_light']
 
             self.drawIntersection = True
             self.drawCoordinates = True

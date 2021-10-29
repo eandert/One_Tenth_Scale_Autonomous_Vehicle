@@ -18,7 +18,7 @@ def GuiProcess(config):
     mainWin.show()
     QTapp.exec_()
 
-def initFlask(config):
+def initGui(config):
     # Start up the Flask front end processor as it's own thread
     gui_handler = Thread(target=GuiProcess, args=(config, ))
     gui_handler.daemon = True
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     rsu_instance = rsu.RSU(config)
 
     # Start the GUI
-    initFlask(config)
+    initGui(config)
 
     time.sleep(5)
 
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     while(True):
         #continue
         rsu_instance.check_state()
-        time.sleep(.01)
+        time.sleep(.1)
         #print ( "sleep" )
 
 sys.exit()

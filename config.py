@@ -1,7 +1,8 @@
 cav = [[-0.75, 0.0, 0, True]]
+#cav = [[0.0, 0.75, 270, True]]
 # 2 CAV 1 CIS settings, simulation
-#cav = [[-0.75, 0.0, 0, True],
-#       [0.0, 0.75, 270, True]]
+# cav = [[-0.75, 0.0, 0, True],
+#        [0.0, 0.75, 270, True]]
 # cis = [[-0.75, 0.75, -45, True]]
 # 4 CAV 2 CIS settings, simulation
 # cav = [[-0.75, 0.0, 270, True],
@@ -21,7 +22,7 @@ cav = [[-0.75, 0.0, 0, True]]
 #        [0.0, 1.5, 0, False]]
 # cis = [[-0.75, 0.75, -45, False],
 #        [0.75, -0.75, 135, False]]
-rsu_ip = 'localhost' #'192.168.0.103'
+rsu_ip = '127.0.0.1' #'192.168.0.103'
 interval = 0.125
 offset_interval = 0.0
 fallthrough_delay = 0.100
