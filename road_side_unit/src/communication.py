@@ -169,9 +169,13 @@ class MainClass(Resource):
                 roll = float(request_data['roll'])
                 pitch = float(request_data['pitch'])
                 yaw = float(request_data['yaw'])
+                steeringAcceleration = float(request_data['steeringAcceleration'])
+                motorAcceleration = float(request_data['motorAcceleration'])
+                targetIndexX = float(request_data['targetIndexX'])
+                targetIndexY = float(request_data['targetIndexX'])
                 detections = request_data['detections']
 
-                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, detections)
+                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, detections)
 
                 #flask_app.config['RSUQueue'].put([key, id, type, timestamp, x, y, yaw, detections])
 

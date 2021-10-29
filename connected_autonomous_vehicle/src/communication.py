@@ -66,7 +66,7 @@ class connectServer:
                 print ( "Error: Failed to message RSU, trying again" )
                 time.sleep(.01)
 
-    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, detections):
+    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, detections):
   
         # data to be sent to api 
         packet = {'key':self.key, 
@@ -79,6 +79,10 @@ class connectServer:
                 'roll':roll,
                 'pitch':pitch,
                 'yaw':yaw,
+                'steeringAcceleration':steeringAcceleration, 
+                'motorAcceleration':motorAcceleration, 
+                'targetIndexX':targetIndexX, 
+                'targetIndexY':targetIndexY,
                 'detections':detections}
   
         try:

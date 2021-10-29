@@ -160,7 +160,7 @@ def cav(config, vid):
     # This is important to make sure a rogue signal doesn't drive us away
     # We do not need this if this is simulation
     global vehicle_id, debug, global_time
-    vehicle_id = vehicle_id
+    vehicle_id = vid
     debug = config.debug
     last_response = []
 
@@ -265,12 +265,12 @@ def cav(config, vid):
                 if debug: print( " Vehicle ", vehicle_id, " posiiton and localization updated" )
                 
                 # Send the lolcailzation values to the RSU
-                rsu_sim_check.sendSimPosition(vehicle_id, planner.positionX_sim, planner.positionY_sim, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
+                rsu_sim_check.sendSimPosition(vehicle_id, planner.positionX_sim + planner.positionX_offset, planner.positionY_sim + planner.positionY_offset, 0.0, 0.0, 0.0, planner.theta + planner.theta_offset, planner.velocity)
                 if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
 
                 # Recieve positions of other vehicles from RSU so we can fake the sensor values
                 sim_values = rsu_sim_check.getSimPositions(vehicle_id)
-                while(sim_values['step_sim_vehicle'] == True):
+                while(sim_values['step_sim_vehicle'] == False):
                     #time.sleep(.01)
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                 
@@ -339,13 +339,14 @@ def cav(config, vid):
                 # TODO: check the timestamps are close
 
                 # Update the steering here while we wait for sensor fusion results and the reply from the RSU about the plan
-                planner.update_localization(True, [localization[0], localization[1], localization[2]])
-                planner.pure_pursuit_control()
+                if not config.simulation:
+                    planner.update_localization(True, [localization[0], localization[1], localization[2]])
+                # planner.pure_pursuit_control()
 
-                # Now update our current PID with respect to other vehicles
-                planner.check_positions_of_other_vehicles_adjust_velocity(last_response)
-                # We can't update the PID controls until after all positions are known
-                planner.update_pid()
+                # # Now update our current PID with respect to other vehicles
+                # planner.check_positions_of_other_vehicles_adjust_velocity(last_response)
+                # # We can't update the PID controls until after all positions are known
+                # planner.update_pid()
 
                 # Finally, issue the commands to the motors
                 steering_ppm, motor_pid = planner.return_command_package()
@@ -374,7 +375,8 @@ def cav(config, vid):
 
                 if config.simulation:
                     response_message = rsu_sim_check.checkin(vehicle_id, localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
-                            objectPackage)
+                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX + planner.positionX_offset, planner.targetIndexY + planner.positionY_offset, objectPackage)
+
                     # Check if our result is valid
                     if response_message == None:
                         response["error"] = 1
@@ -394,7 +396,7 @@ def cav(config, vid):
                 else:
                     comm_q.put(
                         [localization[0], localization[1], 0.0, 0.0, 0.0, localization[2],
-                            objectPackage])
+                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, objectPackage])
 
                     # This should not take long but we will delay just a bit
                     time.sleep(.01)

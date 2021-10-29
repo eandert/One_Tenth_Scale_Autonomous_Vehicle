@@ -1012,6 +1012,7 @@ class MainWindow(QMainWindow):
             self.drawIntersection = True
             self.drawCoordinates = True
             self.drawTrafficLight = True
+            self.path_debug = True
 
             #print ( "Gui", self.vehicles )
 
@@ -1161,7 +1162,7 @@ class MainWindow(QMainWindow):
         #     # self.drawVehicle = False
 
         if self.drawVehicle:
-            for vehicle in self.vehicles:
+            for idx, vehicle in enumerate(self.vehicles):
                 pen = QPen()
                 pen.setWidth(4)
                 pen.setBrush(brush_color['vehicle'])
@@ -1176,6 +1177,12 @@ class MainWindow(QMainWindow):
                 steeringAcceleration = vehicle[6]
                 targetIndexX = vehicle[7]
                 targetIndexY = vehicle[8]
+                rearAxlePositionX = vehicle[9]
+                rearAxlePositionY = vehicle[10]
+                targetVelocity = vehicle[11]
+                motorAcceleration = vehicle[12]
+                width = vehicle[13]
+                length = vehicle[14]
 
                 # Draw the vehicle position
                 # Front
@@ -1273,61 +1280,61 @@ class MainWindow(QMainWindow):
                                  self.translateX(passenger_rear_center_x - 5 * math.cos(theta)),
                                  self.translateY(passenger_rear_center_y - 5 * math.sin(theta)))
 
-        #         if self.path_debug:
-        #             # Draw the target point
-        #             pen.setBrush(brush_color['target_point'])
-        #             painter.setPen(pen)
-        #             painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * targetIndexX),
-        #                             self.translateY(self.mapSpecs.meters_to_print_scale * targetIndexY))
-        #             pen.setBrush(brush_color['wheel_angle'])
-        #             pen.setWidth(1)
-        #             painter.setPen(pen)
-        #             self.drawTargetArc(localizationPositionX, localizationPositionY, rearAxlePositionX, rearAxlePositionY, targetIndexX, targetIndexY, painter)
+                if self.path_debug:
+                    # Draw the target point
+                    pen.setBrush(brush_color['target_point'])
+                    painter.setPen(pen)
+                    painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * targetIndexX),
+                                    self.translateY(self.mapSpecs.meters_to_print_scale * targetIndexY))
+                    pen.setBrush(brush_color['wheel_angle'])
+                    pen.setWidth(1)
+                    painter.setPen(pen)
+                    self.drawTargetArc(localizationPositionX, localizationPositionY, rearAxlePositionX, rearAxlePositionY, targetIndexX, targetIndexY, painter)
 
-        #         self.labelVehicleSpeedActual[idx].setText('VA=' + str(round(velocity, 2)))
-        #         self.labelVehicleSpeedTarget[idx].setText('VT=' + str(round(targetVelocity, 2)))
-        #         self.labelVehicleAcceleration[idx].setText('AA=' + str(round(motorAcceleration, 2)))
+                self.labelVehicleSpeedActual[idx].setText('VA=' + str(round(velocity, 2)))
+                self.labelVehicleSpeedTarget[idx].setText('VT=' + str(round(targetVelocity, 2)))
+                self.labelVehicleAcceleration[idx].setText('AA=' + str(round(motorAcceleration, 2)))
 
-        #         if self.path_debug:
-        #             pen.setWidth(.5)
-        #             pen.setBrush(brush_color['bounding_box'])
-        #             pen.setWidth(4)
-        #             painter.setPen(pen)
-        #             buffer = 0.1
-        #             x1 = localizationPositionX + (
-        #                         (width/2.0 + buffer) * math.cos(theta + math.radians(90)) + (
-        #                             (length/2.0 + buffer) * math.cos(theta - math.radians(180))))
-        #             y1 = localizationPositionY + (
-        #                         (width/2.0 + buffer) * math.sin(theta + math.radians(90)) + (
-        #                             (length/2.0 + buffer) * math.sin(theta - math.radians(180))))
-        #             x2 = localizationPositionX + (
-        #                         (width/2.0 + buffer) * math.cos(theta - math.radians(90)) + (
-        #                             (length/2.0 + buffer) * math.cos(theta - math.radians(180))))
-        #             y2 = localizationPositionY + (
-        #                         (width/2.0 + buffer) * math.sin(theta - math.radians(90)) + (
-        #                             (length/2.0 + buffer) * math.sin(theta - math.radians(180))))
-        #             x3 = localizationPositionX + (
-        #                         (width/2.0 + buffer) * math.cos(theta - math.radians(90)) + (
-        #                             (length/2.0 + buffer) * math.cos(theta)))
-        #             y3 = localizationPositionY + (
-        #                         (width/2.0 + buffer) * math.sin(theta - math.radians(90)) + (
-        #                             (length/2.0 + buffer) * math.sin(theta)))
-        #             x4 = localizationPositionX + (
-        #                         (width/2.0 + buffer) * math.cos(theta + math.radians(90)) + (
-        #                             (length/2.0 + buffer) * math.cos(theta)))
-        #             y4 = localizationPositionY + (
-        #                         (width/2.0 + buffer) * math.sin(theta + math.radians(90)) + (
-        #                             (length/2.0 + buffer) * math.sin(theta)))
+                if self.path_debug:
+                    pen.setWidth(.5)
+                    pen.setBrush(brush_color['bounding_box'])
+                    pen.setWidth(4)
+                    painter.setPen(pen)
+                    buffer = 0.1
+                    x1 = localizationPositionX + (
+                                (width/2.0 + buffer) * math.cos(theta + math.radians(90)) + (
+                                    (length/2.0 + buffer) * math.cos(theta - math.radians(180))))
+                    y1 = localizationPositionY + (
+                                (width/2.0 + buffer) * math.sin(theta + math.radians(90)) + (
+                                    (length/2.0 + buffer) * math.sin(theta - math.radians(180))))
+                    x2 = localizationPositionX + (
+                                (width/2.0 + buffer) * math.cos(theta - math.radians(90)) + (
+                                    (length/2.0 + buffer) * math.cos(theta - math.radians(180))))
+                    y2 = localizationPositionY + (
+                                (width/2.0 + buffer) * math.sin(theta - math.radians(90)) + (
+                                    (length/2.0 + buffer) * math.sin(theta - math.radians(180))))
+                    x3 = localizationPositionX + (
+                                (width/2.0 + buffer) * math.cos(theta - math.radians(90)) + (
+                                    (length/2.0 + buffer) * math.cos(theta)))
+                    y3 = localizationPositionY + (
+                                (width/2.0 + buffer) * math.sin(theta - math.radians(90)) + (
+                                    (length/2.0 + buffer) * math.sin(theta)))
+                    x4 = localizationPositionX + (
+                                (width/2.0 + buffer) * math.cos(theta + math.radians(90)) + (
+                                    (length/2.0 + buffer) * math.cos(theta)))
+                    y4 = localizationPositionY + (
+                                (width/2.0 + buffer) * math.sin(theta + math.radians(90)) + (
+                                    (length/2.0 + buffer) * math.sin(theta)))
 
-        #             # print (localizationPositionX, localizationPositionY, x1, y1, x2, y2)
-        #             painter.drawPoint(self.translateX(x1 * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(y1 * self.mapSpecs.meters_to_print_scale))
-        #             painter.drawPoint(self.translateX(x2 * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(y2 * self.mapSpecs.meters_to_print_scale))
-        #             painter.drawPoint(self.translateX(x3 * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(y3 * self.mapSpecs.meters_to_print_scale))
-        #             painter.drawPoint(self.translateX(x4 * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(y4 * self.mapSpecs.meters_to_print_scale))
+                    # print (localizationPositionX, localizationPositionY, x1, y1, x2, y2)
+                    painter.drawPoint(self.translateX(x1 * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(y1 * self.mapSpecs.meters_to_print_scale))
+                    painter.drawPoint(self.translateX(x2 * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(y2 * self.mapSpecs.meters_to_print_scale))
+                    painter.drawPoint(self.translateX(x3 * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(y3 * self.mapSpecs.meters_to_print_scale))
+                    painter.drawPoint(self.translateX(x4 * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(y4 * self.mapSpecs.meters_to_print_scale))
 
         # if self.drawCamera:
         #     for idx, cis in self.cis.items():

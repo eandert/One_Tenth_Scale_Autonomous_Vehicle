@@ -189,6 +189,7 @@ class RSU():
                 self.thread[idx].daemon = True
                 self.thread[idx].start()
                 self.step_sim_vehicle_tracker.append(False)
+                print( "RSU Initialized vehicle ", idx, " thread" )
 
     def register(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
         if type == 0:
@@ -200,25 +201,14 @@ class RSU():
             self.vehicles[id].key = key
 
             # Now init the vehicle at a location
-            self.vehicles[id].update_localization(True, [x, y, yaw, 0.0])
-            self.vehicles[id].recieve_coordinate_group_commands(self.trafficLightArray)
-
-            # We update this just for the visualizer
-            self.vehicles[id].pure_pursuit_control()
+            if not self.simulation:
+                self.vehicles[id].update_localization(True, [x, y, yaw, 0.0])
 
             # Get the last known location of all other vehicles
             vehicleList = []
             for idx, vehicle in self.vehicles.items():
                 if idx != id:
                     vehicleList.append(vehicle.get_location())
-
-            # Now update our current PID with respect to other vehicles
-            self.vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList)
-
-            # We can't update the PID controls until after all positions are known
-            # We still do this here just for debugging as it should match the PID controls
-            # on the actual car and then it will be displayed on the UI
-            self.vehicles[id].update_pid()
 
             # Finally we can create the return messages
             registerResponse = dict(
@@ -248,7 +238,8 @@ class RSU():
             self.sensors[id].key = key
 
             # Now init the vehicle at a location
-            self.sensors[id].update_localization(False,[x, y, yaw, 0.0])
+            if not self.simulation:
+                self.sensors[id].update_localization(False,[x, y, yaw, 0.0])
 
             # Finally we can create the return messages
             registerResponse = dict(
@@ -267,17 +258,11 @@ class RSU():
 
             return registerResponse
 
-    def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw, detections):
+    def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, detections):
         if type == 0:
             # Double check our security, this is pretty naive at this point
             #if self.vehicles[id].key == key:
             # TODO: possibly do these calculation after responding to increase response time
-
-            # We do these calculation after responding to increase response time
-            self.vehicles[id].recieve_coordinate_group_commands(self.trafficLightArray)
-
-            # We update this just for the visualizer
-            self.vehicles[id].pure_pursuit_control()
 
             # Lets add the detections to the vehicle class
             self.vehicles[id].cameraDetections = detections["cam_obj"]
@@ -285,25 +270,22 @@ class RSU():
             self.vehicles[id].fusionDetections = detections["fused_obj"]
 
             # Update the location of this vehicle
-            self.vehicles[id].localizationPositionX = detections["localization"][0]
-            self.vehicles[id].localizationPositionY = detections["localization"][1]
+            if not self.simulation:
+                self.vehicles[id].localizationPositionX = detections["localization"][0]
+                self.vehicles[id].localizationPositionY = detections["localization"][1]
+                self.vehicles[id].velocity = detections["localization"][3]
+                self.vehicles[id].theta = detections["localization"][2]
             self.vehicles[id].localizationCovariance = detections["localization"][4]
-            self.vehicles[id].velocity = detections["localization"][3]
-            self.vehicles[id].theta = detections["localization"][2]
+            self.vehicles[id].steeringAcceleration = steeringAcceleration
+            self.vehicles[id].motorAcceleration = motorAcceleration
+            self.vehicles[id].targetIndexX = targetIndexX
+            self.vehicles[id].targetIndexY = targetIndexY
 
             # Get the last known location of all other vehicles
             vehicleList = []
             for idx, vehicle in self.vehicles.items():
                 if idx != id:
                     vehicleList.append(vehicle.get_location())
-
-            # Now update our current PID with respect to other vehicles
-            self.vehicles[id].check_positions_of_other_vehicles_adjust_velocity(vehicleList)
-
-            # We can't update the PID controls until after all positions are known
-            # We still do this here just for debugging as it should match the PID controls
-            # on the actual car and then it will be displayed on the UI
-            self.vehicles[id].update_pid()
 
             # Finally we can create the return messages
             response = dict(
@@ -366,7 +348,7 @@ class RSU():
     def sendSimPositions(self, key, id, type, x, y, z, roll, pitch, yaw, velocity):
         if type == 0:
             # Udpate the location of this vehicle
-            self.vehicles[id].update_localization(False,[x, y, yaw, velocity])
+            self.vehicles[id].update_localization(True, [x, y, yaw, velocity])
 
         # Finally we can create the return messages
         response = dict(
@@ -392,6 +374,7 @@ class RSU():
                 continue_blocker_check = True
 
         if continue_blocker_check == False:
+            self.step_sim_vehicle = False
             # Fusion time!
             # First we need to add the localization frame, since it should be the basis
             localizationsList = []
@@ -450,10 +433,11 @@ class RSU():
             self.startSim()
 
     def startSim(self):
-        self.step_sim_vehicle = False
+        self.step_sim_vehicle = True
         self.time += self.interval
         for idx, thing in enumerate(self.step_sim_vehicle_tracker):
-            self.step_sim_vehicle_tracker[idx] = False
+            self.step_sim_vehicle_tracker[idx] = True
+        print ( "Sim time Stepped @: " , self.time)
 
     def getGuiValues(self, coordinates):
         vehicle_export = []
@@ -487,6 +471,12 @@ class RSU():
                             vehicle.steeringAcceleration,
                             vehicle.targetIndexX,
                             vehicle.targetIndexY,
+                            vehicle.rearAxlePositionX,
+                            vehicle.rearAxlePositionY,
+                            vehicle.targetVelocity,
+                            vehicle.motorAcceleration,
+                            vehicle.width,
+                            vehicle.length
             ])
             camera_fov.append(vehicle.cameraSensor.field_of_view)
             camera_center.append(vehicle.cameraSensor.center_angle)
