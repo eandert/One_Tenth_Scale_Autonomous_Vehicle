@@ -221,16 +221,16 @@ class Planner:
 
     def update_pid(self):
         if self.distance_pid_control_en and not self.distance_pid_control_overide:
-            # print("TD", self.targetFollowDistance, "FD", self.followDistance)
+            print("TD", self.targetFollowDistance, "FD", self.followDistance)
             self.d_pid.setpoint = self.targetFollowDistance + self.followDistanceGain * self.velocity
             self.motorAcceleration = self.d_pid(self.followDistance)
         else:
             # Default to velocity PID cotnrol
-            # print("TV", self.targetVelocity)
+            print("TV", self.targetVelocity)
             self.v_pid.setpoint = self.targetVelocity
             self.motorAcceleration = self.v_pid(self.velocity)
         # Check for pause and we have no reverse
-        if not self.simVehicle and self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0 and not self.simVehicle):
+        if not (self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0)):
             self.motorAcceleration = 0.0
         #if self.simVehicle == False:
             #commands[self.id] = [-self.steeringAcceleration, self.motorAcceleration]

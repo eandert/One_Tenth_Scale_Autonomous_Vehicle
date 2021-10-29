@@ -32,6 +32,10 @@ if __name__ == "__main__":
     # Start the GUI
     initFlask(config)
 
+    time.sleep(5)
+
+    rsu_instance.startSim()
+
     while(True):
         #continue
         rsu_instance.check_state()

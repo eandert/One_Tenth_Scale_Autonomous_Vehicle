@@ -24,12 +24,13 @@ class RSU():
         self.lightTime = 0
 
         # Settings for the simulation
-        self.continue_blocker = False
+        self.step_sim_vehicle = False
         self.estimate_covariance = False
         self.simulate_error = False
         self.real_lidar = False
         self.simulation = config.simulation
         self.time = 0.0
+        self.interval = config.interval
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -181,13 +182,13 @@ class RSU():
         if config.simulation:
             self.sim_time = 0.0
             self.thread = {}
-            self.continue_blocker = True
-            self.continue_blocker_tracker = []
+            self.step_sim_vehicle = False
+            self.step_sim_vehicle_tracker = []
             for idx, vehicle in self.vehicles.items():
                 self.thread[idx] = Thread(target=cav.cav, args=(config, idx, ))
                 self.thread[idx].daemon = True
                 self.thread[idx].start()
-                self.continue_blocker_tracker.append(True)
+                self.step_sim_vehicle_tracker.append(False)
 
     def register(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
         if type == 0:
@@ -334,9 +335,16 @@ class RSU():
             if type != 0 or idx != id:
                 vehicleList.append(vehicle.get_location())
 
+        # If step_sim_vehicle
+        if self.step_sim_vehicle and self.step_sim_vehicle_tracker[id]:
+            step_temp = True
+            self.step_sim_vehicle_tracker[id] = False
+        else:
+            step_temp = False
+
         # Finally we can create the return messages
         response = dict(
-            continue_blocker=self.continue_blocker,
+            step_sim_vehicle=step_temp,
             estimate_covariance=self.estimate_covariance,
             simulate_error=self.simulate_error,
             real_lidar=self.real_lidar,
@@ -359,7 +367,6 @@ class RSU():
         if type == 0:
             # Udpate the location of this vehicle
             self.vehicles[id].update_localization(False,[x, y, yaw, velocity])
-            self.continue_blocker_tracker[id] = False
 
         # Finally we can create the return messages
         response = dict(
@@ -380,7 +387,7 @@ class RSU():
     def check_state(self):
         # Check if we are ready for sensor fusion
         continue_blocker_check = False
-        for each in self.continue_blocker_tracker:
+        for each in self.step_sim_vehicle_tracker:
             if each == True:
                 continue_blocker_check = True
 
@@ -440,7 +447,13 @@ class RSU():
                 self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
 
             # We have completed fusion, unblock
-            self.continue_blocker = False
+            self.startSim()
+
+    def startSim(self):
+        self.step_sim_vehicle = False
+        self.time += self.interval
+        for idx, thing in enumerate(self.step_sim_vehicle_tracker):
+            self.step_sim_vehicle_tracker[idx] = False
 
     def getGuiValues(self, coordinates):
         vehicle_export = []

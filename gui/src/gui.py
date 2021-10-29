@@ -320,7 +320,7 @@ class MainWindow(QMainWindow):
         print ( " GUI Init end ")
 
         # Do this forevvvvveerrrrr!!!
-        timer = QtCore.QTimer(self, timeout=self.stepTime, interval=250)
+        timer = QtCore.QTimer(self, timeout=self.stepTime, interval=100)
         timer.start()
 
     def on_start_clicked(self):
@@ -1000,7 +1000,7 @@ class MainWindow(QMainWindow):
 
         if len(response) > 5:
 
-            self.vehicle = response['vehicle']
+            self.vehicles = response['vehicle']
             self.camera_fov = response['camera_fov']
             self.camera_center = response['camera_center']
             self.lidar_detection_centroid = response['lidar_detection_centroid']
@@ -1013,7 +1013,7 @@ class MainWindow(QMainWindow):
             self.drawCoordinates = True
             self.drawTrafficLight = True
 
-            print ( "Gui", self.vehicle )
+            #print ( "Gui", self.vehicles )
 
         self.drawTrafficLight = True
 

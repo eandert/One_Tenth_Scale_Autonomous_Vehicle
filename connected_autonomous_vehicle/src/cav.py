@@ -270,7 +270,7 @@ def cav(config, vid):
 
                 # Recieve positions of other vehicles from RSU so we can fake the sensor values
                 sim_values = rsu_sim_check.getSimPositions(vehicle_id)
-                while(sim_values['continue_blocker'] == True):
+                while(sim_values['step_sim_vehicle'] == True):
                     #time.sleep(.01)
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                 
@@ -365,9 +365,9 @@ def cav(config, vid):
                     "localization_t": lidartimestamp,
                     "localization": localization,
                     "lidar_t": lidartimestamp,
-                    "lidar_obj": lidarcoordinates,
+                    "lidar_obj": [],#lidarcoordinates,
                     "cam_t": camtimestamp,
-                    "cam_obj": camcoordinates,
+                    "cam_obj": [],#camcoordinates,
                     "fused_t": fusion_start,
                     "fused_obj": fusion_result
                 }
@@ -415,9 +415,11 @@ def cav(config, vid):
 
                     # Now update our current PID with respect to other vehicles
                     planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
+                    if debug: print( " Vehicle ", vehicle_id, " target velocity ", planner.motorAcceleration, planner.targetVelocityGeneral, planner.targetVelocity, planner.targetFollowDistance, planner.followDistance )
                     last_response = response["veh_locations"]
                     # We can't update the PID controls until after all positions are known
                     planner.update_pid()
+                    if debug: print( " Vehicle ", vehicle_id, " ppm, pwm ", steering_ppm, motor_pid )
 
                     # Finally, issue the commands to the motors
                     steering_ppm, motor_pid = planner.return_command_package()
