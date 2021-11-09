@@ -39,7 +39,7 @@ if __name__ == "__main__":
     while(True):
         #continue
         rsu_instance.check_state()
-        time.sleep(.1)
+        #time.sleep(.1)
         #print ( "sleep" )
 
 sys.exit()

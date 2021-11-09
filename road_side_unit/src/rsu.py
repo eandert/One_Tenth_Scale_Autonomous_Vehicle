@@ -51,10 +51,12 @@ class RSU():
         self.globalFusionList = []
 
         # Lets create the vehicles
+        self.step_sim_vehicle_tracker = []
         for idx, vehicle in enumerate(config.cav):
             new_vehicle = vehicle_planning.Planner()
             new_vehicle.initialVehicleAtPosition(vehicle[0], vehicle[1], vehicle[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, 0, vehicle[3])
             self.vehicles[idx] = new_vehicle
+            self.step_sim_vehicle_tracker.append(False)
 
         # Lets create the sensors
         for idx, cis in enumerate(config.cav):
@@ -83,6 +85,8 @@ class RSU():
 
         # If we are in a simulation, this will start the threads
         self.initSimulation(config)
+
+        self.timeout = math.ceil(self.getTime())
 
         # newvehicle1 = vehicle_planning.Planner()
         # newvehicle1.initialVehicleAtPosition(
@@ -183,12 +187,10 @@ class RSU():
             self.sim_time = 0.0
             self.thread = {}
             self.step_sim_vehicle = False
-            self.step_sim_vehicle_tracker = []
             for idx, vehicle in self.vehicles.items():
                 self.thread[idx] = Thread(target=cav.cav, args=(config, idx, ))
                 self.thread[idx].daemon = True
                 self.thread[idx].start()
-                self.step_sim_vehicle_tracker.append(False)
                 print( "RSU Initialized vehicle ", idx, " thread" )
 
     def register(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
@@ -281,6 +283,8 @@ class RSU():
             self.vehicles[id].targetIndexX = targetIndexX
             self.vehicles[id].targetIndexY = targetIndexY
 
+            self.step_sim_vehicle_tracker[id] = False
+
             # Get the last known location of all other vehicles
             vehicleList = []
             for idx, vehicle in self.vehicles.items():
@@ -372,10 +376,10 @@ class RSU():
         # Check if we are ready for sensor fusion
         continue_blocker_check = False
         for each in self.step_sim_vehicle_tracker:
-            if each == True:
+            if each:
                 continue_blocker_check = True
 
-        if continue_blocker_check == False:
+        if continue_blocker_check == False or self.getTime() > self.timeout:
             self.step_sim_vehicle = False
             # Fusion time!
             # First we need to add the localization frame, since it should be the basis
@@ -395,7 +399,7 @@ class RSU():
             #     # Add to the global sensor fusion
             #     self.globalFusion.processDetectionFrame(idx, self.getTime(), cis.fusionDetections, .25, self.estimate_covariance)
 
-            self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+            self.globalFusionList = []#self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
             # Ground truth to the original dataset
             # Get the last known location of all other vehicles
@@ -433,14 +437,17 @@ class RSU():
 
             # We have completed fusion, unblock
             self.startSim()
+            self.update_traffic_lights()
+
+            self.timeout += self.interval
 
     def startSim(self):
-        self.update_traffic_lights()
-        self.step_sim_vehicle = True
-        self.time += self.interval
-        for idx, thing in enumerate(self.step_sim_vehicle_tracker):
-            self.step_sim_vehicle_tracker[idx] = True
-        print ( "Sim time Stepped @: " , self.time)
+        if self.simulation:
+            self.step_sim_vehicle = True
+            self.time += self.interval
+            for idx, thing in enumerate(self.step_sim_vehicle_tracker):
+                self.step_sim_vehicle_tracker[idx] = True
+            print ( "Sim time Stepped @: " , self.time)
 
     def getGuiValues(self, coordinates):
         vehicle_export = []
