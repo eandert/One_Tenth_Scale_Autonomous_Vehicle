@@ -271,7 +271,7 @@ def cav(config, vid):
                 # Recieve positions of other vehicles from RSU so we can fake the sensor values
                 sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                 while(sim_values['step_sim_vehicle'] == False):
-                    #time.sleep(.01)
+                    time.sleep(.01)
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                 
                 tempList = sim_values['veh_locations']

@@ -168,6 +168,10 @@ class MainWindow(QMainWindow):
         # self.lastLocalizationUpdate = 0
         # self.lightTime = 0
 
+        self.end_simulation = False
+        self.pause_simulation = True
+        self.last_pause_simulation = True
+
         # Draw params
         self.drawTrafficLight = False
         self.display_localization = True
@@ -288,6 +292,7 @@ class MainWindow(QMainWindow):
         self.labelVehicleSpeedActual = []
         self.labelVehicleSpeedTarget = []
         self.labelVehicleAcceleration = []
+        self.last_line_vehicle_speed = []
 
         for idx, vehicle in enumerate(self.vehicles):
             self.labelVehicleSpeed.append(QLabel(self))
@@ -298,6 +303,7 @@ class MainWindow(QMainWindow):
             self.lineVehicleSpeed[idx].move(1000, 120 + 80 * idx)
             self.lineVehicleSpeed[idx].resize(100, 32)
             self.lineVehicleSpeed[idx].setText("0")
+            self.last_line_vehicle_speed.append(0.0)
 
             self.labelVehicleSpeedActual.append(QLabel(self))
             self.labelVehicleSpeedActual[idx].setText('VA=0')
@@ -408,7 +414,7 @@ class MainWindow(QMainWindow):
                 self.unitTestButton.setText('Unit Test On')
 
     def on_end_clicked(self):
-        sys.exit()
+        self.end_simulation = True
 
     # def updateVehicleInSim(self, idx, full_simulation, vehicleList, thread_idx):
     #     # Update ourself
@@ -1018,6 +1024,20 @@ class MainWindow(QMainWindow):
             #print ( "Gui", self.vehicles )
 
         self.drawTrafficLight = True
+
+        new_speed_target = False
+        for idx, vehicle in enumerate(self.vehicles):
+            if not (self.lineVehicleSpeed[idx].text() == "" or self.lineVehicleSpeed[idx].text() == "."):
+                if float(self.lineVehicleSpeed[idx].text()) != self.last_line_vehicle_speed[idx]:
+                    new_speed_target = True
+                    self.last_line_vehicle_speed[idx] = float(self.lineVehicleSpeed[idx].text())
+
+        if self.pause_simulation != self.last_pause_simulation or self.end_simulation or new_speed_target:
+            print ( "Senging gui buttons!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ")
+            self.rsu_connection.sendGuiValues(self.last_line_vehicle_speed, self.pause_simulation, self.end_simulation, None)
+            self.last_pause_simulation = self.pause_simulation
+            if self.end_simulation:
+                sys.exit()
 
             # if self.time == 599875:
             #     f = open("localization.txt", "a")

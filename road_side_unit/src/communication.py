@@ -299,3 +299,27 @@ class MainClass(Resource):
             )
         except Exception as e:
             name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+
+@name_space.route("/guisend/", methods=['GET'])
+class MainClass(Resource):
+
+    @app.doc(responses={200: 'OK', 401: 'RSU Not Running.', 500: 'Unknown Error'}, params={})
+    @app.doc(description="This method is called during simulation to get the locations of other vehicels within the simulation..")
+    @app.response(200, 'Success', RSUVehicleGetSimTime)
+    def get(self):
+        #print("got request")
+        #print(request.is_json)
+        request_data = request.get_json()
+        try:
+            #print("data:", request_data)
+            if request_data:
+                velocity_targets = request_data['velocity_targets']
+                pause = request_data['pause']
+                end = request_data['end']
+                button_states = request_data['button_states']
+
+                returnObject = flask_app.config['RSUClass'].sendGuiValues(velocity_targets, pause, end, button_states)
+
+                #print ( returnObject )
+        except Exception as e:
+            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")

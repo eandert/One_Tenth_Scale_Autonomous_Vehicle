@@ -34,12 +34,14 @@ if __name__ == "__main__":
 
     time.sleep(5)
 
-    rsu_instance.startSim()
+    rsu_instance.stepSim()
 
     while(True):
-        #continue
         rsu_instance.check_state()
-        #time.sleep(.1)
-        #print ( "sleep" )
+
+        if rsu_instance.end:
+            sys.exit()
+
+        time.sleep(.01)
 
 sys.exit()

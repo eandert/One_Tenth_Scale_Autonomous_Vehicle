@@ -22,6 +22,8 @@ class RSU():
         self.sensors = {}
         self.trafficLightArray = [0, 2, 0]
         self.lightTime = 0
+        self.pause_simulation = True
+        self.end = False
 
         # Settings for the simulation
         self.step_sim_vehicle = False
@@ -293,11 +295,14 @@ class RSU():
 
             # Finally we can create the return messages
             response = dict(
-                v_t=self.vehicles[id].targetVelocity,
+                v_t=self.vehicles[id].targetVelocityGeneral,
                 tfl_state=self.trafficLightArray,
                 veh_locations=vehicleList,
                 timestep=self.getTime()
             )
+
+            if self.pause_simulation:
+                response['v_t'] = 0.0
 
             # Finally we can create the return message
             return response
@@ -379,7 +384,7 @@ class RSU():
             if each:
                 continue_blocker_check = True
 
-        if continue_blocker_check == False or self.getTime() > self.timeout:
+        if continue_blocker_check == False or (not self.simulation and self.getTime() > self.timeout):
             self.step_sim_vehicle = False
             # Fusion time!
             # First we need to add the localization frame, since it should be the basis
@@ -436,19 +441,35 @@ class RSU():
                 self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
 
             # We have completed fusion, unblock
-            self.startSim()
+            self.stepSim()
             self.update_traffic_lights()
 
             self.timeout += self.interval
+            if self.simulation:
+                self.time += self.interval
 
-    def startSim(self):
+    def stepSim(self):
         if self.simulation:
             self.step_sim_vehicle = True
-            self.time += self.interval
             for idx, thing in enumerate(self.step_sim_vehicle_tracker):
                 self.step_sim_vehicle_tracker[idx] = True
-            print ( "Sim time Stepped @: " , self.time)
+            #print ( "Sim time Stepped @: " , self.time)
 
+    def sendGuiValues(self, velocity_targets, pause, end, button_states):
+        self.pause_simulation = pause
+
+        if end:
+            self.end = True
+
+        for idx, each in enumerate(velocity_targets):
+            self.vehicles[idx].targetVelocityGeneral = each
+
+        response = dict(
+            returned = True
+        )
+
+        return response
+    
     def getGuiValues(self, coordinates):
         vehicle_export = []
         camera = []
@@ -470,8 +491,7 @@ class RSU():
 
         for idx, vehicle in self.vehicles.items():
             # Add to the global sensor fusion
-            vehicle.targetVelocity = 0.5
-            vehicle.targetVelocityGeneral = 0.5
+            #vehicle.targetVelocityGeneral = 0.5
             vehicle_export.append([vehicle.localizationPositionX,
                             vehicle.localizationPositionY,
                             vehicle.theta + vehicle.theta_offset,
@@ -513,9 +533,9 @@ class RSU():
         return response
 
     def update_traffic_lights(self):
-        print("checking light", self.lightTime, self.mapSpecs.lightTimePeriod, self.trafficLightArray)
+        #print("checking light", self.lightTime, self.mapSpecs.lightTimePeriod, self.trafficLightArray)
         if self.lightTime > self.mapSpecs.lightTimePeriod:
-            print( "changing light" )
+            #print( "changing light" )
             self.lightTime = 0
             if self.trafficLightArray[1] == 2:
                 self.trafficLightArray[1] = 1
