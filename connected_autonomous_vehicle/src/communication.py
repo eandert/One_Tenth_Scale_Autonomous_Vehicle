@@ -95,7 +95,7 @@ class connectServer:
             #print("The response is:%s"%response)
 
             return response
-        except requests.exceptions.Timeout as e:
+        except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
             response = None
 
@@ -116,7 +116,7 @@ class connectServer:
             #print("The response is:%s"%response)
 
             return response
-        except requests.exceptions.Timeout as e:
+        except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
             response = None
 
@@ -135,9 +135,10 @@ class connectServer:
             #print("The response is:%s"%response)
 
             return response
-        except requests.exceptions.Timeout as e:
+        except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
-            response = None
+            response = {'time':-99}
+            return response
 
     def sendSimPosition(self, vehicle_id, x, y, z, roll, pitch, yaw, velocity):
   
@@ -163,7 +164,7 @@ class connectServer:
             #print("The response is:%s"%response)
 
             return response
-        except requests.exceptions.Timeout as e:
+        except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
             response = None
 
@@ -256,7 +257,7 @@ class connectLIDAR:
         return fromc.read()
 
     def runLIDARCode(self):
-        cmd = "./slamware_sdk_linux-armv7hf-gcc4.8/linux-armv7hf-release/output/ttcomp"
+        cmd = "/home/jetson/Projects/slamware/slamware_sdk_linux-armv7hf-gcc4.8/linux-armv7hf-release/output/ttcomp"
         pro = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
                            shell=True, preexec_fn=os.setsid) 
         return pro

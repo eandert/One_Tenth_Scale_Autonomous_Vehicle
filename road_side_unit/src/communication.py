@@ -207,10 +207,10 @@ class MainClass(Resource):
             #print("data:", request_data)
             if request_data:
                 key = request_data['key']
-                id = int(request_data['id'])
-                type = int(request_data['type'])
+                vid = int(request_data['id'])
+                vtype = int(request_data['type'])
 
-                returnObject = flask_app.config['RSUClass'].getSimPositions(key, id, type)
+                returnObject = flask_app.config['RSUClass'].getSimPositions(key, vid, vtype)
 
                 return jsonify(
                     returnObject

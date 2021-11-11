@@ -46,8 +46,6 @@ class MainWindow(QMainWindow):
         self.rsu_connection = communication.connectServer(config.rsu_ip)
         init_response = self.rsu_connection.getGuiValues(True)
 
-        print ( "gui" ,  init_response )
-
         self.mapSpecs = mapGenerator.MapSpecs(init_response['map_specs'][0], init_response['map_specs'][1])
         self.vehicles = init_response['vehicle']
         self.camera_fov = init_response['camera_fov']
@@ -1033,7 +1031,6 @@ class MainWindow(QMainWindow):
                     self.last_line_vehicle_speed[idx] = float(self.lineVehicleSpeed[idx].text())
 
         if self.pause_simulation != self.last_pause_simulation or self.end_simulation or new_speed_target:
-            print ( "Senging gui buttons!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ")
             self.rsu_connection.sendGuiValues(self.last_line_vehicle_speed, self.pause_simulation, self.end_simulation, None)
             self.last_pause_simulation = self.pause_simulation
             if self.end_simulation:

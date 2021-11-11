@@ -295,9 +295,22 @@ class LIDAR:
 
         #print ( "got", output )
 
-        array = np.array(output)
+        unfiltered_array = np.array(output)
 
-        #print ( "conv", array )
+        # FIlter points outside of our route
+        # Create an empty list
+        filter_arr = []
+
+        # Go through each element in the list
+        # for element in unfiltered_array:
+        #     if bounding_box[0][0] >= element[0] <= bounding_box[0][1] and bounding_box[1][0] >= element[1] <= bounding_box[1][1]:
+        #         filter_arr.append(True)
+        #     else:
+        #         filter_arr.append(False)
+
+        # array = unfiltered_array[filter_arr]
+
+        array = unfiltered_array
 
         db = DBSCAN(eps=0.1, min_samples=3).fit(array)
         y_pred = db.fit_predict(array)

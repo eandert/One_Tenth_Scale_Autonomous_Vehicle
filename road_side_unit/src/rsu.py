@@ -72,14 +72,6 @@ class RSU():
         # Sleep for a second while we let flask get up and running
         time.sleep(1)
 
-        # Start up the Flask back end processor as it's own thread
-        # self.backend = Thread(target=BackendProcessor, args=(self.q, self.vehicles, self.sensors, self.trafficLightArray))
-        # self.backend.daemon = True
-        # self.backend.start()
-
-        # Sleep for a second while we let flask get up and running
-        # time.sleep(1)
-
         # Start the falsk server for communication
         self.initFlask(config.rsu_ip)
 
@@ -89,52 +81,6 @@ class RSU():
         self.initSimulation(config)
 
         self.timeout = math.ceil(self.getTime())
-
-        # newvehicle1 = vehicle_planning.Planner()
-        # newvehicle1.initialVehicleAtPosition(
-        #     (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 0,
-        #     0,
-        #     mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 0, isSimulation)
-
-        # newvehicle2 = vehicle_planning.Planner()
-        # newvehicle2.initialVehicleAtPosition(0, (
-        #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-        #                                         270,
-        #                                         mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
-        #                                         isSimulation)
-
-        # newvehicle3 = vehicle_planning.Planner()
-        # newvehicle3.initialVehicleAtPosition(
-        #     2.0 * (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 50) / mapSpecs.meters_to_print_scale, 
-        #     0,
-        #     0,
-        #     mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, 1, isSimulation)
-
-        # newvehicle4 = vehicle_planning.Planner()
-        # newvehicle4.initialVehicleAtPosition(0, 2.0 * (
-        #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 50) / mapSpecs.meters_to_print_scale,
-        #                                         270,
-        #                                         mapSpecs.xCoordinates, mapSpecs.yCoordinates, mapSpecs.vCoordinates, len(self.vehicles),
-        #                                         isSimulation)
-
-        # newSensor = cam_planning.Planner()
-        # newSensor.initialVehicleAtPosition(
-        #     (- (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) - 100) / mapSpecs.meters_to_print_scale, (
-        #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale,
-        #     -45, 2, isSimulation)
-
-        # newSensor2 = cam_planning.Planner()
-        # newSensor2.initialVehicleAtPosition(
-        #     (+ (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale, -(
-        #         (mapSpecs.intersectionWidth * mapSpecs.meters_to_print_scale / 2) + 100) / mapSpecs.meters_to_print_scale,
-        #     -45 + 180, 2, isSimulation)
-
-        # self.vehicles[0] = newvehicle1
-        # self.vehicles[1] = newvehicle2
-        # #self.vehicles[2] = newvehicle3
-        # #self.vehicles[3] = newvehicle4
-        # self.sensors[0] = newSensor
-        # #self.sensors[1] = newSensor2
 
     def initUnitTestParams(self):
         # Keep track of stats if this is a simulation
@@ -187,13 +133,14 @@ class RSU():
          # If this is a simulation, we need to start up the CAVs and CISs as threads
         if config.simulation:
             self.sim_time = 0.0
-            self.thread = {}
+            self.thread = dict()
             self.step_sim_vehicle = False
             for idx, vehicle in self.vehicles.items():
-                self.thread[idx] = Thread(target=cav.cav, args=(config, idx, ))
-                self.thread[idx].daemon = True
-                self.thread[idx].start()
+                self.thread["cav"+str(idx)] = Thread(target=cav.cav, args=(config, idx, ))
+                self.thread["cav"+str(idx)].daemon = True
+                self.thread["cav"+str(idx)].start()
                 print( "RSU Initialized vehicle ", idx, " thread" )
+                print ( self.thread )
 
     def register(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
         if type == 0:
@@ -217,12 +164,12 @@ class RSU():
             # Finally we can create the return messages
             registerResponse = dict(
                 v_t=self.vehicles[id].targetVelocityGeneral,
-                t_x=self.vehicles[id].positionX_offset,
-                t_y=self.vehicles[id].positionY_offset,
+                t_x=self.vehicles[id].localizationPositionX,
+                t_y=self.vehicles[id].localizationPositionY,
                 t_z="0.0",
                 t_roll="0.0",
                 t_pitch="0.0",
-                t_yaw=self.vehicles[id].theta_offset,
+                t_yaw=self.vehicles[id].theta,
                 route_x=self.mapSpecs.xCoordinates,
                 route_y=self.mapSpecs.yCoordinates,
                 route_TFL=self.mapSpecs.vCoordinates,
@@ -359,7 +306,7 @@ class RSU():
     def sendSimPositions(self, key, id, type, x, y, z, roll, pitch, yaw, velocity):
         if type == 0:
             # Udpate the location of this vehicle
-            self.vehicles[id].update_localization(True, [x - self.vehicles[id].positionX_offset, y- self.vehicles[id].positionY_offset, yaw- self.vehicles[id].theta_offset, velocity])
+            self.vehicles[id].update_localization(True, [x, y, yaw, velocity])
 
         # Finally we can create the return messages
         response = dict(
@@ -445,15 +392,15 @@ class RSU():
             self.update_traffic_lights()
 
             self.timeout += self.interval
-            if self.simulation:
-                self.time += self.interval
+            
 
     def stepSim(self):
         if self.simulation:
             self.step_sim_vehicle = True
             for idx, thing in enumerate(self.step_sim_vehicle_tracker):
                 self.step_sim_vehicle_tracker[idx] = True
-            #print ( "Sim time Stepped @: " , self.time)
+            self.time += self.interval
+            print ( "Sim time Stepped @: " , self.time)
 
     def sendGuiValues(self, velocity_targets, pause, end, button_states):
         self.pause_simulation = pause

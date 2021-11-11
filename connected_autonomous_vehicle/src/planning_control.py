@@ -27,7 +27,7 @@ class Planner:
         self.wheelbaseLength = .35
         self.wheelbaseWidth = .245
         self.axleFromCenter = self.wheelbaseLength/2.0
-        self.steeringAngleMax = math.radians(40.0)
+        self.steeringAngleMax = math.radians(35.0)
         self.velocityMax = 1.0
         
         self.maxTurningRadius = self.wheelbaseLength / math.tan(self.steeringAngleMax)
@@ -86,31 +86,36 @@ class Planner:
         self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
                                                0, .025, .05, .15)
         
-    def initialVehicleAtPosition(self, x_offset, y_offset, theta_offset, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
+    def initialVehicleAtPosition(self, x_init, y_init, theta_init, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
         self.targetVelocityGeneral = 0
         self.id = id_in
         self.simVehicle = simVehicle
         self.seeringAngle = 0
-        # This holds the actual position of the vehicle
-        self.positionX_offset = x_offset
-        self.positionY_offset = y_offset
-        self.theta_offset = math.radians(theta_offset)
         # This is the known localization position
         if simVehicle:
-            reverse_theta = self.theta_offset-math.radians(180)
-            self.rearAxlePositionX = self.positionX_offset + (self.axleFromCenter * math.cos(reverse_theta))
-            self.rearAxlePositionY = self.positionY_offset + (self.axleFromCenter * math.sin(reverse_theta))
-            self.localizationPositionX = self.positionX_offset
-            self.localizationPositionY = self.positionY_offset
+            reverse_theta = theta_init-math.radians(180)
+            self.rearAxlePositionX = x_init + (self.axleFromCenter * math.cos(reverse_theta))
+            self.rearAxlePositionY = y_init + (self.axleFromCenter * math.sin(reverse_theta))
+            self.localizationPositionX = x_init
+            self.localizationPositionY = y_init
             self.positionX_sim = self.rearAxlePositionX
             self.positionY_sim = self.rearAxlePositionY
             self.velocity = 0
-            self.theta = self.theta_offset
+            self.theta = theta_init
+            # For simulation we will zero out the offsets
+            self.positionX_offset = 0
+            self.positionY_offset = 0
+            self.theta_offset = 0
         else:
-            # Since this is a real world test we will start the vehicle somewhere random until it connects
-            self.rearAxlePositionX = 5 + self.positionX_offset
-            self.rearAxlePositionY = 5 + self.positionY_offset
-            self.theta = self.theta_offset
+            # A real world test
+            # We need to calcualte the constant offset for the LIDAR to world coordinates here
+            self.positionX_offset = x_init - self.localizationPositionX
+            self.positionY_offset = y_init - self.localizationPositionY
+            self.theta_offset = theta_init - self.theta
+            # Now set our position
+            self.rearAxlePositionX = x_init
+            self.rearAxlePositionY = y_init
+            self.theta = theta_init
             self.velocity = 0
         self.lastPointIndex = None
         self.xCoordinates = xCoordinates
@@ -147,11 +152,11 @@ class Planner:
             self.velocity = self.calc_velocity(localization[0], localization[1], self.rearAxlePositionX, self.rearAxlePositionY, localization[2])
             self.rearAxlePositionX = (((localization[0] - self.axleFromCenter) * math.cos(self.theta_offset)) - (localization[1] * math.sin(self.theta_offset))) + self.positionX_offset
             self.rearAxlePositionY = ((localization[1] * math.cos(self.theta_offset)) + (localization[0] * math.sin(self.theta_offset))) + self.positionY_offset
-            self.theta = localization[2] + self.theta_offset
             # Update the localization position correctly
             reverse_theta = self.theta - math.radians(180)
-            self.localizationPositionX = self.rearAxlePositionX - (self.axleFromCenter * math.cos(reverse_theta))
-            self.localizationPositionY = self.rearAxlePositionY - (self.axleFromCenter * math.sin(reverse_theta))
+            self.localizationPositionX = localization[0]
+            self.localizationPositionY = localization[1]
+            self.theta = localization[2]
 
     def calc_velocity(self, x1, y1, x2, y2, theta):
         velocity = math.hypot(x2 - x1, y2 - y1) * (1/8)
@@ -170,7 +175,7 @@ class Planner:
 
         alpha = math.atan2(ty - self.rearAxlePositionY, tx - self.rearAxlePositionX) - self.theta
 
-        Lf = self.k * self.velocity + self.Lfc
+        Lf = self.k * self.velocity + self.Lfc + self.axleFromCenter
 
         delta = math.atan2(2.0 * self.wheelbaseLength * math.sin(alpha) / Lf, 1.0)
 
@@ -236,7 +241,7 @@ class Planner:
             self.motorAcceleration = self.v_pid(self.velocity)
             #print( "motorAcceleration", self.motorAcceleration)
         # Check for pause and we have no reverse
-        if self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0 and self.simVehicle):
+        if self.targetVelocityGeneral == 0.0 or (self.targetVelocity <= 0.0 and not self.simVehicle):
             self.motorAcceleration = 0.0
         #if self.simVehicle == False:
             #commands[self.id] = [-self.steeringAcceleration, self.motorAcceleration]
@@ -353,7 +358,7 @@ class Planner:
                 if checkind >= len(self.xCoordinates):
                     checkind = 0
                 distance_next_index = self.calc_distance(self.xCoordinates[checkind], self.yCoordinates[checkind])
-                if distance_next_index > distance_this_index >= Lf:
+                if distance_next_index > distance_this_index:
                     break
                 distance_this_index = distance_next_index
                 ind = checkind
