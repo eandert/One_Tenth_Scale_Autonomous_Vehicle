@@ -324,7 +324,7 @@ class MainWindow(QMainWindow):
         print ( " GUI Init end ")
 
         # Do this forevvvvveerrrrr!!!
-        timer = QtCore.QTimer(self, timeout=self.stepTime, interval=100)
+        timer = QtCore.QTimer(self, timeout=self.stepTime, interval=250)
         timer.start()
 
     def on_start_clicked(self):

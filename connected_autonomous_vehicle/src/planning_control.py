@@ -109,13 +109,16 @@ class Planner:
         else:
             # A real world test
             # We need to calcualte the constant offset for the LIDAR to world coordinates here
-            self.positionX_offset = x_init - self.localizationPositionX
-            self.positionY_offset = y_init - self.localizationPositionY
-            self.theta_offset = theta_init - self.theta
-            # Now set our position
-            self.rearAxlePositionX = x_init
-            self.rearAxlePositionY = y_init
+            self.localizationPositionX = x_init
+            self.localizationPositionY = y_init
             self.theta = theta_init
+            self.positionX_offset = x_init
+            self.positionY_offset = y_init
+            self.theta_offset = theta_init
+            # Now set our position
+            reverse_theta = theta_init - math.radians(180)
+            self.rearAxlePositionX = x_init + (self.axleFromCenter * math.cos(reverse_theta))
+            self.rearAxlePositionY = y_init + (self.axleFromCenter * math.sin(reverse_theta))
             self.velocity = 0
         self.lastPointIndex = None
         self.xCoordinates = xCoordinates

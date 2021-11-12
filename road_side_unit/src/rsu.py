@@ -164,12 +164,12 @@ class RSU():
             # Finally we can create the return messages
             registerResponse = dict(
                 v_t=self.vehicles[id].targetVelocityGeneral,
-                t_x=self.vehicles[id].localizationPositionX,
-                t_y=self.vehicles[id].localizationPositionY,
+                t_x=self.vehicles[id].positionX_offset,
+                t_y=self.vehicles[id].positionY_offset,
                 t_z="0.0",
                 t_roll="0.0",
                 t_pitch="0.0",
-                t_yaw=self.vehicles[id].theta,
+                t_yaw=self.vehicles[id].theta_offset,
                 route_x=self.mapSpecs.xCoordinates,
                 route_y=self.mapSpecs.yCoordinates,
                 route_TFL=self.mapSpecs.vCoordinates,

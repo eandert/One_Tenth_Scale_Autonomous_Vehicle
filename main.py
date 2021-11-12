@@ -42,6 +42,6 @@ if __name__ == "__main__":
         if rsu_instance.end:
             sys.exit()
 
-        time.sleep(.01)
+        time.sleep(.001)
 
 sys.exit()
