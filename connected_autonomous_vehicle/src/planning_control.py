@@ -27,7 +27,7 @@ class Planner:
         self.wheelbaseLength = .35
         self.wheelbaseWidth = .245
         self.axleFromCenter = self.wheelbaseLength/2.0
-        self.steeringAngleMax = math.radians(35.0)
+        self.steeringAngleMax = math.radians(30.0)
         self.velocityMax = 1.0
         
         self.maxTurningRadius = self.wheelbaseLength / math.tan(self.steeringAngleMax)
@@ -109,14 +109,15 @@ class Planner:
         else:
             # A real world test
             # We need to calcualte the constant offset for the LIDAR to world coordinates here
+            # Assume we are starting at 0,0
             self.localizationPositionX = x_init
             self.localizationPositionY = y_init
             self.theta = theta_init
             self.positionX_offset = x_init
             self.positionY_offset = y_init
             self.theta_offset = theta_init
-            # Now set our position
-            reverse_theta = theta_init - math.radians(180)
+            # Now set our rear axle position
+            reverse_theta = theta_init-math.radians(180)
             self.rearAxlePositionX = x_init + (self.axleFromCenter * math.cos(reverse_theta))
             self.rearAxlePositionY = y_init + (self.axleFromCenter * math.sin(reverse_theta))
             self.velocity = 0
@@ -152,14 +153,14 @@ class Planner:
             # Calculate velocity before we update, the localization positions are from last frame
             # self.axleFromCenter is to adjust for lidar position vs rear axle
             # TODO: Check this!
-            self.velocity = self.calc_velocity(localization[0], localization[1], self.rearAxlePositionX, self.rearAxlePositionY, localization[2])
-            self.rearAxlePositionX = (((localization[0] - self.axleFromCenter) * math.cos(self.theta_offset)) - (localization[1] * math.sin(self.theta_offset))) + self.positionX_offset
-            self.rearAxlePositionY = ((localization[1] * math.cos(self.theta_offset)) + (localization[0] * math.sin(self.theta_offset))) + self.positionY_offset
+            self.velocity = self.calc_velocity(localization[0] + self.positionX_offset, localization[1] + self.positionY_offset, self.localizationPositionX, self.localizationPositionY, localization[2])
             # Update the localization position correctly
+            self.localizationPositionX = localization[0] + self.positionX_offset
+            self.localizationPositionY = localization[1] + self.positionY_offset
+            self.theta = localization[2] + self.theta_offset
             reverse_theta = self.theta - math.radians(180)
-            self.localizationPositionX = localization[0]
-            self.localizationPositionY = localization[1]
-            self.theta = localization[2]
+            self.rearAxlePositionX = self.localizationPositionX + (self.axleFromCenter * math.cos(reverse_theta))
+            self.rearAxlePositionY = self.localizationPositionY + (self.axleFromCenter * math.sin(reverse_theta))
 
     def calc_velocity(self, x1, y1, x2, y2, theta):
         velocity = math.hypot(x2 - x1, y2 - y1) * (1/8)

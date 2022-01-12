@@ -1,41 +1,22 @@
-import sys, math, random, os, cv2, numpy as np, time, csv, socket
-from flask import Response
-from flask import Flask
-from flask import render_template
-import threading
+import sys, math, os, cv2, numpy as np, time
 from sklearn.neighbors import BallTree
-import matplotlib.pyplot as plt
-import io
 import nanocamera as nano
 # Change folder so we can find where darknet is stored
 # Uncomment only if darknet is not in the same folder as this python file
 sys.path.insert(0, '../darknet')
 import darknet
 
-app = Flask(__name__)
 
-outputFrame = None
-outputCoordinates = None
-lock = threading.Lock()
-
-# This class holds the default camera configurations for the 2 recorded videos as well as the default guess for the
-# configuation outlined in the readme
+''' This class holds the default camera configurations for the 2 recorded videos as well as the default guess for the
+configuation outlined in the readme '''
 class CameraSpecifications:
-    def __init__(self, defaultVehicle = False, defaultTrafficCam = True):
-        if defaultVehicle:
-            self.cameraAdjustmentAngle = -10.0
-            self.cameraHeight = 1.0
-            self.hFOV = 157.0  # 2 * math.atan( / focalLength)
-            self.vFOV = 155.0
-            self.imageWidth = 1280
-            self.imageHeight = 720
-            self.focalLength = self.imageHeight / 2 / math.tan(self.vFOV / 2.0)
-        elif defaultTrafficCam:
+    def __init__(self, default = True):
+        if default:
             # Use default settign for pre-recorded traffic cam setup
             self.cameraAdjustmentAngle = 0.0
-            self.cameraHeight = 0.5
-            self.hFOV = 160.0  # 2 * math.atan( / focalLength)
-            self.vFOV = 146.0
+            self.cameraHeight = 2.0
+            self.hFOV = 157.0  # 2 * math.atan( / focalLength)
+            self.vFOV = 155.0
             self.imageWidth = 1280
             self.imageHeight = 720
             self.focalLength = self.imageHeight / 2 / math.tan(self.vFOV / 2.0)
@@ -57,18 +38,18 @@ class Settings:
         self.tinyYolo = True
         self.suppressDebug = True
         self.forwardCollisionWarning = False
-        self.darknetPath = "/home/jetson/Projects/darknet/"
+        self.darknetPath = ""
         self.plot = False
         self.useCamera = True
-        self.inputFilename = "cav2.avi"
+        self.inputFilename = ""
         self.outputFilename = ""
 
 
+''' This object tracks a single object that has been detected in a video frame.
+We use this primarily to match objects seen between frames and included in here
+is a function for kalman filter to smooth the x and y values as well as a
+function for prediction where the next bounding box will be based on prior movement. '''
 class Tracked:
-    # This object tracks a single object that has been detected in a video frame.
-    # We use this primarily to match objects seen between frames and included in here
-    # is a function for kalman filter to smooth the x and y values as well as a
-    # function for prediction where the next bounding box will be based on prior movement.
     def __init__(self, xmin, ymin, xmax, ymax, type, confidence, x, y, crossSection, time, id):
         self.xmin = xmin
         self.ymin = ymin
@@ -238,7 +219,7 @@ class Tracked:
             #print("yp, y ", self.yp, self.y)
             self.lastTimePassed = timePassed
             return
-        # When we have onle 1 history that math changes
+        # When we have only 1 history that math changes
         if self.lastHistory == 1:
             dxmin = (self.xmin - self.lastXmin)/(timePassed)
             dymin = (self.ymin - self.lastYmin)/(timePassed)
@@ -275,10 +256,10 @@ class Tracked:
 
 def convertBack(x, y, w, h):
     # Converts xmin ymin xmax ymax to centroid x,y with height and width
-    xmin = int(round(x - w / 2))
-    xmax = int(round(x + w / 2))
-    ymin = int(round(y - h / 2))
-    ymax = int(round(y + h / 2))
+    xmin = int(round(x - w / 2.0))
+    xmax = int(round(x + w / 2.0))
+    ymin = int(round(y - h / 2.0))
+    ymax = int(round(y + h / 2.0))
     return (xmin, ymin, xmax, ymax)
 
 def computeDistance(a, b, epsilon=1e-5):
@@ -374,7 +355,7 @@ class YOLO:
 
         # If we have set this to create an output video, create the video
         if self.write:
-            self.out = cv2.VideoWriter(settings.self.outputFilename, (cv2.VideoWriter_fourcc)(*'MJPG'), 10.0, (
+            self.out = cv2.VideoWriter(settings.outputFilename, (cv2.VideoWriter_fourcc)(*'MJPG'), 10.0, (
              self.frame_width, self.frame_height))
 
         # If we have set this to show the output via opencv, start that here
@@ -428,13 +409,13 @@ class YOLO:
           53, 61, 6], 
          'vase':[145, 75, 152],  'scissors':[8, 140, 38],  'teddy bear':[37, 61, 220],  'hair drier':[
           129, 12, 229], 
-         'toothbrush':[11, 126, 158],  'cav':[24, 245, 217]}
+         'toothbrush':[11, 126, 158], 'cav':[24, 245, 217]}
         cars = 0
         trucks = 0
         buses = 0
         total = 0
         tracked_items = [
-         'car', 'truck', 'bus', 'motorbike', 'cav']
+         'car', 'truck', 'bus', 'motorbike']
         detections_list = []
         detections_position_list = []
         for label, confidence, bbox in detections:
@@ -449,7 +430,6 @@ class YOLO:
                         cars += 1
                         total += 1
                         ObjectHeight = .25
-                        #print ( " Detected CAV! " )
                     elif name_tag == 'car':
                         cars += 1
                         total += 1
@@ -477,31 +457,31 @@ class YOLO:
                         # Calculate the crosssection (width) of vehicle being detected for error math
                         crossSection = math.sin(math.radians((xmax - xmin) * (self.cameraSpecs.cameraHeight / self.cameraSpecs.imageWidth))) * distancei
                         detections_list.append([tracked_items.index(name_key), confidence * 100, x_actual, y_actual, crossSection])
-                        print ( " detection: ", x_actual, y_actual )
 
         # Call the matching function to modilfy our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp)
 
-        for detection in self.trackedList:
-            if detection.lastHistory >= 1:
-                print ( " detection: ", detection.x, detection.y )
-                #xmin, ymin, xmax, ymax = convertBack(float(detection.x), float(detection.y), float(detection.width), float(detection.height))
-                pt1 = (detection.xmin, detection.ymin)
-                pt2 = (detection.xmax, detection.ymax)
-                color = color_dict[tracked_items[detection.type]]
-                if self.forwardCollisionWarning and -0.5 <= detection.x <= 0.5 and 0.0 <= detection.timeToIntercept <= 2.5:
-                    cv2.rectangle(img, pt1, pt2, [255, 0, 0], -1)
-                    cv2.putText(img, str(
-                        round(detection.timeToIntercept, 2)), (
-                                    pt1[0], pt1[1] + 25), cv2.FONT_HERSHEY_SIMPLEX, 1.5, [255, 255, 255], 2)
-                else:
-                    cv2.rectangle(img, pt1, pt2, color, 1)
-                    if self.suppressDebug:
-                        cv2.putText(img, str(detection.id), (pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        # This is for if we are printing to an image, otherwise no reason to do it
+        if self.showImage:
+            for detection in self.trackedList:
+                if detection.lastHistory >= 1:
+                    #xmin, ymin, xmax, ymax = convertBack(float(detection.x), float(detection.y), float(detection.width), float(detection.height))
+                    pt1 = (detection.xmin, detection.ymin)
+                    pt2 = (detection.xmax, detection.ymax)
+                    color = color_dict[tracked_items[detection.type]]
+                    if self.forwardCollisionWarning and -0.5 <= detection.x <= 0.5 and 0.0 <= detection.timeToIntercept <= 2.5:
+                        cv2.rectangle(img, pt1, pt2, [255, 0, 0], -1)
+                        cv2.putText(img, str(
+                            round(detection.timeToIntercept, 2)), (
+                                        pt1[0], pt1[1] + 25), cv2.FONT_HERSHEY_SIMPLEX, 1.5, [255, 255, 255], 2)
                     else:
-                        cv2.putText(img, str(detection.id) + ' t:' + str(tracked_items[detection.type]) + ' x:' + str(
-                            round(detection.x, 2)) + ' y:' + str(round(detection.y, 2)), (
-                                        pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                        cv2.rectangle(img, pt1, pt2, color, 1)
+                        if self.suppressDebug:
+                            cv2.putText(img, str(detection.id), (pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                        else:
+                            cv2.putText(img, str(detection.id) + ' t:' + str(tracked_items[detection.type]) + ' x:' + str(
+                                round(detection.x, 2)) + ' y:' + str(round(detection.y, 2)), (
+                                            pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         return img
 
@@ -524,9 +504,16 @@ class YOLO:
         result = []
         for track in self.trackedList:
             if track.lastHistory >= 5:
-                result.append([track.id, track.x, track.y, track.crossSection, track.velocity])
+                result.append([track.id, track.x, track.y, track.crossSection, track.velocity, "C"])
         return result, timestamp
 
+    def writeFrame(self, frame_read):
+        frame_rgb = cv2.cvtColor(frame_read, cv2.COLOR_BGR2RGB)
+        frame_resized = cv2.resize(frame_rgb, (
+         self.frame_width, self.frame_height),
+          interpolation=(cv2.INTER_LINEAR))
+        image = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+        self.out.write(image)
 
     def matchDetections(self, detections_list_positions, detection_list, timestamp):
         self.time += 1
@@ -646,30 +633,38 @@ class YOLO:
     def endVideo(self):
         self.out.release()
 
+
+''' This class starts the jetson nano camera using the nano camera library
+(which is built on CV2). Takes pictures on demand. Set to 720P to reduce
+overhead since YOLO only uses 416x416 anyways.'''
 class Camera:
-    def __init__(self, settings, camSpecs, unitTest):
-        self.unitTest = unitTest
-        if self.unitTest:
-            self.cap = cv2.VideoCapture(settings.inputFilename)  # Local Stored video detection - Set input video
-            ret, frame_read = self.cap.read()  # Capture frame and return true if frame present
-        else:
-            # Create the Camera instance
-            self.camera = nano.Camera(flip=2, width=1280, height=720, fps=60)
-            print('CSI Camera ready? - ', self.camera.isReady())
-            # read the first camera image
-            frame_read = self.camera.read()
+    def __init__(self, settings, camSpecs):
+        # Create the Camera instance
+        self.camera = nano.Camera(flip=2, width=1280, height=720, fps=60)
+        print('CSI Camera ready? - ', self.camera.isReady())
+        # read the first camera image
+        frame_read = self.camera.read()
         # Setup the variables we need, hopefully this function stays active
         self.yolo = YOLO()
         height, width = frame_read.shape[:2]
         self.yolo.init(width, height, time.time(), settings, camSpecs)
+        self.frame = 0
 
-    def takeCameraFrame(self, settings, camSpecs):
-        if self.unitTest:
-            ret, frame_read = self.cap.read()  # Capture frame and return true if frame present
-        else:
-            frame_read = self.camera.read()
-        coordinates, timestamp = self.yolo.readFrame(frame_read, time.time())
-        return coordinates, timestamp
+    def takeCameraFrame(self):
+        start_time = time.time()
+        frame_read = self.camera.read()
+        end_time = time.time()
+        coordinates, timestamp = self.yolo.readFrame(frame_read, start_time)
+        return coordinates, start_time, end_time
+
+    def takeCameraFrameRaw(self):
+        start_time = time.time()
+        frame_read = self.camera.read()
+        end_time = time.time()
+        self.yolo.write = True
+        self.yolo.writeFrame(frame_read)
+        self.frame += 1
+        return start_time, self.frame - 1
 
     def closeCamera(self):
         # close the camera instance

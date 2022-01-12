@@ -81,6 +81,7 @@ class RSU():
         self.initSimulation(config)
 
         self.timeout = math.ceil(self.getTime())
+        self.last_light = self.getTime()
 
     def initUnitTestParams(self):
         # Keep track of stats if this is a simulation
@@ -194,6 +195,7 @@ class RSU():
 
             # Finally we can create the return messages
             registerResponse = dict(
+                v_t=0,
                 t_x=self.sensors[id].positionX_offset,
                 t_y=self.sensors[id].positionY_offset,
                 t_z="0.0",
@@ -204,6 +206,7 @@ class RSU():
                 route_y=self.mapSpecs.yCoordinates,
                 route_TFL=self.mapSpecs.vCoordinates,
                 tfl_state=self.trafficLightArray,
+                veh_locations=[],
                 timestep=self.getTime()
             )
 
@@ -480,24 +483,26 @@ class RSU():
         return response
 
     def update_traffic_lights(self):
-        #print("checking light", self.lightTime, self.mapSpecs.lightTimePeriod, self.trafficLightArray)
-        if self.lightTime > self.mapSpecs.lightTimePeriod:
-            #print( "changing light" )
-            self.lightTime = 0
-            if self.trafficLightArray[1] == 2:
-                self.trafficLightArray[1] = 1
-                self.trafficLightArray[2] = 0
-            elif self.trafficLightArray[2] == 2:
-                self.trafficLightArray[1] = 0
-                self.trafficLightArray[2] = 1
-            elif self.trafficLightArray[1] == 1:
-                self.trafficLightArray[1] = 0
-                self.trafficLightArray[2] = 2
-            elif self.trafficLightArray[2] == 1:
-                self.trafficLightArray[1] = 2
-                self.trafficLightArray[2] = 0
-        else:
-            self.lightTime += 1
+        if (self.getTime() - self.last_light) >= .125:
+            #print("checking light", self.lightTime, self.mapSpecs.lightTimePeriod, self.trafficLightArray)
+            self.last_light = self.getTime()
+            if self.lightTime > self.mapSpecs.lightTimePeriod:
+                #print( "changing light" )
+                self.lightTime = 0
+                if self.trafficLightArray[1] == 2:
+                    self.trafficLightArray[1] = 1
+                    self.trafficLightArray[2] = 0
+                elif self.trafficLightArray[2] == 2:
+                    self.trafficLightArray[1] = 0
+                    self.trafficLightArray[2] = 1
+                elif self.trafficLightArray[1] == 1:
+                    self.trafficLightArray[1] = 0
+                    self.trafficLightArray[2] = 2
+                elif self.trafficLightArray[2] == 1:
+                    self.trafficLightArray[1] = 2
+                    self.trafficLightArray[2] = 0
+            else:
+                self.lightTime += 1
 
 # def BackendProcessor(q, vehicles, sensors, trafficLightArray):
 #     while True:

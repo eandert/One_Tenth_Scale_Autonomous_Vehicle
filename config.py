@@ -41,9 +41,11 @@
 
 
 # Working simulation
-#cav = [[-0.75, 0.0, 0, False]]
+# cav = [[-0.75, 0.0, 0, False]]
 cav = [[-0.75, 0.0, 0, False],
-       [0.0, 0.75, 4.71238898038469, False]]
+       [-1.5, 0.0, 0, False]]
+#       [0.0, 0.75, 4.71238898038469, False]]
+cis = [[-0.75, 0.75, -45, False]]
 rsu_ip = '192.168.0.103' #'127.0.0.1'
 interval = 0.125
 offset_interval = 0.0
