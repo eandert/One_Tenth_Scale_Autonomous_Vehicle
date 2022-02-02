@@ -1,0 +1,9 @@
+timeout_decorator
+nanocamera
+shapely
+numpy
+sklearn
+matplotlib
+simple_pid
+flask_restx
+PyQt5
