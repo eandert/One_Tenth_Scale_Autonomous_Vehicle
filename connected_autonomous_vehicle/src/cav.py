@@ -196,7 +196,7 @@ def cav(config, vid):
     data_collect_mode = config.data_collect_mode
 
     if not config.simulation:
-        # Do our imports within this function so we dont disturb the simulation
+    	# Do our imports within this function so we dont disturb the simulation
         from connected_autonomous_vehicle.src import camera_recognition, motors
         egoVehicle = motors.Motors()
 
@@ -469,7 +469,7 @@ def cav(config, vid):
                         fails = 0
                 else:
                     comm_q.put(
-                        [planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
+                        [planner.rearAxlePositionX, planner.rearAxlePositionY, 0.0, 0.0, 0.0, planner.theta,
                             planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, objectPackage])
 
                     # This should not take long but we will delay just a bit

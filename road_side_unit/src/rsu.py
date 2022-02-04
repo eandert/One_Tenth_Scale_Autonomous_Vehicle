@@ -309,7 +309,12 @@ class RSU():
     def sendSimPositions(self, key, id, type, x, y, z, roll, pitch, yaw, velocity):
         if type == 0:
             # Udpate the location of this vehicle
-            self.vehicles[id].update_localization(True, [x, y, yaw, velocity])
+            self.vehicles[id].localizationPositionX = x
+            self.vehicles[id].localizationPositionY = y
+            self.vehicles[id].velocity = velocity
+            self.vehicles[id].theta = yaw
+            print("     cav ", id, " position ", x, y, yaw, velocity)
+            #self.vehicles[id].update_localization(True, [x, y, yaw, velocity])
 
         # Finally we can create the return messages
         response = dict(

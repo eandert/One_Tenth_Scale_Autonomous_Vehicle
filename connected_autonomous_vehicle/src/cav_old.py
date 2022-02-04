@@ -10,45 +10,50 @@ from shared_library import local_fusion, sensor
 pipeFromC = "/home/jetson/Projects/slamware/fifo_queues/fifopipefromc"
 pipeToC = "/home/jetson/Projects/slamware/fifo_queues/fifopipetoc"
 
-vehicle_id = 0
-dump_to_file = False
-simulation_time = False
-rsu_sim_check = None
-global_time = -99
-debug = False
-
 # This function is for controlling the time function in case of simulation
-def fetch_time():
+def fetch_time(simulation_time, global_time = 0.0):
     if simulation_time:
-        global_time = rsu_sim_check.getSimTime()
-        # Sleep so we dont overwhelm the server
-        #time.sleep(.01)
         return global_time
     else:
         return time.time()
 
+# This function is for controlling the time function in case of simulation
+def fetch_new_time(simulation_time, rsu_sim_check = None):
+    if simulation_time:
+        returned = rsu_sim_check.getSimTime()
+        if returned["time"] != -99:
+            return returned["time"]
+        else:
+            return -99
 
-def sourceImagesThread(out_queue, settings, camSpecs, start_time, interval):
-    # Do our imports within this function so we dont disturb the simulation
+def sourceImagesThread(out_queue, settings, camSpecs, simulation_time, data_collect_mode, start_time, interval):
+    # DO our imports within this function so we dont disturb the simulation
     from connected_autonomous_vehicle.src import camera_recognition
-
+    
     # Init the camera class
     cameraRecognition = camera_recognition.Camera(settings, camSpecs)
 
     # Sleep until test start time
-    wait_until_start = start_time - fetch_time() - .01
+    wait_until_start = start_time - fetch_time(simulation_time) - .01
     if wait_until_start > 0:
         time.sleep(wait_until_start)
 
+    target = start_time
+
     # Now wait and ask for input
     while 1:
-        if (round(fetch_time(),3) % interval) == 0.000:
+        if fetch_time(simulation_time) >= target:
             #print( "camera")
-            now = fetch_time()
+            now = fetch_time(simulation_time)
 
             # Take the camera frame and process
-            camcoordinates, camtimestamp_start, camtimestamp_end = cameraRecognition.takeCameraFrame()
-            #print ( "CAM got " + str(fetch_time()))
+            if data_collect_mode:
+                # Only collecting data, skip processing
+                camcoordinates = []
+                camtimestamp_start, frame = cameraRecognition.takeCameraFrameRaw()
+            else:
+                camcoordinates, camtimestamp_start, camtimestamp_end = cameraRecognition.takeCameraFrame()
+            #print ( "CAM got " + str(fetch_time(simulation_time, global_time)))
 
             # Prep value to be sent to the part of the program
 	    # Clear the queue of old data
@@ -57,18 +62,26 @@ def sourceImagesThread(out_queue, settings, camSpecs, start_time, interval):
             out_queue.put([camcoordinates, camtimestamp_start, now])
 
             # Sleep to reduce busy wait
-            #wait_until_next = round(fetch_time(),3) % interval - .001
+            #wait_until_next = round(fetch_time(simulation_time, global_time),3) % interval - .001
             #if wait_until_next > 0:
             #    time.sleep(wait_until_next)
 
+            with open("cam_output.txt", 'a') as file1:
+                file1.write(str(camtimestamp_start) + ',' + str(frame) + '\n')
 
-def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, start_time, interval):
+            # New target
+            target = target + interval
+        time.sleep(.001)
+
+
+def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, simulation_time, data_collect_mode, start_time, interval):
+    global bounding_box
     # Start the connection with the LIDAR through pipes
     lidarDevice = communication.connectLIDAR(pipeFromC, pipeToC)
     target = interval
 
     # Init the LIDAR processing class
-    lidarRecognition = lidar_recognition.LIDAR(fetch_time())
+    lidarRecognition = lidar_recognition.LIDAR(fetch_time(simulation_time))
 
     # Wait for 1 second before we start everything
     time.sleep(2)
@@ -84,26 +97,33 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, start_time, in
     index = 0
 
     # Sleep until test start time
-    wait_until_start = start_time - fetch_time() - .01
+    wait_until_start = start_time - fetch_time(simulation_time) - .01
     if wait_until_start > 0:
         time.sleep(wait_until_start)
 
+    target = start_time
+
     # Now wait for input
     while 1:
-        if (round(fetch_time(),3) % target) == 0.000:
+        if fetch_time(simulation_time) >= target:
             # Take the LIDAR frame and process
-            #print ( "LIDAR start " + str(fetch_time()))
+            #print ( "LIDAR start " + str(fetch_time(simulation_time, global_time)))
             start, end = lidarDevice.getFromC()
-            #print ( "LIDAR got " + str(fetch_time()))
-
-            lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(),
-                                                                                start,
-                                                                                lidarDevice.localizationX,
-                                                                                lidarDevice.localizationY, 
-                                                                                lidarDevice.localizationYaw,
-                                                                                lidarSensor)
+            #print ( "LIDAR got " + str(fetch_time(simulation_time, global_time)))
+            if data_collect_mode:
+                # Only collecting data, skip processing
+                raw_lidar = lidarDevice.parseFromC()
+                lidarcoordinates = []
+                lidartimestamp = end
+            else:
+                lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(),
+                                                                                    start,
+                                                                                    lidarDevice.localizationX,
+                                                                                    lidarDevice.localizationY, 
+                                                                                    lidarDevice.localizationYaw,
+                                                                                    lidarSensor)
             localization = [lidarDevice.localizationX, lidarDevice.localizationY, lidarDevice.localizationYaw, index, start]
-            #print ( "LIDAR detect " + str(fetch_time()))
+            #print ( "LIDAR detect " + str(fetch_time(simulation_time, global_time)))
 
             # Send the localization and coordinate results to the fusion function
 	        # Clear the queue of old data
@@ -113,6 +133,13 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, start_time, in
 
             # Log this to a file
             index += 1
+
+            with open("lidar_output.txt", 'a') as file1:
+                file1.write(str(lidartimestamp) + '\n' + str(localization) + '\n' + str(raw_lidar) + '\n')
+
+            # New target
+            target = target + interval
+        time.sleep(.001)
 
 def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
     vehicle_id = v_id
@@ -159,13 +186,17 @@ def cav(config, vid):
     # The first thing we should always do is initialize the control module
     # This is important to make sure a rogue signal doesn't drive us away
     # We do not need this if this is simulation
-    global vehicle_id, debug, global_time
     vehicle_id = vid
     debug = config.debug
+    simulation_time = False
+    rsu_sim_check = None
+    global_time = -99
+    bounding_box = [[0.0, 0.0],[0.0, 0.0]]
     last_response = []
+    data_collect_mode = config.data_collect_mode
 
     if not config.simulation:
-    	# Do our imports within this function so we dont disturb the simulation
+        # Do our imports within this function so we dont disturb the simulation
         from connected_autonomous_vehicle.src import camera_recognition, motors
         egoVehicle = motors.Motors()
 
@@ -176,9 +207,18 @@ def cav(config, vid):
         camSpecs = camera_recognition.CameraSpecifications()
         camSpecs.cameraHeight = .2
         camSpecs.cameraAdjustmentAngle = 0.0
+        if data_collect_mode:
+            settings.record = True
+            settings.outputFilename = "live_test_output.avi"
+    else:
+        simulation_time = True
+        global_time = 0.0
 
     # Set up the timing
-    start_time = fetch_time() + config.init_time
+    if config.simulation:
+        start_time = fetch_time(simulation_time, global_time)
+    else:
+        start_time = fetch_time(simulation_time, global_time) + config.init_time
     interval = config.interval
     interval_offset = config.offset_interval
     fallthrough_delay = config.fallthrough_delay
@@ -189,12 +229,12 @@ def cav(config, vid):
     if not config.simulation:
         # Spawn the camera processing thread
         cam_out_queue = Queue()
-        cameraThread = Process(target=sourceImagesThread, args=(cam_out_queue, settings, camSpecs, start_time, interval))
+        cameraThread = Process(target=sourceImagesThread, args=(cam_out_queue, settings, camSpecs, simulation_time, data_collect_mode, start_time, interval))
         cameraThread.start()
 
         # Spawn the lidar processign thread
         lidar_out_queue = Queue()
-        cameraThread = Process(target=sourceLIDARThread, args=(lidar_out_queue, pipeFromC, pipeToC, planner.lidarSensor, start_time, interval))
+        cameraThread = Process(target=sourceLIDARThread, args=(lidar_out_queue, pipeFromC, pipeToC, planner.lidarSensor, simulation_time, data_collect_mode, start_time, interval))
         cameraThread.start()
 
         # Spawn the communication thread
@@ -215,10 +255,10 @@ def cav(config, vid):
         lidarRecognition = lidar_recognition.LIDAR(0.0)
 
         # Manually do what the thread would normally do
-        if debug: print( " Vehicle ", vehicle_id, " connecting to RSU ", config.rsu_ip)
+        if debug: print( " Vehicle ", vehicle_id, " connecting to RSU... ", config.rsu_ip)
         # Start the connection with the RSU (Road Side Unit) server through sockets
         rsu_sim_check = communication.connectServer(config.rsu_ip)
-        if debug: print( " Vehicle ", vehicle_id, " connected to RSU ", config.rsu_ip)
+        if debug: print( " Vehicle ", vehicle_id, " connected ", config.rsu_ip)
         init_returned = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         if debug: print( " Vehicle ", vehicle_id, " registered with RSU ", config.rsu_ip)
 
@@ -234,10 +274,31 @@ def cav(config, vid):
     while 'route_x' not in init:
         time.sleep(.01)
 
+    if debug: print( " Vehicle ", vehicle_id, " init pos ", init["t_x"], init["t_y"], init["t_yaw"])
+
     # Now that we have chatted with the RSU server, we should know where we are going
     planner.initialVehicleAtPosition(init["t_x"], init["t_y"], init["t_yaw"], init["route_x"], init["route_y"],
                                     init["route_TFL"], vehicle_id, config.simulation)
-    if debug: print( " Vehicle ", vehicle_id, " planner initialized" )
+    if debug: print( " Vehicle ", vehicle_id, " planner initialized " , planner.localizationPositionX, planner.localizationPositionY, planner.theta, planner.positionX_offset, planner.positionY_offset, planner.theta_offset)
+
+    # Do a quick check of the coordinates to make abounding box filter so that we can take out uneccessary points
+    min_x = 99.0
+    max_x = -99.0
+    min_y = 99.0
+    max_y = -99.0
+    for x in init["route_x"]:
+        if x > max_x:
+            max_x = x
+        if x < min_x:
+            min_x = x
+    for y in init["route_y"]:
+        if y > max_y:
+            max_y = y
+        if y < min_y:
+            min_y = y
+    buffer = .25
+    bounding_box = [[min_x - buffer, max_x + buffer],[min_y - buffer, max_y + buffer]]
+    if debug: print( " Vehicle ", vehicle_id, " bounding box params ", bounding_box )
 
     # If this is a simulation we need a second communication class to get some ideal positions
     if config.simulation:
@@ -249,17 +310,22 @@ def cav(config, vid):
     if debug: print( " Vehicle ", vehicle_id, " started fusion node" )
 
     # Sleep until test start time
-    wait_until_start = start_time - fetch_time() - .01
+    wait_until_start = start_time - fetch_time(simulation_time, global_time) - .01
     if wait_until_start > 0 and not config.simulation:
         time.sleep(wait_until_start)
 
     next_time = start_time + interval_offset
     if debug: print( " Vehicle ", vehicle_id, " start time is ", next_time)
 
-    last_lidar_time = fetch_time()
+    last_lidar_time = fetch_time(simulation_time, global_time)
 
     while True:
-        if fetch_time() > next_time:
+        if config.simulation:
+            new_time = fetch_new_time(simulation_time, rsu_sim_check)
+            if new_time!= -99:
+                global_time = new_time
+            print ( fetch_time(simulation_time, global_time), next_time )
+        if fetch_time(simulation_time, global_time) >= next_time:
             if config.simulation:
                 # Special simulation setup where we do not use the source threads
                 # Update the localization first because we use it here
@@ -268,14 +334,15 @@ def cav(config, vid):
                 if debug: print( " Vehicle ", vehicle_id, " posiiton and localization updated" )
                 
                 # Send the lolcailzation values to the RSU
-                rsu_sim_check.sendSimPosition(vehicle_id, planner.positionX_sim, planner.positionY_sim, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
+                rsu_sim_check.sendSimPosition(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
                 if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
 
                 # Recieve positions of other vehicles from RSU so we can fake the sensor values
                 sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                 while(sim_values['step_sim_vehicle'] == False):
-                    #time.sleep(.01)
+                    time.sleep(.01)
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
+                    if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
                 
                 tempList = sim_values['veh_locations']
                 lidar_returned = [[], [], None]
@@ -292,19 +359,19 @@ def cav(config, vid):
                                     planner.theta, planner.velocity, temp_covariance.covariance.tolist()]
                 if sim_values["simulate_error"]:
                     cam_returned[0] = camera_error_array
-                    cam_returned[1] = fetch_time()
+                    cam_returned[1] = fetch_time(simulation_time, global_time)
                     planner.localizationError = localization_error_gaussian
                     if sim_values["real_lidar"]:
                         # TODO: check this seems wrong
-                        lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud_error, fetch_time(),
+                        lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud_error, fetch_time(simulation_time, global_time),
                             lidar_returned[0][0], lidar_returned[0][1], lidar_returned[0][2], planner.lidarSensor)
                         planner.rawLidarDetections = point_cloud_error
                     else:
                         lidar_returned[1] = lidar_detected_error
                 else:
                     cam_returned[0] = camera_array
-                    cam_returned[1] = fetch_time()
-                    lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud, fetch_time(),
+                    cam_returned[1] = fetch_time(simulation_time, global_time)
+                    lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud, fetch_time(simulation_time, global_time),
                         lidar_returned[0][0], lidar_returned[0][1], lidar_returned[0][2], planner.lidarSensor)
                     planner.rawLidarDetections = point_cloud
                 planner.groundTruth = camera_array
@@ -319,8 +386,8 @@ def cav(config, vid):
                 lidar_recieved = False
                 camera_recieved = False
 
-                fallthrough = fetch_time() + fallthrough_delay
-                while(fetch_time() < fallthrough and not (lidar_recieved and camera_recieved)):
+                fallthrough = fetch_time(simulation_time, global_time) + fallthrough_delay
+                while(fetch_time(simulation_time, global_time) < fallthrough and not (lidar_recieved and camera_recieved)):
                     # Get the lidar
                     if not lidar_out_queue.empty():
                         lidar_returned = lidar_out_queue.get()
@@ -344,6 +411,9 @@ def cav(config, vid):
                 # Update the steering here while we wait for sensor fusion results and the reply from the RSU about the plan
                 if not config.simulation:
                     planner.update_localization(True, [localization[0], localization[1], localization[2]])
+                    localization[0] = planner.localizationPositionX
+                    localization[1] = planner.localizationPositionY
+                    localization[2] = planner.theta
                 planner.pure_pursuit_control()
 
                 # # Now update our current PID with respect to other vehicles
@@ -358,10 +428,11 @@ def cav(config, vid):
 
                 # Fusion
                 fusion_result = []
-                fusion_start = fetch_time()
-                #fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
-                #fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
-                #fusion_result = fusion.fuseDetectionFrame(1, planner)
+                fusion_start = fetch_time(simulation_time, global_time)
+                if not data_collect_mode:
+                    fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
+                    fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
+                    fusion_result = fusion.fuseDetectionFrame(1, planner)
 
                 # Message the RSU, for now we must do this before our control loop
                 # as the RSU has the traffic light state information
@@ -432,22 +503,26 @@ def cav(config, vid):
                         egoVehicle.setControlMotors(steering_ppm, motor_pid)
 
                     # with open("timing.txt", 'a') as file1:
-                    #     file1.write(lidarDevice.localizationIdx, fetch_time())
+                    #     file1.write(lidarDevice.localizationIdx, fetch_time(simulation_time, global_time))
                     #     index += 1
-                    last_lidar_time = fetch_time()
-                print(" Time taken: ", fetch_time() - lidartimestamp, fetch_time() - camtimestamp, fetch_time())
+                    last_lidar_time = fetch_time(simulation_time, global_time)
+                if debug: print(" Time taken: ", fetch_time(simulation_time, global_time) - lidartimestamp, fetch_time(simulation_time, global_time) - camtimestamp, fetch_time(simulation_time, global_time))
             else:
-                print(" Error, no camera/lidar frame returned ", lidar_recieved, camera_recieved)
+                if debug: print(" Error, no camera/lidar frame returned ", lidar_recieved, camera_recieved)
                 # Cut the engine to make sure that we don't hit anything since we are blind
-                if not config.simulation and (fetch_time() - last_lidar_time) >= .250 :
+                if not config.simulation and (fetch_time(simulation_time, global_time) - last_lidar_time) >= .250 :
                     egoVehicle.emergencyStop()
 
             last_next_time = next_time
-            while next_time <= fetch_time():
+            while next_time <= fetch_time(simulation_time, global_time):
                 next_time = last_next_time + interval
                 last_next_time = next_time
 
             #time.sleep(last_next_time - .01)
+        if config.simulation:
+            if debug: print(" Vehicle ", vehicle_id, fetch_time(simulation_time, global_time))
+
+        time.sleep(.001)
 
     if not config.simulation:
         egoVehicle.emergencyStop()

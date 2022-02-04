@@ -25,12 +25,14 @@ def initGui(config):
     gui_handler.start()
 
 if __name__ == "__main__":
+    # Configure the settings
+    conf = config.Setting("two_cav_simulation")
+
     # Setup the RSU
-    print( "start ")
-    rsu_instance = rsu.RSU(config)
+    rsu_instance = rsu.RSU(conf)
 
     # Start the GUI
-    initGui(config)
+    initGui(conf)
 
     time.sleep(5)
 

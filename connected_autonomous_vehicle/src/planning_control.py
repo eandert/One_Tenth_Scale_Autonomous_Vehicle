@@ -98,14 +98,14 @@ class Planner:
             self.rearAxlePositionY = y_init + (self.axleFromCenter * math.sin(reverse_theta))
             self.localizationPositionX = x_init
             self.localizationPositionY = y_init
-            self.positionX_sim = self.rearAxlePositionX
-            self.positionY_sim = self.rearAxlePositionY
+            self.positionX_sim = x_init
+            self.positionY_sim = y_init
             self.velocity = 0
             self.theta = theta_init
-            # For simulation we will zero out the offsets
-            self.positionX_offset = 0
-            self.positionY_offset = 0
-            self.theta_offset = 0
+            # For simulation we will not use the offset but still need to store them
+            self.positionX_offset = x_init
+            self.positionY_offset = y_init
+            self.theta_offset = theta_init
         else:
             # A real world test
             # We need to calcualte the constant offset for the LIDAR to world coordinates here
