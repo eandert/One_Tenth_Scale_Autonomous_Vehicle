@@ -449,7 +449,7 @@ class RSU():
             #vehicle.targetVelocityGeneral = 0.5
             vehicle_export.append([vehicle.localizationPositionX,
                             vehicle.localizationPositionY,
-                            vehicle.theta + vehicle.theta_offset,
+                            vehicle.theta,
                             vehicle.velocity,
                             vehicle.wheelbaseWidth,
                             vehicle.wheelbaseLength,

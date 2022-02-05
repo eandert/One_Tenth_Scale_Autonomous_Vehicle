@@ -63,6 +63,7 @@ class Planner:
         self.id = None
         self.simVehicle = True
         self.key = None
+        self.coordinateGroupVelocities = [0,0,0,0,0]
 
         # Buffer to be added around vehicles to do follow distance math
         self.arbitrary_buffer = 0.1

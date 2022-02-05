@@ -16,7 +16,7 @@ class Setting:
                         self.fallthrough_delay = 0.100
                         self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
-                        self.map_length = 0.5
+                        self.map_length = 1.0
                         self.simulation = False
                         self.debug = True
                         self.unit_test = False
@@ -36,7 +36,7 @@ class Setting:
                         self.fallthrough_delay = 0.100
                         self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
-                        self.map_length = 0.5
+                        self.map_length = 1.0
                         self.simulation = True
                         self.debug = True
                         self.data_collect_mode = False
@@ -55,7 +55,7 @@ class Setting:
                         self.fallthrough_delay = 0.100
                         self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
-                        self.map_length = 0.5
+                        self.map_length = 1.0
                         self.simulation = True
                         self.debug = True
                         self.data_collect_mode = False
