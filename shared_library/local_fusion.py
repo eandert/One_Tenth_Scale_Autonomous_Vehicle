@@ -595,7 +595,7 @@ class FUSION:
             if estimateCovariance and len(det) >= 3:
                 # Calculate our 3 sigma std deviation to create a bounding box for matching
                 try:
-                    a, b, phi = det[2].extractErrorElipseParamsFromBivariateGaussian(3)
+                    a, b, phi = shared_math.ellipsify(det[2], 3)
                     # Enforce a minimum size so matching doesn't fail
                     a += self.min_size
                     b += self.min_size
@@ -605,6 +605,7 @@ class FUSION:
                     # Use an arbitrary size if we have no covariance estimate
                     detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             else:
+                print(" Warning: no covaraince data for ", sensor_id)
                 # Use an arbitrary size if we have no covariance estimate
                 detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             detections_list.append([0, det[0], det[1], sensor_id])

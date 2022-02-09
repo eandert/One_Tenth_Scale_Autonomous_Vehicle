@@ -79,6 +79,7 @@ class Planner:
         # Raw LIDAR for gui debug
         self.lidarPoints = []
         self.localizationError = None
+        self.lidarDetectionsRaw = []
 
         # Start sensors with standard error model
         self.localization = sensor.Localization(0.075, .25, 0.1, .025)

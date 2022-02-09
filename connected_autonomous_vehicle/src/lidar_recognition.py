@@ -364,7 +364,7 @@ class LIDAR:
         detections_position_list = []
         detections_list = []
 
-        # For the small detections we should add .25 to offset for the center of the vehicle from teh edge
+        # For the small detections we should add .25 to offset for the center of the vehicle from the edge
         for x, y in zip(smallX, smallY):
             det_dir = math.atan2(vehicle_y - y, vehicle_x - x) - math.radians(180)
             x = x + (.25 * math.cos(det_dir))
@@ -400,7 +400,12 @@ class LIDAR:
         result = []
         for track in self.trackedList:
             if track.lastHistory >= 5:
-                result.append([track.x, track.y])
+                # Calculate the covariance
+                relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
+                    vehicle_x, vehicle_y, vehicle_theta, track.x, track.y)
+                success_lidar, expected_error_gaussian_lidar, actual_sim_error_lidar = lidar_sensor.calculateErrorGaussian(
+                    relative_angle_to_detector, target_line_angle, relative_distance, True)
+                result.append([track.x, track.y, expected_error_gaussian_lidar.covariance.tolist()])
 
         return result, timestamp
 

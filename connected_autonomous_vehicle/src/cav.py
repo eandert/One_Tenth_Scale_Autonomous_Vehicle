@@ -404,6 +404,7 @@ def cav(config, vid):
                 localization = lidar_returned[0]
                 lidarcoordinates = lidar_returned[1]
                 lidartimestamp = lidar_returned[2]
+                lidarraw = planner.rawLidarDetections
                 camcoordinates = cam_returned[0]
                 camtimestamp = cam_returned[1]
                 # TODO: check the timestamps are close
@@ -440,9 +441,10 @@ def cav(config, vid):
                     "localization_t": lidartimestamp,
                     "localization": localization,
                     "lidar_t": lidartimestamp,
-                    "lidar_obj": [],#lidarcoordinates,
+                    "lidar_detection_raw": lidarraw,
+                    "lidar_obj": lidarcoordinates,
                     "cam_t": camtimestamp,
-                    "cam_obj": [],#camcoordinates,
+                    "cam_obj": camcoordinates,
                     "fused_t": fusion_start,
                     "fused_obj": fusion_result
                 }

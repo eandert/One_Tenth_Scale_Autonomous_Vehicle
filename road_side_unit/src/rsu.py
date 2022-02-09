@@ -234,6 +234,7 @@ class RSU():
             self.vehicles[id].motorAcceleration = motorAcceleration
             self.vehicles[id].targetIndexX = targetIndexX
             self.vehicles[id].targetIndexY = targetIndexY
+            self.vehicles[id].lidarDetectionsRaw = detections["lidar_detection_raw"]
 
             self.step_sim_vehicle_tracker[id] = False
 
@@ -427,11 +428,8 @@ class RSU():
     
     def getGuiValues(self, coordinates):
         vehicle_export = []
-        camera = []
         camera_fov = []
         camera_center = []
-        traffic_light_green = []
-        mapSpecs = None
         lidar_detection_centroid = []
         lidar_detection_raw = []
         camera_detection_centroid = []
@@ -465,10 +463,11 @@ class RSU():
             ])
             camera_fov.append(vehicle.cameraSensor.field_of_view)
             camera_center.append(vehicle.cameraSensor.center_angle)
+            lidar_detection_raw.append(vehicle.lidarDetectionsRaw)
             lidar_detection_centroid.append(vehicle.lidarDetections)
             camera_detection_centroid.append(vehicle.cameraDetections)
             sensor_fusion_centroid.append(vehicle.fusionDetections)
-            localization_error.append(vehicle.localizationError)
+            localization_error.append(vehicle.localizationCovariance)
             
         # Finally we can create the return messages
         response = dict(
@@ -476,10 +475,11 @@ class RSU():
             vehicle=vehicle_export,
             camera_fov=camera_fov,
             camera_center=camera_center,
+            lidar_detection_raw=lidar_detection_raw,
             lidar_detection_centroid=lidar_detection_centroid,
             camera_detection_centroid=camera_detection_centroid,
             sensor_fusion_centroid=sensor_fusion_centroid,
-            localization_error=localization_error,
+            localization_error=[],#localization_error,
             global_sensor_fusion_centroid=self.globalFusionList,
             traffic_light=self.trafficLightArray,
             returned=True
