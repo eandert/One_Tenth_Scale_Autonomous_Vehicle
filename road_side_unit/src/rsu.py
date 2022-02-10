@@ -27,8 +27,8 @@ class RSU():
 
         # Settings for the simulation
         self.step_sim_vehicle = False
-        self.estimate_covariance = False
-        self.simulate_error = False
+        self.estimate_covariance = True
+        self.simulate_error = True
         self.real_lidar = False
         self.simulation = config.simulation
         self.time = 0.0
@@ -479,7 +479,7 @@ class RSU():
             lidar_detection_centroid=lidar_detection_centroid,
             camera_detection_centroid=camera_detection_centroid,
             sensor_fusion_centroid=sensor_fusion_centroid,
-            localization_error=[],#localization_error,
+            localization_error=localization_error,
             global_sensor_fusion_centroid=self.globalFusionList,
             traffic_light=self.trafficLightArray,
             returned=True

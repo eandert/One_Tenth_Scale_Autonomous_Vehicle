@@ -508,7 +508,8 @@ def cav(config, vid):
                     #     file1.write(lidarDevice.localizationIdx, fetch_time(simulation_time, global_time))
                     #     index += 1
                     last_lidar_time = fetch_time(simulation_time, global_time)
-                if debug: print(" Time taken: ", fetch_time(simulation_time, global_time) - lidartimestamp, fetch_time(simulation_time, global_time) - camtimestamp, fetch_time(simulation_time, global_time))
+                if not config.simulation:
+                    if debug: print(" Time taken: ", fetch_time(simulation_time, global_time) - lidartimestamp, fetch_time(simulation_time, global_time) - camtimestamp, fetch_time(simulation_time, global_time))
             else:
                 if debug: print(" Error, no camera/lidar frame returned ", lidar_recieved, camera_recieved)
                 # Cut the engine to make sure that we don't hit anything since we are blind

@@ -35,6 +35,7 @@ brush_color = {
     "camera_detection_centroid": Qt.darkYellow,
     "camera_detection_error": Qt.darkYellow,
     "sensor_fusion_centroid": Qt.red,
+    "localization": Qt.yellow,
     "localization_error": Qt.yellow,
     "sensor_fusion_error_ellipse": Qt.green,
     "global_sensor_fusion_centroid": Qt.blue,
@@ -1456,31 +1457,55 @@ class MainWindow(QMainWindow):
                                 # Restore the environment to what it was before
                                 painter.restore()
 
-            # if self.display_covariance:
-            #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-            #     pen.setWidth(.5)
-            #     painter.setPen(pen)
-            #     for each in self.lidar_detection_centroid[idx]:
-            #         # Make sure covariance parameters have been added
-            #         if len(each) >= 3:
-            #             pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-            #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-            #             a, b, phi = shared_math.ellipsify(each[2].covariance, 3.0)
-            #             a = a * self.mapSpecs.meters_to_print_scale
-            #             b = b * self.mapSpecs.meters_to_print_scale
-            #             # Save the previous painter envinronment so we don't mess up the other things
-            #             painter.save()
-            #             # get the x and y components of the ellipse position
-            #             ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
-            #             ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
-            #             # translate the center to where our ellipse should be
-            #             painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-            #             # Rotate by phi to tunr the ellipse the correct way
-            #             painter.rotate(math.degrees(phi))
-            #             # Draw the ellipse at 0.0
-            #             painter.drawEllipse(0, 0, a, b)
-            #             # Restore the environment to what it was before
-            #             painter.restore()
+                if self.display_localization:
+                    pen.setBrush(brush_color['localization_error'])
+                    pen.setWidth(.5)
+                    painter.setPen(pen)
+                    if self.localization_error != []:
+                        pos = ( self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale) )
+                        a, b, phi = shared_math.ellipsify(self.localization_error[idx], 3.0)
+                        a = a * self.mapSpecs.meters_to_print_scale
+                        b = b * self.mapSpecs.meters_to_print_scale
+                        # Save the previous painter envinronment so we don't mess up the other things
+                        painter.save()
+                        # get the x and y components of the ellipse position
+                        ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                        ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                        # translate the center to where our ellipse should be
+                        painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                        # Rotate by phi to tunr the ellipse the correct way
+                        painter.rotate(math.degrees(phi))
+                        # Draw the ellipse at 0.0
+                        painter.drawEllipse(0, 0, a, b)
+                        # Restore the environment to what it was before
+                        painter.restore()
+
+                    # if self.display_covariance:
+                    #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                    #     pen.setWidth(.5)
+                    #     painter.setPen(pen)
+                    #     for each in self.lidar_detection_centroid[idx]:
+                    #         # Make sure covariance parameters have been added
+                    #         if len(each) >= 3:
+                    #             pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                    #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                    #             a, b, phi = shared_math.ellipsify(each[2].covariance, 3.0)
+                    #             a = a * self.mapSpecs.meters_to_print_scale
+                    #             b = b * self.mapSpecs.meters_to_print_scale
+                    #             # Save the previous painter envinronment so we don't mess up the other things
+                    #             painter.save()
+                    #             # get the x and y components of the ellipse position
+                    #             ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                    #             ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                    #             # translate the center to where our ellipse should be
+                    #             painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                    #             # Rotate by phi to tunr the ellipse the correct way
+                    #             painter.rotate(math.degrees(phi))
+                    #             # Draw the ellipse at 0.0
+                    #             painter.drawEllipse(0, 0, a, b)
+                    #             # Restore the environment to what it was before
+                    #             painter.restore()
 
         # if self.drawCamera:
         #     for idx, cis in self.cis.items():
