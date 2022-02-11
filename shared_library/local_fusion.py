@@ -199,21 +199,11 @@ class Tracked:
         return F @ x
 
     def hx(self, x):
-        #print ( x )
-        #print ( self.tempH_t.dot(x) )
-        #Z_t = (x).transpose()
-        #Z_t = Z_t.reshape(Z_t.shape[0], -1)
-        #final = Z_t - self.tempH_t.dot(x)
-        #print ( Z_t )
-        print ( "h", self.tempH_t, x )
-        # print ( self.tempH_t @ x)
-        # print ( x @ self.tempH_t, "end" )
         ret_val = self.tempH_t
         ret_val[0][0] = ret_val[0][0] * x[0]
         ret_val[1][1] = ret_val[1][1] * x[1]
         ret_val[2][2] = ret_val[2][0] * x[2]
         ret_val[3][3] = ret_val[3][1] * x[3]
-        print(ret_val)
         return ret_val
 
     def fusion(self, estimate_covariance, vehicle):
@@ -336,6 +326,7 @@ class Tracked:
             # We have valid data
             # Transition matrix
             # Prediction step!
+            print("inside", self.lastTracked, self.prev_time)
             elapsed = self.lastTracked - self.prev_time
             if elapsed <= 0.0:
                 #print( "Error time elapsed is incorrect! " + str(elapsed) )

@@ -291,7 +291,8 @@ class LIDAR:
         debug = False
 
         if len(output) < 1:
-            return [[],timestamp]
+            # probably the LIDAR is not on, skip
+            return [], timestamp
 
         #print ( "got", output )
 

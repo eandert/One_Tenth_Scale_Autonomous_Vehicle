@@ -318,6 +318,27 @@ class MainWindow(QMainWindow):
             self.labelVehicleAcceleration[idx].setText('AA=0')
             self.labelVehicleAcceleration[idx].move(1200, 120 + 80 * idx)
 
+        self.labelList = []
+        self.labelList.append(QLabel(self))
+        self.labelList[0].setText("Legend:")
+        self.labelList[0].move(5, 5)
+        for idx, brush in enumerate(brush_color):
+            self.labelList.append(QLabel(self))
+            # self.labelList[idx].setAutoFillBackground(True) # This is important!!
+            # color  = brush_color[brush]
+            # print(color)
+            # alpha  = 140
+            # values = "{r}, {g}, {b}, {a}".format(r = color.red(),
+            #                                     g = color.green(),
+            #                                     b = color.blue(),
+            #                                     a = alpha
+            #                                     )
+            # self.labelList[idx].setStyleSheet("QLabel { background-color: rgba("+values+"); }")
+            self.labelList[idx].setText(brush)
+            #self.labelList[idx].setStyleSheet("background-color: " + str(brush_color[brush]))
+            self.labelList[idx].move(5, 15 + (idx * 10))
+
+
         self.setVelocity = True
 
         self.drawVehicle = True
@@ -1013,6 +1034,7 @@ class MainWindow(QMainWindow):
             self.lidar_detection_centroid = response['lidar_detection_centroid']
             self.camera_detection_centroid = response['camera_detection_centroid']
             self.sensor_fusion_centroid = response['sensor_fusion_centroid']
+            #self.sensor_fusion_error = response['sensor_fusion_error']
             self.localization_error = response['localization_error']
             self.global_sensor_fusion_centroid = response['global_sensor_fusion_centroid']
             self.trafficLightArray = response['traffic_light']
@@ -1172,7 +1194,6 @@ class MainWindow(QMainWindow):
                 painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * x),
                                   self.translateY(self.mapSpecs.meters_to_print_scale * y))
 
-        #     # self.drawVehicle = False
 
         if self.drawVehicle:
             for idx, vehicle in enumerate(self.vehicles):
@@ -1481,31 +1502,52 @@ class MainWindow(QMainWindow):
                         # Restore the environment to what it was before
                         painter.restore()
 
-                    # if self.display_covariance:
-                    #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-                    #     pen.setWidth(.5)
-                    #     painter.setPen(pen)
-                    #     for each in self.lidar_detection_centroid[idx]:
-                    #         # Make sure covariance parameters have been added
-                    #         if len(each) >= 3:
-                    #             pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                    #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                    #             a, b, phi = shared_math.ellipsify(each[2].covariance, 3.0)
-                    #             a = a * self.mapSpecs.meters_to_print_scale
-                    #             b = b * self.mapSpecs.meters_to_print_scale
-                    #             # Save the previous painter envinronment so we don't mess up the other things
-                    #             painter.save()
-                    #             # get the x and y components of the ellipse position
-                    #             ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
-                    #             ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
-                    #             # translate the center to where our ellipse should be
-                    #             painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-                    #             # Rotate by phi to tunr the ellipse the correct way
-                    #             painter.rotate(math.degrees(phi))
-                    #             # Draw the ellipse at 0.0
-                    #             painter.drawEllipse(0, 0, a, b)
-                    #             # Restore the environment to what it was before
-                    #             painter.restore()
+            if self.fusion_debug:
+                # Now draw the vehicle fusion detections
+                pen.setBrush(brush_color['sensor_fusion_centroid'])
+                pen.setWidth(6)
+                painter.setPen(pen)
+                print("fusion ", self.sensor_fusion_centroid[idx])
+                for each in self.sensor_fusion_centroid[idx]:
+                    # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
+                    painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
+                # pen.setWidth(.5)
+                # painter.setPen(pen)
+                # for each in self.sensor_fusion_centroid[idx]:
+                #     # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
+                #     painter.drawLine(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
+                #                     self.translateX((each[0] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale),
+                #                     self.translateY((each[1] + (8.0*each[4])) * self.mapSpecs.meters_to_print_scale))
+
+                # if self.display_covariance:
+                #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                #     pen.setWidth(.5)
+                #     painter.setPen(pen)
+                #     for each in self.sensor_fusion_error:
+                #         # Make sure covariance parameters have been added
+                #         if len(each) >= 3:
+                #             pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                #             a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                #             a = a * self.mapSpecs.meters_to_print_scale
+                #             b = b * self.mapSpecs.meters_to_print_scale
+
+                #             if not math.isnan(a) and not math.isnan(b):
+                #                 # Save the previous painter envinronment so we don't mess up the other things
+                #                 painter.save()
+                #                 # get the x and y components of the ellipse position
+                #                 ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                #                 ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                #                 # translate the center to where our ellipse should be
+                #                 painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                #                 # Rotate by phi to tunr the ellipse the correct way
+                #                 painter.rotate(math.degrees(phi))
+                #                 # Draw the ellipse at 0.0
+                #                 painter.drawEllipse(0, 0, a, b)
+                #                 # Restore the environment to what it was before
+                #                 painter.restore()
 
         # if self.drawCamera:
         #     for idx, cis in self.cis.items():
@@ -1626,52 +1668,7 @@ class MainWindow(QMainWindow):
         #             # Restore the environment to what it was before
         #             painter.restore()
 
-        # if self.fusion_debug:
-        #     for idx, vehicle in self.vehicles.items():
-        #         # Now draw the vehicle fusion detections
-        #         pen.setBrush(brush_color['sensor_fusion_centroid'])
-        #         pen.setWidth(6)
-        #         painter.setPen(pen)
-        #         for each in fusionDetections:
-        #             # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
-        #             painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
-        #         pen.setWidth(.5)
-        #         painter.setPen(pen)
-        #         for each in fusionDetections:
-        #             # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
-        #             painter.drawLine(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateX((each[0] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY((each[1] + (8.0*each[4])) * self.mapSpecs.meters_to_print_scale))
-
-        #         if self.display_covariance:
-        #             pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-        #             pen.setWidth(.5)
-        #             painter.setPen(pen)
-        #             for each in fusionDetections:
-        #                 # Make sure covariance parameters have been added
-        #                 if len(each) >= 3:
-        #                     pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-        #                     a, b, phi = shared_math.ellipsify(each[2], 3.0)
-        #                     a = a * self.mapSpecs.meters_to_print_scale
-        #                     b = b * self.mapSpecs.meters_to_print_scale
-
-        #                     if not math.isnan(a) and not math.isnan(b):
-        #                         # Save the previous painter envinronment so we don't mess up the other things
-        #                         painter.save()
-        #                         # get the x and y components of the ellipse position
-        #                         ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
-        #                         ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
-        #                         # translate the center to where our ellipse should be
-        #                         painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-        #                         # Rotate by phi to tunr the ellipse the correct way
-        #                         painter.rotate(math.degrees(phi))
-        #                         # Draw the ellipse at 0.0
-        #                         painter.drawEllipse(0, 0, a, b)
-        #                         # Restore the environment to what it was before
-        #                         painter.restore()
+        
 
         #     for idx, cis in self.cis.items():
         #         # Now draw the camera fusion detections

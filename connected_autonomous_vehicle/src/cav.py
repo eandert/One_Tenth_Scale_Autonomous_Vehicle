@@ -11,20 +11,18 @@ pipeFromC = "/home/jetson/Projects/slamware/fifo_queues/fifopipefromc"
 pipeToC = "/home/jetson/Projects/slamware/fifo_queues/fifopipetoc"
 
 # This function is for controlling the time function in case of simulation
-def fetch_time(simulation_time, global_time = 0.0):
+def fetch_time(simulation_time, global_time = 1.0):
     if simulation_time:
         return global_time
     else:
         return time.time()
 
-# This function is for controlling the time function in case of simulation
-def fetch_new_time(simulation_time, rsu_sim_check = None):
-    if simulation_time:
-        returned = rsu_sim_check.getSimTime()
-        if returned["time"] != -99:
-            return returned["time"]
-        else:
-            return -99
+def update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check = None):
+    while(True):
+        new_time = rsu_sim_check.getSimTime()["time"]
+        if new_time != -99 and new_time != None:
+            if debug: print( " Vehicle ", vehicle_id, " got sim time from server ", new_time)
+            return new_time
 
 def sourceImagesThread(out_queue, settings, camSpecs, simulation_time, data_collect_mode, start_time, interval):
     # DO our imports within this function so we dont disturb the simulation
@@ -212,7 +210,7 @@ def cav(config, vid):
             settings.outputFilename = "live_test_output.avi"
     else:
         simulation_time = True
-        global_time = 0.0
+        global_time = 1.0 # This must start as nonzero else Python will confuse with none
 
     # Set up the timing
     if config.simulation:
@@ -249,7 +247,7 @@ def cav(config, vid):
         # We are in sumulation and cannot start unlimited threads so this will be done in series
         fails = 0        
         simulation_time = True
-        global_time = 0.0
+        global_time = 1.0
         init = {}
         response = {}
         lidarRecognition = lidar_recognition.LIDAR(0.0)
@@ -302,8 +300,8 @@ def cav(config, vid):
 
     # If this is a simulation we need a second communication class to get some ideal positions
     if config.simulation:
-        global_time = rsu_sim_check.getSimTime()['time']
-        if debug: print( " Vehicle ", vehicle_id, " got sim time from server ", global_time )
+        global_time = update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check)
+        print("global_time", global_time)
 
     # Start the sensor fusion pipeline
     fusion = local_fusion.FUSION(0, vehicle_id)
@@ -321,10 +319,7 @@ def cav(config, vid):
 
     while True:
         if config.simulation:
-            new_time = fetch_new_time(simulation_time, rsu_sim_check)
-            if new_time!= -99:
-                global_time = new_time
-            print ( fetch_time(simulation_time, global_time), next_time )
+            global_time = update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check)
         if fetch_time(simulation_time, global_time) >= next_time:
             if config.simulation:
                 # Special simulation setup where we do not use the source threads
@@ -368,6 +363,7 @@ def cav(config, vid):
                         planner.rawLidarDetections = point_cloud_error
                     else:
                         lidar_returned[1] = lidar_detected_error
+                        lidar_returned[2] = fetch_time(simulation_time, global_time)
                 else:
                     cam_returned[0] = camera_array
                     cam_returned[1] = fetch_time(simulation_time, global_time)
@@ -431,6 +427,7 @@ def cav(config, vid):
                 fusion_result = []
                 fusion_start = fetch_time(simulation_time, global_time)
                 if not data_collect_mode:
+                    print("pre call", global_time, lidartimestamp, camtimestamp)
                     fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
                     fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
                     fusion_result = fusion.fuseDetectionFrame(1, planner)

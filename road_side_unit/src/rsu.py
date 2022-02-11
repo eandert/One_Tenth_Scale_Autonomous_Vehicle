@@ -31,7 +31,7 @@ class RSU():
         self.simulate_error = True
         self.real_lidar = False
         self.simulation = config.simulation
-        self.time = 0.0
+        self.time = 1.0 # Time MUST start positive or it will be considered none!
         self.interval = config.interval
 
         # Init parameters for unit testing
