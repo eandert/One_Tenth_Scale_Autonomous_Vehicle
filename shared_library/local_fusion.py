@@ -326,7 +326,6 @@ class Tracked:
             # We have valid data
             # Transition matrix
             # Prediction step!
-            print("inside", self.lastTracked, self.prev_time)
             elapsed = self.lastTracked - self.prev_time
             if elapsed <= 0.0:
                 #print( "Error time elapsed is incorrect! " + str(elapsed) )

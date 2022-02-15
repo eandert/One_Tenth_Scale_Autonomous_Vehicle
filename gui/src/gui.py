@@ -1507,19 +1507,16 @@ class MainWindow(QMainWindow):
                 pen.setBrush(brush_color['sensor_fusion_centroid'])
                 pen.setWidth(6)
                 painter.setPen(pen)
-                print("fusion ", self.sensor_fusion_centroid[idx])
                 for each in self.sensor_fusion_centroid[idx]:
-                    # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
                     painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
                                     self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
-                # pen.setWidth(.5)
-                # painter.setPen(pen)
-                # for each in self.sensor_fusion_centroid[idx]:
-                #     # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
-                #     painter.drawLine(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                #                     self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
-                #                     self.translateX((each[0] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale),
-                #                     self.translateY((each[1] + (8.0*each[4])) * self.mapSpecs.meters_to_print_scale))
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                for each in self.sensor_fusion_centroid[idx]:
+                    painter.drawLine(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateX((each[1] + (8.0*each[4])) * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY((each[2] + (8.0*each[5])) * self.mapSpecs.meters_to_print_scale))
 
                 # if self.display_covariance:
                 #     pen.setBrush(brush_color['sensor_fusion_error_ellipse'])

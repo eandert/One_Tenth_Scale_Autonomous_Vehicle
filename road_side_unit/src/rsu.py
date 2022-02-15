@@ -273,7 +273,6 @@ class RSU():
         vehicleList = []
 
         # If step_sim_vehicle is false, just send back false
-        print( "simpos: ", id )
         if self.step_sim_vehicle and self.step_sim_vehicle_tracker[id]:
             step_temp = True
             self.step_sim_vehicle_tracker[id] = False
@@ -314,7 +313,7 @@ class RSU():
             self.vehicles[id].localizationPositionY = y
             self.vehicles[id].velocity = velocity
             self.vehicles[id].theta = yaw
-            print("     cav ", id, " position ", x, y, yaw, velocity)
+            #print("     cav ", id, " position ", x, y, yaw, velocity)
             #self.vehicles[id].update_localization(True, [x, y, yaw, velocity])
 
         # Finally we can create the return messages
@@ -347,9 +346,13 @@ class RSU():
             localizationsList = []
             for idx, vehicle in self.vehicles.items():
                 # Add to the global sensor fusion
-                localizationsList.append((vehicle.localizationPositionX,
-                                            vehicle.localizationPositionY,
-                                            vehicle.localizationCovariance, 0, 0, -1))
+                localizationsList.append((vehicle.id-10,
+                                          vehicle.localizationPositionX,
+                                          vehicle.localizationPositionY,
+                                          vehicle.localizationCovariance, 
+                                          0, 
+                                          0, 
+                                          -1))
             self.globalFusion.processDetectionFrame(-1, self.getTime(), localizationsList, .25, self.estimate_covariance)
 
             for idx, vehicle in self.vehicles.items():
@@ -360,7 +363,7 @@ class RSU():
             #     # Add to the global sensor fusion
             #     self.globalFusion.processDetectionFrame(idx, self.getTime(), cis.fusionDetections, .25, self.estimate_covariance)
 
-            self.globalFusionList = []#self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+            self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
             # Ground truth to the original dataset
             # Get the last known location of all other vehicles

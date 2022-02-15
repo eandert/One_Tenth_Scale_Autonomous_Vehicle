@@ -57,7 +57,7 @@ class Setting:
                         self.map = 0
                         self.map_length = 1.0
                         self.simulation = True
-                        self.debug = True
+                        self.debug = False
                         self.data_collect_mode = False
                         self.unit_test = False
                         self.unit_test_config = None

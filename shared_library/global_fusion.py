@@ -286,6 +286,7 @@ class ResizableKalman:
                     [[self.x], [self.y], [0], [0], [0]], dtype = 'float')
             
             # Seed the covariance values directly from the measurement
+            print( " error cov ", self.error_covariance)
             self.P_t[0][0] = self.error_covariance[0][0]
             self.P_t[0][1] = self.error_covariance[0][1]
             self.P_t[1][0] = self.error_covariance[1][0]
@@ -547,9 +548,9 @@ class GlobalFUSION:
             #         detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             # else:
             #     # Use an arbitrary size if we have no covariance estimate
-            detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
             #detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([0, det[0], det[1], np.array(det[2]), det[3], det[4], np.array(det[5]), sensor_id])
+            detections_list.append([det[0], det[1], det[2], np.array(det[3]), det[4], det[5], np.array(det[6]), sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
