@@ -27,12 +27,15 @@ class RSU():
 
         # Settings for the simulation
         self.step_sim_vehicle = False
-        self.estimate_covariance = True
-        self.simulate_error = True
+        self.estimate_covariance = False
+        self.simulate_error = False
         self.real_lidar = False
         self.simulation = config.simulation
         self.time = 1.0 # Time MUST start positive or it will be considered none!
         self.interval = config.interval
+
+        # Unit test settings
+        self.unit_test_state = 0
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -363,7 +366,7 @@ class RSU():
             #     # Add to the global sensor fusion
             #     self.globalFusion.processDetectionFrame(idx, self.getTime(), cis.fusionDetections, .25, self.estimate_covariance)
 
-            self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+            self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
             # Ground truth to the original dataset
             # Get the last known location of all other vehicles
@@ -415,13 +418,28 @@ class RSU():
             print ( "Sim time Stepped @: " , self.time)
 
     def sendGuiValues(self, velocity_targets, pause, end, button_states):
-        self.pause_simulation = pause
-
+        # Check if the user has ended it all
         if end:
             self.end = True
 
-        for idx, each in enumerate(velocity_targets):
-            self.vehicles[idx].targetVelocityGeneral = each
+        # Check button states from the GUI if we are not unit testing
+        if self.unit_test_state == 0:
+            # Pause state from GUI
+            self.pause_simulation = pause
+
+            # Get CAV velocity targets from GUI
+            for idx, each in enumerate(velocity_targets):
+                self.vehicles[idx].targetVelocityGeneral = each
+
+            print( " trying to get values from gui! ")
+
+            # Get other gui button states
+            self.estimate_covariance = button_states['estimate_covariance']
+            self.simulate_error = button_states['simulate_error']
+            self.real_lidar = button_states['full_simulation']
+            self.unit_test_state = button_states['unit_test']
+
+            print( " got values from gui! ")
 
         response = dict(
             returned = True
@@ -438,7 +456,6 @@ class RSU():
         camera_detection_centroid = []
         sensor_fusion_centroid = []
         localization_error = []
-        global_sensor_fusion_centroid = []
 
         if coordinates:
             map_specs = [self.mapSpecs.map, self.mapSpecs.intersectionStraightLength]

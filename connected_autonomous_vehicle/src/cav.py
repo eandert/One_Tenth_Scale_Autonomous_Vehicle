@@ -349,7 +349,7 @@ def cav(config, vid):
                     temp_covariance = localization_error_gaussian
                 else:
                     temp_covariance = sensor.BivariateGaussian(0.175, 0.175, 0)
-                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(planner, tempList, [], 15.0, 15.0, 0.0, 160.0, l_error = localization_error, l_error_gauss = temp_covariance)
+                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(planner, tempList, [], 15.0, 15.0, 0.0, 160.0)
                 lidar_returned[0] = [planner.localizationPositionX + localization_error[0], planner.localizationPositionY + localization_error[1],
                                     planner.theta, planner.velocity, temp_covariance.covariance.tolist()]
                 if sim_values["simulate_error"]:
@@ -364,6 +364,7 @@ def cav(config, vid):
                     else:
                         lidar_returned[1] = lidar_detected_error
                         lidar_returned[2] = fetch_time(simulation_time, global_time)
+                        planner.rawLidarDetections = point_cloud_error
                 else:
                     cam_returned[0] = camera_array
                     cam_returned[1] = fetch_time(simulation_time, global_time)
@@ -427,7 +428,6 @@ def cav(config, vid):
                 fusion_result = []
                 fusion_start = fetch_time(simulation_time, global_time)
                 if not data_collect_mode:
-                    print("pre call", global_time, lidartimestamp, camtimestamp)
                     fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
                     fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
                     fusion_result = fusion.fuseDetectionFrame(1, planner)

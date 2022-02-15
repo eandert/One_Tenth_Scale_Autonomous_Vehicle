@@ -204,7 +204,7 @@ def addBivariateGaussians(gaussianA, gaussianB):
 # This function is for full simulation where we fake both LIDAR and camera
 # TODO: modularize this more so we can consider other sensor locations and facing angles
 def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
-                              cam_center_angle, cam_fov, l_error = [0.0,0.0], l_error_gauss = None):
+                              cam_center_angle, cam_fov):
 
         # print ( "FAKING LIDAR" )
         lidar_point_cloud = []
@@ -279,7 +279,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                 # Generate error for the individual points
                 x_error = np.random.normal(0, 0.05, 1)[0]
                 y_error = np.random.normal(0, 0.05, 1)[0]
-                lidar_point_cloud_error.append((final_point[0] + x_error + l_error[0], final_point[1] + y_error + l_error[1]))
+                lidar_point_cloud_error.append((final_point[0] + x_error, final_point[1] + y_error))
 
                 # See if we can add a camera point as well
                 if shared_math.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, detector.theta + cam_center_angle,
@@ -294,9 +294,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                         success, expected_error_gaussian, actual_sim_error = detector.cameraSensor.calculateErrorGaussian(
                             relative_angle_to_detector, target_line_angle, relative_distance, True)
                         if success:
-                            # if l_error_gauss != None:
-                            #     expected_error_gaussian.unionBivariateGaussians(l_error_gauss)
-                            camera_error_array.append((point[0] + actual_sim_error[0] + l_error[0], point[1] + actual_sim_error[1] + l_error[1], expected_error_gaussian.covariance.tolist()))
+                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian.covariance.tolist()))
                             camera_array.append((point[0], point[1], expected_error_gaussian.covariance.tolist()))
                             camera_array_searcher.append((point[0], point[1]))
                 
@@ -316,9 +314,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                                 relative_angle_to_detector, target_line_angle, relative_distance, True)
 
                         if success_lidar:
-                            # if l_error_gauss != None:
-                            #     expected_error_gaussian_lidar.unionBivariateGaussians(l_error_gauss)
-                            lidar_detected_error.append((point[0] + actual_sim_error_lidar[0] + l_error[0], point[1] + actual_sim_error_lidar[1] + l_error[1], expected_error_gaussian_lidar.covariance.tolist()))
+                            lidar_detected_error.append((point[0] + actual_sim_error_lidar[0], point[1] + actual_sim_error_lidar[1], expected_error_gaussian_lidar.covariance.tolist()))
                             lidar_array_searcher.append((point[0], point[1]))
 
         return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array, lidar_detected_error
