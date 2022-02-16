@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from threading import Lock, Thread
 from queue import Queue
+from multiprocessing import Process
 
 # CAV and CIS stuff
 sys.path.append("../../../")
@@ -140,11 +141,17 @@ class RSU():
             self.thread = dict()
             self.step_sim_vehicle = False
             for idx, vehicle in self.vehicles.items():
+                # Old way that is slow because of the Global Interpreter Lock
                 self.thread["cav"+str(idx)] = Thread(target=cav.cav, args=(config, idx, ))
                 self.thread["cav"+str(idx)].daemon = True
                 self.thread["cav"+str(idx)].start()
+
+                # New actual threading
+                # self.thread["cav"+str(idx)] = Process(target=cav.cav, args=(config, idx, ))
+                # self.thread["cav"+str(idx)].daemon = True
+                # self.thread["cav"+str(idx)].start()
+
                 print( "RSU Initialized vehicle ", idx, " thread" )
-                print ( self.thread )
 
     def register(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
         if type == 0:
