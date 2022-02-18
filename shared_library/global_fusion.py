@@ -54,7 +54,7 @@ class ResizableKalman:
         self.elapsed = 0.125
 
         # Arbitrary min tracking size so we are not too small to match to
-        self.min_size = .75
+        self.min_size = .5
 
         # Process varaition guess
         process_variation = 1
@@ -438,7 +438,7 @@ class GlobalTracked:
         self.lastTracked = time
         self.id = id
         self.idx = 0
-        self.min_size = 0.75
+        self.min_size = 0.5
         self.track_count = 0
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
         self.match_list = []
@@ -505,7 +505,7 @@ class GlobalFUSION:
         self.trackedList = []
         self.id = 0
         self.prev_time = -99.0
-        self.min_size = 0.75
+        self.min_size = 0.5
         self.trackShowThreshold = 5
         self.fusion_mode = fusion_mode
 
@@ -532,6 +532,7 @@ class GlobalFUSION:
         detections_position_list = []
         detections_list = []
         for det in observations:
+            # TODO: Figure out why performance is worse with this method
             # # Create a rotated rectangle for IOU of 2 ellipses
             # # [cx, cy, w, h, angle]
             # if estimateCovariance and len(det) >= 3:
