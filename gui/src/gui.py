@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         init_response = self.rsu_connection.getGuiValues(True)
 
         self.mapSpecs = mapGenerator.MapSpecs(init_response['map_specs'][0], init_response['map_specs'][1])
+
         self.vehicles = init_response['vehicle']
         self.camera_fov = init_response['camera_fov']
         self.camera_center = init_response['camera_center']
@@ -57,6 +58,14 @@ class MainWindow(QMainWindow):
         self.camera_detection_centroid = init_response['camera_detection_centroid']
         self.sensor_fusion_centroid = init_response['sensor_fusion_centroid']
         self.localization_error = init_response['localization_error']
+
+        self.sensors = init_response['sensor']
+        self.sensor_camera_fov = init_response['sensor_camera_fov']
+        self.sensor_camera_center = init_response['sensor_camera_center']
+        self.sensor_camera_detection_centroid = init_response['sensor_camera_detection_centroid']
+        self.sensor_sensor_fusion_centroid = init_response['sensor_sensor_fusion_centroid']
+        self.sensor_localization_error = init_response['sensor_localization_error']
+
         self.global_sensor_fusion_centroid = init_response['global_sensor_fusion_centroid']
         self.trafficLightArray = init_response['traffic_light']
 
@@ -1047,6 +1056,14 @@ class MainWindow(QMainWindow):
             self.camera_detection_centroid = response['camera_detection_centroid']
             self.sensor_fusion_centroid = response['sensor_fusion_centroid']
             self.localization_error = response['localization_error']
+
+            self.sensors = response['sensor']
+            self.sensor_camera_fov = response['sensor_camera_fov']
+            self.sensor_camera_center = response['sensor_camera_center']
+            self.sensor_camera_detection_centroid = response['sensor_camera_detection_centroid']
+            self.sensor_sensor_fusion_centroid = response['sensor_sensor_fusion_centroid']
+            self.sensor_localization_error = response['sensor_localization_error']
+
             self.global_sensor_fusion_centroid = response['global_sensor_fusion_centroid']
             self.trafficLightArray = response['traffic_light']
             self.lidar_detection_raw = response['lidar_detection_raw']
@@ -1118,406 +1135,547 @@ class MainWindow(QMainWindow):
 
     def paintEvent(self, event):
         painter = QPainter(self)
+        pen = QPen()
 
         ### DRAW INTERSECTION ###
         if self.drawIntersection:
-            painter.setPen(Qt.black)
-
-            # Draw top section
-            painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale) - (
-                                         self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-            painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale) - (
-                                         self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-
-            # Draw bottom section
-            painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale) + (
-                                         self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-            painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale) + (
-                                         self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-
-            # Draw left section
-            painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) - (
-                                         self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-            painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) - (
-                                         self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-
-            # Draw right section
-            painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) + (
-                                         self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-            painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) + (
-                                         self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-
-            # Draw top right 3/4 circle
-            painter.drawArc(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) - (
-                                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2),
-                            self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2,
-                            self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2, -90 * 16, 270 * 16)
-            painter.drawArc(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 1.5) - (
-                                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2),
-                            self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2 + (
-                                        self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 2),
-                            self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2 + (
-                                        self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 2), -90 * 16, 270 * 16)
-
-            # Draw top right 3/4 circle
-            painter.drawArc(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) + (
-                                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2),
-                            -self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2,
-                            -self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2, 90 * 16, 270 * 16)
-            painter.drawArc(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 1.5) + (
-                                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2),
-                            -self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2 - (
-                                        self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 2),
-                            -self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2 - (
-                                        self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 2), 90 * 16, 270 * 16)
+            self.paint_lane_lines(pen, painter)
 
         ### DRAW TRAFFIC LIGHT STATE ###
         if self.drawCoordinates:
-            pen = QPen()
-            pen.setWidth(2)
-            
-            for x, y, intersection in zip(self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates):
-                # painter.translate(self.mapSpecs.centerX-15, self.mapSpecs.centerY-30);
-                # painter.rotate(90);
-                if intersection == 0:
-                    # No inersection here
-                    pen.setBrush(brush_color['waypoint'])
-                    pen.setWidth(2)
-                elif self.trafficLightArray[intersection] == 2:
-                    pen.setWidth(4)
-                    pen.setBrush(brush_color['traffic_light_green'])
-                elif self.trafficLightArray[intersection] == 1:
-                    pen.setWidth(4)
-                    pen.setBrush(brush_color['traffic_light_yellow'])
-                else:
-                    pen.setWidth(4)
-                    pen.setBrush(brush_color['traffic_light_red'])
-                painter.setPen(pen)
-                painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * x),
-                                  self.translateY(self.mapSpecs.meters_to_print_scale * y))
+            self.draw_tfl_and_waypoints(pen, painter)
 
         ### DRAW CAVS ###
         if self.drawVehicle:
-            for idx, vehicle in enumerate(self.vehicles):
-                pen = QPen()
+            self.paint_vehicles(pen, painter)
+
+        ### DRAW CISS ###
+        if self.drawCamera:
+            self.paint_sensors(pen, painter)
+
+        ### GLOBAL FUSION ###
+        if self.display_global_fusion:
+            self.paint_global_fusion(pen, painter)
+
+    def draw_tfl_and_waypoints(self, pen, painter):
+        pen.setWidth(2)
+        
+        for x, y, intersection in zip(self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates):
+            # painter.translate(self.mapSpecs.centerX-15, self.mapSpecs.centerY-30);
+            # painter.rotate(90);
+            if intersection == 0:
+                # No inersection here
+                pen.setBrush(brush_color['waypoint'])
+                pen.setWidth(2)
+            elif self.trafficLightArray[intersection] == 2:
                 pen.setWidth(4)
-                pen.setBrush(brush_color['vehicle'])
+                pen.setBrush(brush_color['traffic_light_green'])
+            elif self.trafficLightArray[intersection] == 1:
+                pen.setWidth(4)
+                pen.setBrush(brush_color['traffic_light_yellow'])
+            else:
+                pen.setWidth(4)
+                pen.setBrush(brush_color['traffic_light_red'])
+            painter.setPen(pen)
+            painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * x),
+                                self.translateY(self.mapSpecs.meters_to_print_scale * y))
+
+    def paint_lane_lines(self, pen, painter):
+        pen = QPen()
+
+        # N/S direction
+        pen.setWidth(4)
+        if self.trafficLightArray[2] == 2:
+            pen.setBrush(Qt.green)
+        elif self.trafficLightArray[2] == 1:
+            pen.setBrush(Qt.yellow)
+        else:
+            pen.setBrush(Qt.red)
+        painter.setPen(pen)
+        painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+        painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+
+        # E/W direction
+        pen.setWidth(4)
+        if self.trafficLightArray[1] == 2:
+            pen.setBrush(Qt.green)
+        elif self.trafficLightArray[1] == 1:
+            pen.setBrush(Qt.yellow)
+        else:
+            pen.setBrush(Qt.red)
+        painter.setPen(pen)
+        painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+        painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+
+        painter.setPen(Qt.black)
+
+        # Draw top section
+        painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale) - (
+                                        self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+        painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale) - (
+                                        self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+
+        # Draw bottom section
+        painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale) + (
+                                        self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+        painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale) + (
+                                        self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+
+        # Draw left section
+        painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) - (
+                                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+        painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) - (
+                                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+
+        # Draw right section
+        painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) + (
+                                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale),
+                            self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+        painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                            self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) + (
+                                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale),
+                            self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+
+        # Draw top right 3/4 circle
+        painter.drawArc(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                        self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) - (
+                                    self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2),
+                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2,
+                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2, -90 * 16, 270 * 16)
+        painter.drawArc(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                        self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 1.5) - (
+                                    self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2),
+                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2 + (
+                                    self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 2),
+                        self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2 + (
+                                    self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 2), -90 * 16, 270 * 16)
+
+        # Draw top right 3/4 circle
+        painter.drawArc(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                        self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2) + (
+                                    self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2),
+                        -self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2,
+                        -self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2, 90 * 16, 270 * 16)
+        painter.drawArc(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
+                        self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 1.5) + (
+                                    self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2),
+                        -self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2 - (
+                                    self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 2),
+                        -self.mapSpecs.intersectionStraightLength * self.mapSpecs.meters_to_print_scale * 2 - (
+                                    self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale * 2), 90 * 16, 270 * 16)
+
+    def paint_vehicles(self, pen, painter):
+        for idx, vehicle in enumerate(self.vehicles):
+            pen = QPen()
+            pen.setWidth(4)
+            pen.setBrush(brush_color['vehicle'])
+            painter.setPen(pen)
+
+            localizationPositionX = vehicle[0]
+            localizationPositionY = vehicle[1]
+            theta = vehicle[2]
+            velocity = vehicle[3]
+            wheelbaseWidth = vehicle[4]
+            wheelbaseLength = vehicle[5]
+            steeringAcceleration = vehicle[6]
+            targetIndexX = vehicle[7]
+            targetIndexY = vehicle[8]
+            rearAxlePositionX = vehicle[9]
+            rearAxlePositionY = vehicle[10]
+            targetVelocity = vehicle[11]
+            motorAcceleration = vehicle[12]
+            width = vehicle[13]
+            length = vehicle[14]
+
+            # Draw the vehicle position
+            # Front
+            front_axle_offset_x = (wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta)
+            front_axle_offset_y = (wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta)
+            rear_axle_offset_x = (wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(180))
+            rear_axle_offset_y = (wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(180))
+            painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(90))) + front_axle_offset_x,
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(90)) + front_axle_offset_y),
+                                self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(90))) + front_axle_offset_x,
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(90)) + front_axle_offset_y))
+            # Middle
+            painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                            wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(180))),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                            wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(180))),
+                                self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                            wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta)),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                            wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta)))
+            # Back
+            painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(90))) + rear_axle_offset_x,
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(90)) + rear_axle_offset_y),
+                                self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(90))) + rear_axle_offset_x,
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(90)) + rear_axle_offset_y))
+
+            # Wheels
+            driver_front_center_x = localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(90)) + front_axle_offset_x
+            driver_front_center_y =  localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(90)) + front_axle_offset_y
+            passenger_front_center_x = localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(90)) + front_axle_offset_x
+            passenger_front_center_y =  localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(90)) + front_axle_offset_y
+            driver_rear_center_x = localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(90)) + rear_axle_offset_x
+            driver_rear_center_y =  localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(90)) + rear_axle_offset_y
+            passenger_rear_center_x = localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(90)) + rear_axle_offset_x
+            passenger_rear_center_y =  localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                            (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(90)) + rear_axle_offset_y
+
+            # Driver side front
+            painter.drawLine(self.translateX(driver_front_center_x + 5 * math.cos(theta + steeringAcceleration)),
+                                self.translateY(driver_front_center_y + 5 * math.sin(theta + steeringAcceleration)),
+                                self.translateX(driver_front_center_x - 5 * math.cos(theta + steeringAcceleration)),
+                                self.translateY(driver_front_center_y - 5 * math.sin(theta + steeringAcceleration)))
+            # Passenger side front
+            painter.drawLine(self.translateX(passenger_front_center_x + 5 * math.cos(theta + steeringAcceleration)),
+                                self.translateY(passenger_front_center_y + 5 * math.sin(theta + steeringAcceleration)),
+                                self.translateX(passenger_front_center_x - 5 * math.cos(theta + steeringAcceleration)),
+                                self.translateY(passenger_front_center_y - 5 * math.sin(theta + steeringAcceleration)))
+            # Driver side rear
+            painter.drawLine(self.translateX(driver_rear_center_x + 5 * math.cos(theta)),
+                                self.translateY(driver_rear_center_y + 5 * math.sin(theta)),
+                                self.translateX(driver_rear_center_x - 5 * math.cos(theta)),
+                                self.translateY(driver_rear_center_y - 5 * math.sin(theta)))
+            # Passenger side rear
+            painter.drawLine(self.translateX(passenger_rear_center_x + 5 * math.cos(theta)),
+                                self.translateY(passenger_rear_center_y + 5 * math.sin(theta)),
+                                self.translateX(passenger_rear_center_x - 5 * math.cos(theta)),
+                                self.translateY(passenger_rear_center_y - 5 * math.sin(theta)))
+
+            if self.path_debug:
+                # Draw the target point
+                pen.setBrush(brush_color['target_point'])
+                painter.setPen(pen)
+                painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * targetIndexX),
+                                self.translateY(self.mapSpecs.meters_to_print_scale * targetIndexY))
+                pen.setBrush(brush_color['wheel_angle'])
+                pen.setWidth(1)
+                painter.setPen(pen)
+                self.drawTargetArc(localizationPositionX, localizationPositionY, (rear_axle_offset_x+driver_rear_center_x)/2, 
+                (rear_axle_offset_y+driver_rear_center_y)/2, targetIndexX, targetIndexY, painter)
+
+            self.labelVehicleSpeedActual[idx].setText('VA=' + str(round(velocity, 2)))
+            self.labelVehicleSpeedTarget[idx].setText('VT=' + str(round(targetVelocity, 2)))
+            self.labelVehicleAcceleration[idx].setText('AA=' + str(round(motorAcceleration, 2)))
+
+            if self.path_debug:
+                pen.setWidth(.5)
+                pen.setBrush(brush_color['bounding_box'])
+                pen.setWidth(4)
+                painter.setPen(pen)
+                buffer = 0.1
+                x1 = localizationPositionX + (
+                            (width/2.0 + buffer) * math.cos(theta + math.radians(90)) + (
+                                (length/2.0 + buffer) * math.cos(theta - math.radians(180))))
+                y1 = localizationPositionY + (
+                            (width/2.0 + buffer) * math.sin(theta + math.radians(90)) + (
+                                (length/2.0 + buffer) * math.sin(theta - math.radians(180))))
+                x2 = localizationPositionX + (
+                            (width/2.0 + buffer) * math.cos(theta - math.radians(90)) + (
+                                (length/2.0 + buffer) * math.cos(theta - math.radians(180))))
+                y2 = localizationPositionY + (
+                            (width/2.0 + buffer) * math.sin(theta - math.radians(90)) + (
+                                (length/2.0 + buffer) * math.sin(theta - math.radians(180))))
+                x3 = localizationPositionX + (
+                            (width/2.0 + buffer) * math.cos(theta - math.radians(90)) + (
+                                (length/2.0 + buffer) * math.cos(theta)))
+                y3 = localizationPositionY + (
+                            (width/2.0 + buffer) * math.sin(theta - math.radians(90)) + (
+                                (length/2.0 + buffer) * math.sin(theta)))
+                x4 = localizationPositionX + (
+                            (width/2.0 + buffer) * math.cos(theta + math.radians(90)) + (
+                                (length/2.0 + buffer) * math.cos(theta)))
+                y4 = localizationPositionY + (
+                            (width/2.0 + buffer) * math.sin(theta + math.radians(90)) + (
+                                (length/2.0 + buffer) * math.sin(theta)))
+
+                # print (localizationPositionX, localizationPositionY, x1, y1, x2, y2)
+                painter.drawPoint(self.translateX(x1 * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(y1 * self.mapSpecs.meters_to_print_scale))
+                painter.drawPoint(self.translateX(x2 * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(y2 * self.mapSpecs.meters_to_print_scale))
+                painter.drawPoint(self.translateX(x3 * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(y3 * self.mapSpecs.meters_to_print_scale))
+                painter.drawPoint(self.translateX(x4 * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(y4 * self.mapSpecs.meters_to_print_scale))
+
+            if self.camera_debug:
+                # Draw the FOV of cam
+                pen.setWidth(.5)
+                pen.setBrush(brush_color['camera_fov'])
                 painter.setPen(pen)
 
-                localizationPositionX = vehicle[0]
-                localizationPositionY = vehicle[1]
-                theta = vehicle[2]
-                velocity = vehicle[3]
-                wheelbaseWidth = vehicle[4]
-                wheelbaseLength = vehicle[5]
-                steeringAcceleration = vehicle[6]
-                targetIndexX = vehicle[7]
-                targetIndexY = vehicle[8]
-                rearAxlePositionX = vehicle[9]
-                rearAxlePositionY = vehicle[10]
-                targetVelocity = vehicle[11]
-                motorAcceleration = vehicle[12]
-                width = vehicle[13]
-                length = vehicle[14]
+                camera_center = math.degrees(self.camera_center[idx])
+                camera_fov = math.degrees(self.camera_fov[idx])
 
-                # Draw the vehicle position
-                # Front
-                front_axle_offset_x = (wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta)
-                front_axle_offset_y = (wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta)
-                rear_axle_offset_x = (wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(180))
-                rear_axle_offset_y = (wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(180))
-                painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(90))) + front_axle_offset_x,
-                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(90)) + front_axle_offset_y),
-                                 self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(90))) + front_axle_offset_x,
-                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(90)) + front_axle_offset_y))
-                # Middle
-                painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                                             wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(180))),
-                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(180))),
-                                 self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                                             wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta)),
-                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             wheelbaseLength/2.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta)))
-                # Back
-                painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(90))) + rear_axle_offset_x,
-                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(90)) + rear_axle_offset_y),
-                                 self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(90))) + rear_axle_offset_x,
-                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(90)) + rear_axle_offset_y))
+                painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                        1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(camera_center + (camera_fov/2)))),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                        1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(camera_center + (camera_fov/2)))))
 
-                # Wheels
-                driver_front_center_x = localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(90)) + front_axle_offset_x
-                driver_front_center_y =  localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(90)) + front_axle_offset_y
-                passenger_front_center_x = localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(90)) + front_axle_offset_x
-                passenger_front_center_y =  localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(90)) + front_axle_offset_y
-                driver_rear_center_x = localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(90)) + rear_axle_offset_x
-                driver_rear_center_y =  localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(90)) + rear_axle_offset_y
-                passenger_rear_center_x = localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                     theta + math.radians(90)) + rear_axle_offset_x
-                passenger_rear_center_y =  localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-                                             (wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                     theta + math.radians(90)) + rear_axle_offset_y
+                painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                        1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(camera_center + -(camera_fov/2)))),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                        1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(camera_center + -(camera_fov/2)))))
 
-                # Driver side front
-                painter.drawLine(self.translateX(driver_front_center_x + 5 * math.cos(theta + steeringAcceleration)),
-                                 self.translateY(driver_front_center_y + 5 * math.sin(theta + steeringAcceleration)),
-                                 self.translateX(driver_front_center_x - 5 * math.cos(theta + steeringAcceleration)),
-                                 self.translateY(driver_front_center_y - 5 * math.sin(theta + steeringAcceleration)))
-                # Passenger side front
-                painter.drawLine(self.translateX(passenger_front_center_x + 5 * math.cos(theta + steeringAcceleration)),
-                                 self.translateY(passenger_front_center_y + 5 * math.sin(theta + steeringAcceleration)),
-                                 self.translateX(passenger_front_center_x - 5 * math.cos(theta + steeringAcceleration)),
-                                 self.translateY(passenger_front_center_y - 5 * math.sin(theta + steeringAcceleration)))
-                # Driver side rear
-                painter.drawLine(self.translateX(driver_rear_center_x + 5 * math.cos(theta)),
-                                 self.translateY(driver_rear_center_y + 5 * math.sin(theta)),
-                                 self.translateX(driver_rear_center_x - 5 * math.cos(theta)),
-                                 self.translateY(driver_rear_center_y - 5 * math.sin(theta)))
-                # Passenger side rear
-                painter.drawLine(self.translateX(passenger_rear_center_x + 5 * math.cos(theta)),
-                                 self.translateY(passenger_rear_center_y + 5 * math.sin(theta)),
-                                 self.translateX(passenger_rear_center_x - 5 * math.cos(theta)),
-                                 self.translateY(passenger_rear_center_y - 5 * math.sin(theta)))
+                # Now draw the vehicle camera detections
+                pen.setBrush(brush_color['camera_detection_centroid'])
+                pen.setWidth(4)
+                painter.setPen(pen)
+                for each in self.camera_detection_centroid[idx]:
+                    # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
+                    painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
-                if self.path_debug:
-                    # Draw the target point
-                    pen.setBrush(brush_color['target_point'])
-                    painter.setPen(pen)
-                    painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * targetIndexX),
-                                    self.translateY(self.mapSpecs.meters_to_print_scale * targetIndexY))
-                    pen.setBrush(brush_color['wheel_angle'])
-                    pen.setWidth(1)
-                    painter.setPen(pen)
-                    self.drawTargetArc(localizationPositionX, localizationPositionY, (rear_axle_offset_x+driver_rear_center_x)/2, 
-                    (rear_axle_offset_y+driver_rear_center_y)/2, targetIndexX, targetIndexY, painter)
-
-                self.labelVehicleSpeedActual[idx].setText('VA=' + str(round(velocity, 2)))
-                self.labelVehicleSpeedTarget[idx].setText('VT=' + str(round(targetVelocity, 2)))
-                self.labelVehicleAcceleration[idx].setText('AA=' + str(round(motorAcceleration, 2)))
-
-                if self.path_debug:
+                # Time for displaying the covaraince
+                if self.display_covariance:
+                    pen.setBrush(brush_color['camera_detection_error'])
                     pen.setWidth(.5)
-                    pen.setBrush(brush_color['bounding_box'])
-                    pen.setWidth(4)
-                    painter.setPen(pen)
-                    buffer = 0.1
-                    x1 = localizationPositionX + (
-                                (width/2.0 + buffer) * math.cos(theta + math.radians(90)) + (
-                                    (length/2.0 + buffer) * math.cos(theta - math.radians(180))))
-                    y1 = localizationPositionY + (
-                                (width/2.0 + buffer) * math.sin(theta + math.radians(90)) + (
-                                    (length/2.0 + buffer) * math.sin(theta - math.radians(180))))
-                    x2 = localizationPositionX + (
-                                (width/2.0 + buffer) * math.cos(theta - math.radians(90)) + (
-                                    (length/2.0 + buffer) * math.cos(theta - math.radians(180))))
-                    y2 = localizationPositionY + (
-                                (width/2.0 + buffer) * math.sin(theta - math.radians(90)) + (
-                                    (length/2.0 + buffer) * math.sin(theta - math.radians(180))))
-                    x3 = localizationPositionX + (
-                                (width/2.0 + buffer) * math.cos(theta - math.radians(90)) + (
-                                    (length/2.0 + buffer) * math.cos(theta)))
-                    y3 = localizationPositionY + (
-                                (width/2.0 + buffer) * math.sin(theta - math.radians(90)) + (
-                                    (length/2.0 + buffer) * math.sin(theta)))
-                    x4 = localizationPositionX + (
-                                (width/2.0 + buffer) * math.cos(theta + math.radians(90)) + (
-                                    (length/2.0 + buffer) * math.cos(theta)))
-                    y4 = localizationPositionY + (
-                                (width/2.0 + buffer) * math.sin(theta + math.radians(90)) + (
-                                    (length/2.0 + buffer) * math.sin(theta)))
-
-                    # print (localizationPositionX, localizationPositionY, x1, y1, x2, y2)
-                    painter.drawPoint(self.translateX(x1 * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(y1 * self.mapSpecs.meters_to_print_scale))
-                    painter.drawPoint(self.translateX(x2 * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(y2 * self.mapSpecs.meters_to_print_scale))
-                    painter.drawPoint(self.translateX(x3 * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(y3 * self.mapSpecs.meters_to_print_scale))
-                    painter.drawPoint(self.translateX(x4 * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(y4 * self.mapSpecs.meters_to_print_scale))
-
-                if self.camera_debug:
-                    # Draw the FOV of cam
-                    pen.setWidth(.5)
-                    pen.setBrush(brush_color['camera_fov'])
-                    painter.setPen(pen)
-
-                    camera_center = math.degrees(self.camera_center[idx])
-                    camera_fov = math.degrees(self.camera_fov[idx])
-
-                    painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
-                                    self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-                                            1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                        theta + math.radians(camera_center + (camera_fov/2)))),
-                                    self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-                                            1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                        theta + math.radians(camera_center + (camera_fov/2)))))
-
-                    painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
-                                    self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-                                            1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                        theta + math.radians(camera_center + -(camera_fov/2)))),
-                                    self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-                                            1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                        theta + math.radians(camera_center + -(camera_fov/2)))))
-
-                    # Now draw the vehicle camera detections
-                    pen.setBrush(brush_color['camera_detection_centroid'])
-                    pen.setWidth(4)
                     painter.setPen(pen)
                     for each in self.camera_detection_centroid[idx]:
-                        # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
-                        painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
+                            # Save the previous painter envinronment so we don't mess up the other things
+                            painter.save()
+                            # get the x and y components of the ellipse position
+                            ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                            ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                            # translate the center to where our ellipse should be
+                            painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                            # Rotate by phi to turn the ellipse the correct way
+                            painter.rotate(math.degrees(phi))
+                            # Draw the ellipse at 0.0
+                            painter.drawEllipse(0, 0, a, b)
+                            # Restore the environment to what it was before
+                            painter.restore()
 
-                    # Time for displaying the covaraince
-                    if self.display_covariance:
-                        pen.setBrush(brush_color['camera_detection_error'])
-                        pen.setWidth(.5)
-                        painter.setPen(pen)
-                        for each in self.camera_detection_centroid[idx]:
-                            # Make sure covariance parameters have been added
-                            if len(each) >= 3:
-                                pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                                a, b, phi = shared_math.ellipsify(each[2], 3.0)
-                                a = a * self.mapSpecs.meters_to_print_scale
-                                b = b * self.mapSpecs.meters_to_print_scale
-                                # Save the previous painter envinronment so we don't mess up the other things
-                                painter.save()
-                                # get the x and y components of the ellipse position
-                                ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
-                                ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
-                                # translate the center to where our ellipse should be
-                                painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-                                # Rotate by phi to turn the ellipse the correct way
-                                painter.rotate(math.degrees(phi))
-                                # Draw the ellipse at 0.0
-                                painter.drawEllipse(0, 0, a, b)
-                                # Restore the environment to what it was before
-                                painter.restore()
+            if self.lidar_debug:
+                # Now draw the vehicle lidar detections
+                pen.setBrush(brush_color['lidar_detection_centroid'])
+                pen.setWidth(4)
+                painter.setPen(pen)
+                for each in self.lidar_detection_centroid[idx]:
+                    painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
-                if self.lidar_debug:
-                    # Now draw the vehicle lidar detections
-                    pen.setBrush(brush_color['lidar_detection_centroid'])
-                    pen.setWidth(4)
-                    painter.setPen(pen)
-                    for each in self.lidar_detection_centroid[idx]:
-                        painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+                # Draw raw lidar
+                pen.setBrush(brush_color['lidar_detection_raw'])
+                pen.setWidth(2)
+                painter.setPen(pen)
+                for each in self.lidar_detection_raw[idx]:
+                    painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
 
-                    # Draw raw lidar
-                    pen.setBrush(brush_color['lidar_detection_raw'])
-                    pen.setWidth(2)
-                    painter.setPen(pen)
-                    for each in self.lidar_detection_raw[idx]:
-                        painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
-
-                    # Time for displaying the covaraince
-                    if self.display_covariance:
-                        pen.setBrush(brush_color['lidar_detection_error'])
-                        pen.setWidth(.5)
-                        painter.setPen(pen)
-                        for each in self.lidar_detection_centroid[idx]:
-                            # Make sure covariance parameters have been added
-                            if len(each) >= 3:
-                                pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                                a, b, phi = shared_math.ellipsify(each[2], 3.0)
-                                a = a * self.mapSpecs.meters_to_print_scale
-                                b = b * self.mapSpecs.meters_to_print_scale
-                                # Save the previous painter envinronment so we don't mess up the other things
-                                painter.save()
-                                # get the x and y components of the ellipse position
-                                ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
-                                ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
-                                # translate the center to where our ellipse should be
-                                painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-                                # Rotate by phi to turn the ellipse the correct way
-                                painter.rotate(math.degrees(phi))
-                                # Draw the ellipse at 0.0
-                                painter.drawEllipse(0, 0, a, b)
-                                # Restore the environment to what it was before
-                                painter.restore()
-
-                if self.display_localization:
-                    pen.setBrush(brush_color['localization_error'])
+                # Time for displaying the covaraince
+                if self.display_covariance:
+                    pen.setBrush(brush_color['lidar_detection_error'])
                     pen.setWidth(.5)
                     painter.setPen(pen)
-                    if self.localization_error != []:
-                        pos = ( self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
-                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale) )
-                        a, b, phi = shared_math.ellipsify(self.localization_error[idx], 3.0)
-                        a = a * self.mapSpecs.meters_to_print_scale
-                        b = b * self.mapSpecs.meters_to_print_scale
+                    for each in self.lidar_detection_centroid[idx]:
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
+                            # Save the previous painter envinronment so we don't mess up the other things
+                            painter.save()
+                            # get the x and y components of the ellipse position
+                            ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                            ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                            # translate the center to where our ellipse should be
+                            painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                            # Rotate by phi to turn the ellipse the correct way
+                            painter.rotate(math.degrees(phi))
+                            # Draw the ellipse at 0.0
+                            painter.drawEllipse(0, 0, a, b)
+                            # Restore the environment to what it was before
+                            painter.restore()
+
+            if self.display_localization:
+                pen.setBrush(brush_color['localization_error'])
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                if self.localization_error != []:
+                    pos = ( self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                            self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale) )
+                    a, b, phi = shared_math.ellipsify(self.localization_error[idx], 3.0)
+                    a = a * self.mapSpecs.meters_to_print_scale
+                    b = b * self.mapSpecs.meters_to_print_scale
+                    # Save the previous painter envinronment so we don't mess up the other things
+                    painter.save()
+                    # get the x and y components of the ellipse position
+                    ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                    ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                    # translate the center to where our ellipse should be
+                    painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                    # Rotate by phi to tunr the ellipse the correct way
+                    painter.rotate(math.degrees(phi))
+                    # Draw the ellipse at 0.0
+                    painter.drawEllipse(0, 0, a, b)
+                    # Restore the environment to what it was before
+                    painter.restore()
+
+            if self.fusion_debug:
+                # Now draw the vehicle fusion detections
+                pen.setBrush(brush_color['sensor_fusion_centroid'])
+                pen.setWidth(6)
+                painter.setPen(pen)
+                for each in self.sensor_fusion_centroid[idx]:
+                    painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                for each in self.sensor_fusion_centroid[idx]:
+                    painter.drawLine(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateX((each[1] + (each[4])) * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY((each[2] + (each[5])) * self.mapSpecs.meters_to_print_scale))
+
+                    if self.display_covariance:
+                        pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                        pen.setWidth(.5)
+                        painter.setPen(pen)
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[3], 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
+
+                            if not math.isnan(a) and not math.isnan(b):
+                                # Save the previous painter envinronment so we don't mess up the other things
+                                painter.save()
+                                # get the x and y components of the ellipse position
+                                ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                                ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                                # translate the center to where our ellipse should be
+                                painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                                # Rotate by phi to tunr the ellipse the correct way
+                                painter.rotate(math.degrees(phi))
+                                # Draw the ellipse at 0.0
+                                painter.drawEllipse(0, 0, a, b)
+                                # Restore the environment to what it was before
+                                painter.restore()
+
+    def paint_global_fusion(self, pen, painter):
+        # Now draw the camera fusion detections
+        pen.setBrush(brush_color['global_sensor_fusion_centroid'])
+        pen.setWidth(6)
+        painter.setPen(pen)
+        for fuse in self.global_sensor_fusion_centroid:
+            painter.drawPoint(self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
+                            self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale))
+        pen.setWidth(.5)
+        painter.setPen(pen)
+        for fuse in self.global_sensor_fusion_centroid:
+            painter.drawLine(self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
+                            self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale),
+                            self.translateX((fuse[1] + (fuse[4])) * self.mapSpecs.meters_to_print_scale),
+                            self.translateY((fuse[2] + (fuse[5])) * self.mapSpecs.meters_to_print_scale))
+
+        if self.display_covariance:
+            pen.setBrush(brush_color['global_sensor_fusion_error_ellipse'])
+            pen.setWidth(.5)
+            painter.setPen(pen)
+            for fuse in self.global_sensor_fusion_centroid:
+                # Make sure covariance parameters have been added
+                if len(fuse) >= 4:
+                    pos = ( self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
+                            self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale) )
+                    a, b, phi = shared_math.ellipsify(fuse[3], 3.0)
+                    a = a * self.mapSpecs.meters_to_print_scale
+                    b = b * self.mapSpecs.meters_to_print_scale
+                    if not math.isnan(a) and not math.isnan(b):
                         # Save the previous painter envinronment so we don't mess up the other things
                         painter.save()
                         # get the x and y components of the ellipse position
@@ -1532,218 +1690,91 @@ class MainWindow(QMainWindow):
                         # Restore the environment to what it was before
                         painter.restore()
 
-                if self.fusion_debug:
-                    # Now draw the vehicle fusion detections
-                    pen.setBrush(brush_color['sensor_fusion_centroid'])
-                    pen.setWidth(6)
-                    painter.setPen(pen)
-                    for each in self.sensor_fusion_centroid[idx]:
-                        painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
+    def paint_sensors(self, pen, painter):
+        for idx, cis in enumerate(self.sensors):
+            localizationPositionX = cis[0]
+            localizationPositionY = cis[1]
+            theta = cis[2]
+            velocity = cis[3]
+            width = cis[4]
+            length = cis[5]
+
+            pen = QPen()
+            pen.setWidth(4)
+            pen.setBrush(brush_color['camera'])
+            painter.setPen(pen)
+
+            # Draw the camera position
+            painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                            self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                            self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                                        length * .5 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                theta)),
+                            self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                        length * .5 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                theta)))
+            painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale + (
+                        (width/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                theta + math.radians(90))),
+                            self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale + (
+                                        (length/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                theta + math.radians(90))),
+                            self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                        (length/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                theta + math.radians(90))),
+                            self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                        (length/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                theta + math.radians(90))))
+
+            if self.camera_debug:
+                # Draw the FOV of cam
+                pen.setWidth(.5)
+                pen.setBrush(brush_color['camera_fov'])
+                painter.setPen(pen)
+
+                camera_center = math.degrees(self.sensor_camera_center[idx])
+                camera_fov = math.degrees(self.sensor_camera_fov[idx])
+
+                painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                        1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(camera_center + (camera_fov/2)))),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                        1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(camera_center + (camera_fov/2)))))
+
+                painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
+                                self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
+                                        1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
+                                    theta + math.radians(camera_center + -(camera_fov/2)))),
+                                self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
+                                        1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
+                                    theta + math.radians(camera_center + -(camera_fov/2)))))
+
+                # Now draw the vehicle camera detections
+                pen.setBrush(brush_color['camera_detection_centroid'])
+                pen.setWidth(4)
+                painter.setPen(pen)
+                for each in self.sensor_camera_detection_centroid[idx]:
+                    # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
+                    painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+
+                # Time for displaying the covaraince
+                if self.display_covariance:
+                    pen.setBrush(brush_color['camera_detection_error'])
                     pen.setWidth(.5)
                     painter.setPen(pen)
-                    for each in self.sensor_fusion_centroid[idx]:
-                        painter.drawLine(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY(each[2] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateX((each[1] + (each[4])) * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY((each[2] + (each[5])) * self.mapSpecs.meters_to_print_scale))
-
-                        if self.display_covariance:
-                            pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-                            pen.setWidth(.5)
-                            painter.setPen(pen)
-                            # Make sure covariance parameters have been added
-                            if len(each) >= 3:
-                                pos = ( self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
-                                        self.translateY(each[2] * self.mapSpecs.meters_to_print_scale) )
-                                a, b, phi = shared_math.ellipsify(each[3], 3.0)
-                                a = a * self.mapSpecs.meters_to_print_scale
-                                b = b * self.mapSpecs.meters_to_print_scale
-
-                                if not math.isnan(a) and not math.isnan(b):
-                                    # Save the previous painter envinronment so we don't mess up the other things
-                                    painter.save()
-                                    # get the x and y components of the ellipse position
-                                    ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
-                                    ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
-                                    # translate the center to where our ellipse should be
-                                    painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-                                    # Rotate by phi to tunr the ellipse the correct way
-                                    painter.rotate(math.degrees(phi))
-                                    # Draw the ellipse at 0.0
-                                    painter.drawEllipse(0, 0, a, b)
-                                    # Restore the environment to what it was before
-                                    painter.restore()
-
-        # if self.drawCamera:
-        #     for idx, cis in self.cis.items():
-        #         pen = QPen()
-        #         pen.setWidth(4)
-        #         pen.setBrush(brush_color['camera'])
-        #         painter.setPen(pen)
-        #         # Draw the camera position
-        #         painter.drawLine(self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale),
-        #                         self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale),
-        #                         self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-        #                                     cis.wheelbaseLength * .5 * self.mapSpecs.meters_to_print_scale) * math.cos(
-        #                             cis.theta)),
-        #                         self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-        #                                     cis.wheelbaseLength * .5 * self.mapSpecs.meters_to_print_scale) * math.sin(
-        #                             cis.theta)))
-        #         painter.drawLine(self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale + (
-        #                     (cis.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-        #             cis.theta + math.radians(90))),
-        #                         self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale + (
-        #                                     (cis.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-        #                             cis.theta + math.radians(90))),
-        #                         self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-        #                                     (cis.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.cos(
-        #                             cis.theta + math.radians(90))),
-        #                         self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-        #                                     (cis.wheelbaseWidth/2) * self.mapSpecs.meters_to_print_scale) * math.sin(
-        #                             cis.theta + math.radians(90))))
-
-        #     for idx, cis in self.cis.items():
-        #         # Draw the FOV
-        #         pen = QPen()
-        #         pen.setWidth(.5)
-        #         pen.setBrush(brush_color['camera_fov'])
-        #         painter.setPen(pen)
-
-        #         painter.drawLine(self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale),
-        #                         self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale),
-        #                         self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-        #                                 1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-        #                             cis.theta + math.radians(180 + 80))),
-        #                         self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-        #                                 1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-        #                             cis.theta + math.radians(180 + 80))))
-
-        #         painter.drawLine(self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale),
-        #                         self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale),
-        #                         self.translateX(cis.localizationPositionX * self.mapSpecs.meters_to_print_scale - (
-        #                                 1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-        #                             cis.theta + math.radians(180 + -80))),
-        #                         self.translateY(cis.localizationPositionY * self.mapSpecs.meters_to_print_scale - (
-        #                                 1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-        #                             cis.theta + math.radians(180 + -80))))
-
-        #     # Now draw the camera detections
-        #     for idx, cis in self.cis.items():
-        #         pen.setBrush(brush_color['camera_detection_centroid'])
-        #         pen.setWidth(4)
-        #         painter.setPen(pen)
-        #         for each in cis.cameraDetections:
-        #             #print ( each )
-        #             #transX, transY = self.translateDetections(each[2], -each[1], math.atan2(-each[1], each[2]), cis.localizationPositionX, cis.localizationPositionY, cis.theta)
-        #             #print ( transX, transY )
-        #             #print ( cis.localizationPositionX, cis.localizationPositionY, cis.theta )
-        #             #painter.drawPoint(self.translateX(transX * self.mapSpecs.meters_to_print_scale),
-        #             #                  self.translateY(transY * self.mapSpecs.meters_to_print_scale))
-        #             painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
-
-        #     if self.display_covariance:
-        #         pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-        #         pen.setWidth(.5)
-        #         painter.setPen(pen)
-        #         for each in cis.cameraDetections:
-        #             # Make sure covariance parameters have been added
-        #             if len(each) >= 3:
-        #                 pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-        #                         self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-        #                 a, b, phi = shared_math.ellipsify(each[2].covariance, 3.0)
-        #                 a = a * self.mapSpecs.meters_to_print_scale
-        #                 b = b * self.mapSpecs.meters_to_print_scale
-        #                 # Save the previous painter envinronment so we don't mess up the other things
-        #                 painter.save()
-        #                 # get the x and y components of the ellipse position
-        #                 ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
-        #                 ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
-        #                 # translate the center to where our ellipse should be
-        #                 painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-        #                 # Rotate by phi to tunr the ellipse the correct way
-        #                 painter.rotate(math.degrees(phi))
-        #                 # Draw the ellipse at 0.0
-        #                 painter.drawEllipse(0, 0, a, b)
-        #                 # Restore the environment to what it was before
-        #                 painter.restore()
-
-        #     for idx, cis in self.cis.items():
-        #         # Now draw the camera fusion detections
-        #         pen.setBrush(brush_color['sensor_fusion_centroid'])
-        #         pen.setWidth(6)
-        #         painter.setPen(pen)
-        #         for each in cis.fusionDetections:
-        #             # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
-        #             painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
-        #         pen.setWidth(.5)
-        #         painter.setPen(pen)
-        #         for each in cis.fusionDetections:
-        #             # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
-        #             painter.drawLine(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(each[1] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateX((each[0] + (8.0*each[3])) * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY((each[1] + (8.0*each[4])) * self.mapSpecs.meters_to_print_scale))
-
-        #         if self.display_covariance:
-        #             pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
-        #             pen.setWidth(.5)
-        #             painter.setPen(pen)
-        #             for each in cis.fusionDetections:
-        #                 # Make sure covariance parameters have been added
-        #                 if len(each) >= 3:
-        #                     pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-        #                             self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-        #                     a, b, phi = shared_math.ellipsify(each[2], 3.0)
-        #                     a = a * self.mapSpecs.meters_to_print_scale
-        #                     b = b * self.mapSpecs.meters_to_print_scale
-        #                     if not math.isnan(a) and not math.isnan(b):
-        #                         # Save the previous painter envinronment so we don't mess up the other things
-        #                         painter.save()
-        #                         # get the x and y components of the ellipse position
-        #                         ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
-        #                         ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
-        #                         # translate the center to where our ellipse should be
-        #                         painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-        #                         # Rotate by phi to tunr the ellipse the correct way
-        #                         painter.rotate(math.degrees(phi))
-        #                         # Draw the ellipse at 0.0
-        #                         painter.drawEllipse(0, 0, a, b)
-        #                         # Restore the environment to what it was before
-        #                         painter.restore()
-
-        ### GLOBAL FUSION ###
-        if self.display_global_fusion:
-            # Now draw the camera fusion detections
-            pen.setBrush(brush_color['global_sensor_fusion_centroid'])
-            pen.setWidth(6)
-            painter.setPen(pen)
-            for fuse in self.global_sensor_fusion_centroid:
-                painter.drawPoint(self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
-                                self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale))
-            pen.setWidth(.5)
-            painter.setPen(pen)
-            for fuse in self.global_sensor_fusion_centroid:
-                painter.drawLine(self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
-                                self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale),
-                                self.translateX((fuse[1] + (fuse[4])) * self.mapSpecs.meters_to_print_scale),
-                                self.translateY((fuse[2] + (fuse[5])) * self.mapSpecs.meters_to_print_scale))
-
-            if self.display_covariance:
-                pen.setBrush(brush_color['global_sensor_fusion_error_ellipse'])
-                pen.setWidth(.5)
-                painter.setPen(pen)
-                for fuse in self.global_sensor_fusion_centroid:
-                    # Make sure covariance parameters have been added
-                    if len(fuse) >= 4:
-                        pos = ( self.translateX(fuse[1] * self.mapSpecs.meters_to_print_scale),
-                                self.translateY(fuse[2] * self.mapSpecs.meters_to_print_scale) )
-                        a, b, phi = shared_math.ellipsify(fuse[3], 3.0)
-                        a = a * self.mapSpecs.meters_to_print_scale
-                        b = b * self.mapSpecs.meters_to_print_scale
-                        if not math.isnan(a) and not math.isnan(b):
+                    for each in self.sensor_camera_detection_centroid[idx]:
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
                             # Save the previous painter envinronment so we don't mess up the other things
                             painter.save()
                             # get the x and y components of the ellipse position
@@ -1751,48 +1782,76 @@ class MainWindow(QMainWindow):
                             ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
                             # translate the center to where our ellipse should be
                             painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
-                            # Rotate by phi to tunr the ellipse the correct way
+                            # Rotate by phi to turn the ellipse the correct way
                             painter.rotate(math.degrees(phi))
                             # Draw the ellipse at 0.0
                             painter.drawEllipse(0, 0, a, b)
                             # Restore the environment to what it was before
                             painter.restore()
 
-        if self.drawTrafficLight:
-            pen = QPen()
+            if self.display_localization:
+                pen.setBrush(brush_color['localization_error'])
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                if self.sensor_localization_error != []:
+                    pos = ( self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
+                            self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale) )
+                    a, b, phi = shared_math.ellipsify(self.localization_error[idx], 3.0)
+                    a = a * self.mapSpecs.meters_to_print_scale
+                    b = b * self.mapSpecs.meters_to_print_scale
+                    # Save the previous painter envinronment so we don't mess up the other things
+                    painter.save()
+                    # get the x and y components of the ellipse position
+                    ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                    ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                    # translate the center to where our ellipse should be
+                    painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                    # Rotate by phi to tunr the ellipse the correct way
+                    painter.rotate(math.degrees(phi))
+                    # Draw the ellipse at 0.0
+                    painter.drawEllipse(0, 0, a, b)
+                    # Restore the environment to what it was before
+                    painter.restore()
 
-            # N/S direction
-            pen.setWidth(4)
-            if self.trafficLightArray[2] == 2:
-                pen.setBrush(Qt.green)
-            elif self.trafficLightArray[2] == 1:
-                pen.setBrush(Qt.yellow)
-            else:
-                pen.setBrush(Qt.red)
-            painter.setPen(pen)
-            painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-            painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+            if self.fusion_debug:
+                # Now draw the vehicle fusion detections
+                pen.setBrush(brush_color['sensor_fusion_centroid'])
+                pen.setWidth(6)
+                painter.setPen(pen)
+                for each in self.sensor_sensor_fusion_centroid[idx]:
+                    painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
+                pen.setWidth(.5)
+                painter.setPen(pen)
+                for each in self.sensor_sensor_fusion_centroid[idx]:
+                    painter.drawLine(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateX((each[1] + (each[4])) * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY((each[2] + (each[5])) * self.mapSpecs.meters_to_print_scale))
 
-            # E/W direction
-            pen.setWidth(4)
-            if self.trafficLightArray[1] == 2:
-                pen.setBrush(Qt.green)
-            elif self.trafficLightArray[1] == 1:
-                pen.setBrush(Qt.yellow)
-            else:
-                pen.setBrush(Qt.red)
-            painter.setPen(pen)
-            painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
-            painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
-                             self.mapSpecs.centerY - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2))
+                    if self.display_covariance:
+                        pen.setBrush(brush_color['sensor_fusion_error_ellipse'])
+                        pen.setWidth(.5)
+                        painter.setPen(pen)
+                        # Make sure covariance parameters have been added
+                        if len(each) >= 3:
+                            pos = ( self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[3], 3.0)
+                            a = a * self.mapSpecs.meters_to_print_scale
+                            b = b * self.mapSpecs.meters_to_print_scale
+
+                            if not math.isnan(a) and not math.isnan(b):
+                                # Save the previous painter envinronment so we don't mess up the other things
+                                painter.save()
+                                # get the x and y components of the ellipse position
+                                ellipse_x_offset = math.cos(phi)*(a/2.0) + -math.sin(phi)*(b/2.0)
+                                ellipse_y_offset = math.sin(phi)*(a/2.0) + math.cos(phi)*(b/2.0)
+                                # translate the center to where our ellipse should be
+                                painter.translate(pos[0]-ellipse_x_offset, pos[1]-ellipse_y_offset)
+                                # Rotate by phi to tunr the ellipse the correct way
+                                painter.rotate(math.degrees(phi))
+                                # Draw the ellipse at 0.0
+                                painter.drawEllipse(0, 0, a, b)
+                                # Restore the environment to what it was before
+                                painter.restore()

@@ -1,9 +1,10 @@
+from sre_constants import JUMP
 import time
 import matplotlib.pyplot as plt
 from multiprocessing import Process, Queue, Manager
 
-from connected_autonomous_vehicle.src import lidar_recognition, planning_control, communication
-from shared_library import local_fusion, sensor
+from connected_autonomous_vehicle.src import planning_control, communication
+from shared_library import local_fusion, sensor, lidar_recognition
 
 #import local_fusion
 
@@ -193,9 +194,12 @@ def cav(config, vid):
     last_response = []
     data_collect_mode = config.data_collect_mode
 
+    print( " CAV ", vid, " begin.")
+
     if not config.simulation:
     	# Do our imports within this function so we dont disturb the simulation
-        from connected_autonomous_vehicle.src import camera_recognition, motors
+        from connected_autonomous_vehicle.src import motors
+        from shared_library import camera_recognition
         egoVehicle = motors.Motors()
 
         # Init the camera
@@ -428,8 +432,8 @@ def cav(config, vid):
                 fusion_result = []
                 fusion_start = fetch_time(simulation_time, global_time)
                 if not data_collect_mode:
-                    fusion.processDetectionFrame(local_fusion.CAMERA, lidartimestamp, lidarcoordinates, .25, 1)
-                    fusion.processDetectionFrame(local_fusion.LIDAR, camtimestamp, camcoordinates, .25, 1)
+                    fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, 1)
+                    fusion.processDetectionFrame(local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25, 1)
                     fusion_result = fusion.fuseDetectionFrame(1, planner)
 
                 # Message the RSU, for now we must do this before our control loop

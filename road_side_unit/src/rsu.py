@@ -5,13 +5,14 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from threading import Lock, Thread
 from queue import Queue
-from multiprocessing import Process
+import multiprocessing as mp
 
 # CAV and CIS stuff
 sys.path.append("../../../")
 from connected_autonomous_vehicle.src import cav
 from connected_autonomous_vehicle.src import planning_control as vehicle_planning
-from connected_infrastructure_sensor.src import planning_control as cam_planning
+from connected_infrastructure_sensor.src import cis
+from connected_infrastructure_sensor.src import planning_stationary as camera_planning
 from shared_library import sensor, global_fusion
 from road_side_unit.src import mapGenerator, communication
 
@@ -58,6 +59,7 @@ class RSU():
 
         # Lets create the vehicles
         self.step_sim_vehicle_tracker = []
+        self.step_sim_sensor_tracker = []
         for idx, vehicle in enumerate(config.cav):
             new_vehicle = vehicle_planning.Planner()
             new_vehicle.initialVehicleAtPosition(vehicle[0], vehicle[1], vehicle[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, 0, vehicle[3])
@@ -65,10 +67,11 @@ class RSU():
             self.step_sim_vehicle_tracker.append(False)
 
         # Lets create the sensors
-        for idx, cis in enumerate(config.cav):
-            new_sensor = vehicle_planning.Planner()
-            new_sensor.initialVehicleAtPosition(cis[0], cis[1], cis[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, 0, cis[3])
+        for idx, cis in enumerate(config.cis):
+            new_sensor = camera_planning.Planner()
+            new_sensor.initialSensorAtPosition(cis[0], cis[1], cis[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, 0, cis[3])
             self.sensors[idx] = new_sensor
+            self.step_sim_sensor_tracker.append(False)
 
         # Queue to talk with backend processor so fast replies can be made while results are computed
         self.q = Queue()
@@ -140,6 +143,7 @@ class RSU():
             self.sim_time = 0.0
             self.thread = dict()
             self.step_sim_vehicle = False
+            #mp.set_start_method('spawn')
             for idx, vehicle in self.vehicles.items():
                 # Old way that is slow because of the Global Interpreter Lock
                 self.thread["cav"+str(idx)] = Thread(target=cav.cav, args=(config, idx, ))
@@ -147,11 +151,28 @@ class RSU():
                 self.thread["cav"+str(idx)].start()
 
                 # New actual threading
-                # self.thread["cav"+str(idx)] = Process(target=cav.cav, args=(config, idx, ))
+                # self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, idx))
                 # self.thread["cav"+str(idx)].daemon = True
                 # self.thread["cav"+str(idx)].start()
 
-                print( "RSU Initialized vehicle ", idx, " thread" )
+                # time.sleep(1)
+
+                print( "RSU Initialized CAV ", idx, " thread" )
+
+            for idx, sensor in self.sensors.items():
+                # Old way that is slow because of the Global Interpreter Lock
+                self.thread["cis"+str(idx)] = Thread(target=cis.cis, args=(config, idx, ))
+                self.thread["cis"+str(idx)].daemon = True
+                self.thread["cis"+str(idx)].start()
+
+                # New actual threading
+                # self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, idx))
+                # self.thread["cav"+str(idx)].daemon = True
+                # self.thread["cav"+str(idx)].start()
+
+                # time.sleep(1)
+
+                print( "RSU Initialized CIS ", idx, " thread" )
 
     def register(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw):
         if type == 0:
@@ -203,20 +224,26 @@ class RSU():
             if not self.simulation:
                 self.sensors[id].update_localization(False,[x, y, yaw, 0.0])
 
+            # Get the last known location of all other vehicles
+            vehicleList = []
+            for idx, vehicle in self.vehicles.items():
+                if idx != id:
+                    vehicleList.append(vehicle.get_location())
+
             # Finally we can create the return messages
             registerResponse = dict(
-                v_t=0,
-                t_x=self.sensors[id].positionX_offset,
-                t_y=self.sensors[id].positionY_offset,
+                v_t=self.vehicles[id].targetVelocityGeneral,
+                t_x=self.vehicles[id].positionX_offset,
+                t_y=self.vehicles[id].positionY_offset,
                 t_z="0.0",
                 t_roll="0.0",
                 t_pitch="0.0",
-                t_yaw=self.sensors[id].theta_offset,
+                t_yaw=self.vehicles[id].theta_offset,
                 route_x=self.mapSpecs.xCoordinates,
                 route_y=self.mapSpecs.yCoordinates,
                 route_TFL=self.mapSpecs.vCoordinates,
                 tfl_state=self.trafficLightArray,
-                veh_locations=[],
+                veh_locations=vehicleList,
                 timestep=self.getTime()
             )
 
@@ -270,6 +297,21 @@ class RSU():
         elif type == 1:
             # Double check our security, this is pretty naive at this point
             #if self.sensors[id].key == key:
+            # Lets add the detections to the CIS class
+            self.sensors[id].cameraDetections = detections["cam_obj"]
+            self.sensors[id].lidarDetections = detections["lidar_obj"]
+            self.sensors[id].fusionDetections = detections["fused_obj"]
+
+            # Update the location of this camera
+            if not self.simulation:
+                self.sensors[id].localizationPositionX = detections["localization"][0]
+                self.sensors[id].localizationPositionY = detections["localization"][1]
+                self.sensors[id].velocity = detections["localization"][3]
+                self.sensors[id].theta = detections["localization"][2]
+            self.sensors[id].localizationCovariance = detections["localization"][4]
+
+            self.step_sim_sensor_tracker[id] = False
+
             # Finally we can create the return messages
             response = dict(
                 tfl_state=self.trafficLightArray,
@@ -282,11 +324,17 @@ class RSU():
     def getSimPositions(self, key, id, type):
         vehicleList = []
 
+        if type == 0:
+            step_temp = self.step_sim_vehicle_tracker[id] and self.step_sim_vehicle
+            if step_temp:
+                self.step_sim_vehicle_tracker[id] = False
+        elif type == 1:
+            step_temp = self.step_sim_sensor_tracker[id] and self.step_sim_vehicle
+            if step_temp:
+                self.step_sim_sensor_tracker[id] = False
+
         # If step_sim_vehicle is false, just send back false
-        if self.step_sim_vehicle and self.step_sim_vehicle_tracker[id]:
-            step_temp = True
-            self.step_sim_vehicle_tracker[id] = False
-            # Get the last known location of all other vehicles
+        if step_temp:
             for idx, vehicle in self.vehicles.items():
                 if type != 0 or idx != id:
                     vehicleList.append(vehicle.get_location())
@@ -348,6 +396,9 @@ class RSU():
         for each in self.step_sim_vehicle_tracker:
             if each:
                 continue_blocker_check = True
+        for each in self.step_sim_sensor_tracker:
+            if each:
+                continue_blocker_check = True
 
         if continue_blocker_check == False or (not self.simulation and self.getTime() > self.timeout):
             self.step_sim_vehicle = False
@@ -369,9 +420,9 @@ class RSU():
                 # Add to the global sensor fusion
                 self.globalFusion.processDetectionFrame(idx, self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
 
-            # for idx, cis in self.cis.items():
-            #     # Add to the global sensor fusion
-            #     self.globalFusion.processDetectionFrame(idx, self.getTime(), cis.fusionDetections, .25, self.estimate_covariance)
+            for idx, sensor in self.sensors.items():
+                # Add to the global sensor fusion
+                self.globalFusion.processDetectionFrame(idx, self.getTime(), sensor.fusionDetections, .25, self.estimate_covariance)
 
             self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
@@ -421,6 +472,8 @@ class RSU():
             self.step_sim_vehicle = True
             for idx, thing in enumerate(self.step_sim_vehicle_tracker):
                 self.step_sim_vehicle_tracker[idx] = True
+            for idx, thing in enumerate(self.step_sim_sensor_tracker):
+                self.step_sim_sensor_tracker[idx] = True
             self.time += self.interval
             print ( "Sim time Stepped @: " , self.time)
 
@@ -464,6 +517,13 @@ class RSU():
         sensor_fusion_centroid = []
         localization_error = []
 
+        sensor_export = []
+        sensor_camera_fov = []
+        sensor_camera_center = []
+        sensor_camera_detection_centroid = []
+        sensor_sensor_fusion_centroid = []
+        sensor_localization_error = []
+
         if coordinates:
             map_specs = [self.mapSpecs.map, self.mapSpecs.intersectionStraightLength]
         else:
@@ -471,7 +531,6 @@ class RSU():
 
         for idx, vehicle in self.vehicles.items():
             # Add to the global sensor fusion
-            #vehicle.targetVelocityGeneral = 0.5
             vehicle_export.append([vehicle.localizationPositionX,
                             vehicle.localizationPositionY,
                             vehicle.theta,
@@ -495,7 +554,22 @@ class RSU():
             camera_detection_centroid.append(vehicle.cameraDetections)
             sensor_fusion_centroid.append(vehicle.fusionDetections)
             localization_error.append(vehicle.localizationCovariance)
-            
+
+        for idx, sensor in self.sensors.items():
+            # Add to the global sensor fusion
+            sensor_export.append([sensor.localizationPositionX,
+                            sensor.localizationPositionY,
+                            sensor.theta,
+                            sensor.velocity,
+                            sensor.width,
+                            sensor.length
+            ])
+            sensor_camera_fov.append(sensor.cameraSensor.field_of_view)
+            sensor_camera_center.append(sensor.cameraSensor.center_angle)
+            sensor_camera_detection_centroid.append(sensor.cameraDetections)
+            sensor_sensor_fusion_centroid.append(sensor.fusionDetections)
+            sensor_localization_error.append(sensor.localizationCovariance)
+
         # Finally we can create the return messages
         response = dict(
             map_specs=map_specs,
@@ -507,6 +581,12 @@ class RSU():
             camera_detection_centroid=camera_detection_centroid,
             sensor_fusion_centroid=sensor_fusion_centroid,
             localization_error=localization_error,
+            sensor=sensor_export,
+            sensor_camera_fov=sensor_camera_fov,
+            sensor_camera_center=sensor_camera_center,
+            sensor_camera_detection_centroid=sensor_camera_detection_centroid,
+            sensor_sensor_fusion_centroid=sensor_sensor_fusion_centroid,
+            sensor_localization_error=sensor_localization_error,
             global_sensor_fusion_centroid=self.globalFusionList,
             traffic_light=self.trafficLightArray,
             returned=True

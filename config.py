@@ -9,7 +9,7 @@ class Setting:
                         self.cav = [[-0.75, 0.0, 0, False],
                         [-1.5, 0.0, 0, False]]
                         #       [0.0, 0.75, 4.71238898038469, False]]
-                        self.cis = [[-0.75, 0.75, -45, False]]
+                        self.cis = [[-0.75, 0.75, -0.785398163, False]]
                         self.rsu_ip = '192.168.0.103' #'127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0
@@ -24,12 +24,12 @@ class Setting:
                         self.gui_interval = 1000 # 1 hz to slow down the toll on the RSU
                 elif "four_cav_simulation" in setting:
                         print("         Config: four_cav_simulation selected")
-                        # Working 2 CAV simulation
+                        # Working 4 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
                                 [-1.5, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True],
                                 [0.0, 1.75, 4.71238898038469, True]]
-                        self.cis = [[-0.75, 0.75, -45, True]]
+                        self.cis = [[-0.75, 0.75, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0
@@ -48,7 +48,7 @@ class Setting:
                         # Working 2 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True]]
-                        self.cis = [[-0.75, 0.75, -45, True]]
+                        self.cis = [[-0.75, 0.75, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0

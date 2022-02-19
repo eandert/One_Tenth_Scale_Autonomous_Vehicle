@@ -312,6 +312,10 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                         if detector.lidarSensor != None:
                             success_lidar, expected_error_gaussian_lidar, actual_sim_error_lidar = detector.lidarSensor.calculateErrorGaussian(
                                 relative_angle_to_detector, target_line_angle, relative_distance, True)
+                        else:
+                            success_lidar = 0.0
+                            expected_error_gaussian_lidar = 0.0
+                            actual_sim_error_lidar = 0.0
 
                         if success_lidar:
                             lidar_detected_error.append((point[0] + actual_sim_error_lidar[0], point[1] + actual_sim_error_lidar[1], expected_error_gaussian_lidar.covariance.tolist()))

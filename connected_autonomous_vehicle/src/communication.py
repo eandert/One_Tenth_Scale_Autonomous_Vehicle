@@ -118,7 +118,7 @@ class connectServer:
             return response
         except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
-            response = None
+            response = {}
 
     def getSimTime(self):
   

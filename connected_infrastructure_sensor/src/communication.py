@@ -66,7 +66,7 @@ class connectServer:
                 print ( "Error: Failed to message RSU, trying again" )
                 time.sleep(.01)
 
-    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, detections):
+    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, detections):
   
         # data to be sent to api 
         packet = {'key':self.key, 
@@ -79,10 +79,10 @@ class connectServer:
                 'roll':roll,
                 'pitch':pitch,
                 'yaw':yaw,
-                'steeringAcceleration':steeringAcceleration, 
-                'motorAcceleration':motorAcceleration, 
-                'targetIndexX':targetIndexX, 
-                'targetIndexY':targetIndexY,
+                'steeringAcceleration':0.0, 
+                'motorAcceleration':0.0, 
+                'targetIndexX':0, 
+                'targetIndexY':0,
                 'detections':detections}
   
         try:
@@ -104,7 +104,7 @@ class connectServer:
         # data to be sent to api 
         packet = {'key':self.key, 
                 'id':vehicle_id, 
-                'type':0}
+                'type':1}
   
         try:
             # sending post request
@@ -118,7 +118,7 @@ class connectServer:
             return response
         except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
-            response = None
+            response = {}
 
     def getSimTime(self):
   
@@ -145,7 +145,7 @@ class connectServer:
         # data to be sent to api 
         packet = {'key':self.key, 
                 'id':vehicle_id,
-                'type':0,
+                'type':1,
                 'x':x,
                 'y':y,
                 'z':z,
@@ -167,163 +167,3 @@ class connectServer:
         except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
             response = None
-
-
-''' This class starts up the process that will read the LIDAR using C++.
-Eddie note: The reason this is not done using Python C/C++ binding is that the
-proprietary driver for the LIDAR is only compiled for 32 bit ARM and 
-short of a miracle I have not been able to figure out how to get Python to
-bind with a 32 bit .so file. So for now we are running a process and killing
-and restarting it if there are any issues, which has been very rare luckily.'''
-class connectLIDAR:
-    def __init__(self, pipeFromC, pipeToC):
-        self.pipeFromC = pipeFromC
-        self.pipeToC =  pipeToC
-        self.lidarTimeout = 1
-        self.time = time.time()
-        self.killMapdemo()
-        self.debug =  False
-        self.localizationX = 0.0
-        self.localizationY = 0.0
-        self.localizationYaw = 0.0
-        time.sleep(1)
-        try:
-            os.mkfifo(pipeFromC)
-        except OSError as oe:
-            print ( "  Warning: pipeFromC exists, that is cool we will use it" )
-        try:
-            os.mkfifo(pipeToC)
-        except OSError as oe:
-            print ( "  Warning: pipeToC exists, that is cool we will use it" )
-        self.lidarProc = self.runLIDARCode()
-        time.sleep(1)
-        lidarTimeout = 0
-        self.connectLIDAR()
-
-    def connectLIDAR(self):
-        tries = 0
-        while True:
-            try:
-                tries += 1
-                # Now start the opening process
-                toc = self.tocCheckWrapper()
-                if self.debug:
-                    print ( "Opened toc pipe" )
-                toc.flush()
-                toc.write("S")
-                toc.close()
-                if self.debug:
-                    print ( "Wrote toc pipe" )
-                fromc = self.fromcCheckWrapper()
-                if self.debug:
-                    print ( "Opened fromc pipe" )
-                testString = self.fromcReadWrapper(fromc)
-                if self.debug:
-                    print ( "Wrote fromc pipe" )
-                if "A" in testString:
-                    fromc.close()
-                    print ("Sucess, LIDAR started!")
-                    # Sleep long enough for the data to start
-                    time.sleep(1)
-                    return
-                else:
-                    print (" Error: LIDAR not started.")
-                    fromc.close()
-            except Exception as e:
-                print ( " Error: Cannot talk to the LIDAR, retrying..", str(e) )
-                # Set tries to 11 so that it reconnects, probably a seg fault
-                tries = 11
-                time.sleep(.1)
-            if tries > 10:
-                self.killMapdemo()
-                time.sleep(1)
-                self.lidarProc = self.runLIDARCode()                 
-                time.sleep(1)
-                tries = 0
-
-    # This function exist just so we can wrap it with the timout function
-    @timeout_decorator.timeout(1)
-    def tocCheckWrapper(self):
-        return open(self.pipeToC,'w')
-
-    # This function exist just so we can wrap it with the timout function
-    @timeout_decorator.timeout(1)
-    def fromcCheckWrapper(self):
-        return open(self.pipeFromC,'r')
-
-    # This function exist just so we can wrap it with the timout function
-    @timeout_decorator.timeout(1)
-    def fromcReadWrapper(self, fromc):
-        return fromc.read()
-
-    def runLIDARCode(self):
-        cmd = "/home/jetson/Projects/slamware/slamware_sdk_linux-armv7hf-gcc4.8/linux-armv7hf-release/output/ttcomp"
-        pro = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
-                           shell=True, preexec_fn=os.setsid) 
-        return pro
-
-    def killMapdemo(self):
-        PROCNAME = "mapdemo"
-        for proc in psutil.process_iter():
-        # check whether the process name matches
-            if proc.name() == PROCNAME:
-                proc.kill()
-
-    @timeout_decorator.timeout(1)
-    def checkFromC(self):
-        if self.debug:
-            print("Opening FIFO...")
-        fromc=open(self.pipeFromC,'r')
-        self.time = time.time()
-        self.datastore = fromc.read()
-        if self.debug:
-            print('Read: "{0}"'.format(self.datastore))
-        fromc.close()
-
-    @timeout_decorator.timeout(1)
-    def getFromC(self):
-        start = time.time()
-        toc = self.tocCheckWrapper()
-        if self.debug:
-            print ( "Opened toc pipe" )
-        toc.flush()
-        toc.write("S")
-        toc.close()
-        if self.debug:
-            print("Opening FIFO...")
-        fromc=open(self.pipeFromC,'r')
-        self.time = time.time()
-        self.datastore = fromc.read()
-        if self.debug:
-            print('Read: "{0}"'.format(self.datastore))
-        fromc.close()
-        end = time.time()
-        return start, end
-
-    def parseFromC(self):
-        reader = csv.reader(self.datastore.split('\n'), delimiter=',')
-        notfirst = False
-        lidarpoints = []
-        try:
-            for idx, row in enumerate(reader):
-                if notfirst:
-                    if row[0] == "1":
-                        angle = float(row[1])
-                        distance = float(row[2])
-                        newRow = []
-                        newRow.append(distance * math.cos(angle))
-                        newRow.append(distance * math.sin(angle))
-                        lidarpoints.append(newRow)
-                else:
-                    notfirst = True
-                    self.localizationX = float(row[0])
-                    self.localizationY = float(row[1])
-                    self.localizationYaw = float(row[2]) 
-        except Exception as e:
-            if "out of range" not in str(e):
-                print ( " Error: ", str(e) )
-        return lidarpoints
-
-    def parseFromCIdx(self, index):
-        self.localizationIdx = index
-        return self.parseFromC()
