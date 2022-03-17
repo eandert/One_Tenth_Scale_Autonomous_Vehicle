@@ -8,7 +8,6 @@ class Setting:
                         # Working 2 CAV Real
                         self.cav = [[-0.75, 0.0, 0, False],
                         [-1.5, 0.0, 0, False]]
-                        #       [0.0, 0.75, 4.71238898038469, False]]
                         self.cis = [[-0.75, 0.75, -0.785398163, False]]
                         self.rsu_ip = '192.168.0.103' #'127.0.0.1'
                         self.interval = 0.125
@@ -16,12 +15,14 @@ class Setting:
                         self.fallthrough_delay = 0.100
                         self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
-                        self.map_length = 1.0
+                        self.map_length = 0.5
                         self.simulation = False
                         self.debug = True
                         self.unit_test = False
                         self.unit_test_config = None
-                        self.gui_interval = 1000 # 1 hz to slow down the toll on the RSU
+                        self.gui_interval = 100 # 1 hz to slow down the toll on the RSU
+                        self.data_collect_mode = True
+                        self.no_global_fusion = True
                 elif "four_cav_simulation" in setting:
                         print("         Config: four_cav_simulation selected")
                         # Working 4 CAV simulation
@@ -43,6 +44,8 @@ class Setting:
                         self.unit_test = False
                         self.unit_test_config = None
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
+                        self.data_collect_mode = False
+                        self.no_global_fusion = False
                 else:
                         print("         Config: two_cav_simulation selected")
                         # Working 2 CAV simulation
@@ -62,4 +65,5 @@ class Setting:
                         self.unit_test = False
                         self.unit_test_config = None
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
+                        self.no_global_fusion = False
                 print(" Config complete, using map: ", self.map)

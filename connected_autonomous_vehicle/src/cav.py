@@ -51,7 +51,8 @@ def sourceImagesThread(out_queue, settings, camSpecs, simulation_time, data_coll
                 camcoordinates = []
                 camtimestamp_start, frame = cameraRecognition.takeCameraFrameRaw()
             else:
-                camcoordinates, camtimestamp_start, camtimestamp_end = cameraRecognition.takeCameraFrame()
+                #camcoordinates, camtimestamp_start, camtimestamp_end = cameraRecognition.takeCameraFrame()
+                camtimestamp_start = time.simte()
             #print ( "CAM got " + str(fetch_time(simulation_time, global_time)))
 
             # Prep value to be sent to the part of the program
@@ -65,8 +66,8 @@ def sourceImagesThread(out_queue, settings, camSpecs, simulation_time, data_coll
             #if wait_until_next > 0:
             #    time.sleep(wait_until_next)
 
-            with open("cam_output.txt", 'a') as file1:
-                file1.write(str(camtimestamp_start) + ',' + str(frame) + '\n')
+            #with open("cam_output.txt", 'a') as file1:
+            #    file1.write(str(camtimestamp_start) + ',' + str(frame) + '\n')
 
             # New target
             target = target + interval
@@ -133,8 +134,8 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, simulation_tim
             # Log this to a file
             index += 1
 
-            with open("lidar_output.txt", 'a') as file1:
-                file1.write(str(lidartimestamp) + '\n' + str(localization) + '\n' + str(raw_lidar) + '\n')
+            #with open("lidar_output.txt", 'a') as file1:
+            #    file1.write(str(lidartimestamp) + '\n' + str(localization) + '\n' + str(raw_lidar) + '\n')
 
             # New target
             target = target + interval
@@ -435,20 +436,35 @@ def cav(config, vid):
                     fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, 1)
                     fusion.processDetectionFrame(local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25, 1)
                     fusion_result = fusion.fuseDetectionFrame(1, planner)
+                else:
+                    fusion_result = []
 
                 # Message the RSU, for now we must do this before our control loop
                 # as the RSU has the traffic light state information
-                objectPackage = {
-                    "localization_t": lidartimestamp,
-                    "localization": localization,
-                    "lidar_t": lidartimestamp,
-                    "lidar_detection_raw": lidarraw,
-                    "lidar_obj": lidarcoordinates,
-                    "cam_t": camtimestamp,
-                    "cam_obj": camcoordinates,
-                    "fused_t": fusion_start,
-                    "fused_obj": fusion_result
-                }
+                if not data_collect_mode:
+                    objectPackage = {
+                        "localization_t": lidartimestamp,
+                        "localization": localization,
+                        "lidar_t": lidartimestamp,
+                        "lidar_detection_raw": lidarraw,
+                        "lidar_obj": lidarcoordinates,
+                        "cam_t": camtimestamp,
+                        "cam_obj": camcoordinates,
+                        "fused_t": fusion_start,
+                        "fused_obj": fusion_result
+                    }
+                else:
+                    objectPackage = {
+                        "localization_t": lidartimestamp,
+                        "localization": localization,
+                        "lidar_t": lidartimestamp,
+                        "lidar_detection_raw": [],
+                        "lidar_obj": [],
+                        "cam_t": camtimestamp,
+                        "cam_obj": [],
+                        "fused_t": lidartimestamp,
+                        "fused_obj": []
+                    }
 
                 if config.simulation:
                     response_message = rsu_sim_check.checkin(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,

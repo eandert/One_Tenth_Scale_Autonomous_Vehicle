@@ -35,6 +35,7 @@ class RSU():
         self.simulation = config.simulation
         self.time = 1.0 # Time MUST start positive or it will be considered none!
         self.interval = config.interval
+        self.no_global_fusion = config.no_global_fusion
 
         # Unit test settings
         self.unit_test_state = 0
@@ -402,63 +403,67 @@ class RSU():
 
         if continue_blocker_check == False or (not self.simulation and self.getTime() > self.timeout):
             self.step_sim_vehicle = False
-            # Fusion time!
-            # First we need to add the localization frame, since it should be the basis
-            localizationsList = []
-            for idx, vehicle in self.vehicles.items():
-                # Add to the global sensor fusion
-                localizationsList.append((vehicle.id-10,
-                                          vehicle.localizationPositionX,
-                                          vehicle.localizationPositionY,
-                                          vehicle.localizationCovariance, 
-                                          0, 
-                                          0, 
-                                          -1))
-            self.globalFusion.processDetectionFrame(-1, self.getTime(), localizationsList, .25, self.estimate_covariance)
 
-            for idx, vehicle in self.vehicles.items():
-                # Add to the global sensor fusion
-                self.globalFusion.processDetectionFrame(idx, self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
+            if not self.no_global_fusion:
+                # Fusion time!
+                # First we need to add the localization frame, since it should be the basis
+                localizationsList = []
+                for idx, vehicle in self.vehicles.items():
+                    # Add to the global sensor fusion
+                    localizationsList.append((vehicle.id-10,
+                                              vehicle.localizationPositionX,
+                                              vehicle.localizationPositionY,
+                                              vehicle.localizationCovariance,
+                                              0,
+                                              0,
+                                              -1))
+                self.globalFusion.processDetectionFrame(-1, self.getTime(), localizationsList, .25, self.estimate_covariance)
 
-            for idx, sensor in self.sensors.items():
-                # Add to the global sensor fusion
-                self.globalFusion.processDetectionFrame(idx, self.getTime(), sensor.fusionDetections, .25, self.estimate_covariance)
+                for idx, vehicle in self.vehicles.items():
+                    # Add to the global sensor fusion
+                    self.globalFusion.processDetectionFrame(idx, self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
 
-            self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+                for idx, sensor in self.sensors.items():
+                    # Add to the global sensor fusion
+                    self.globalFusion.processDetectionFrame(idx, self.getTime(), sensor.fusionDetections, .25, self.estimate_covariance)
 
-            # Ground truth to the original dataset
-            # Get the last known location of all other vehicles
-            vehicleList = []
-            for idx, vehicle in self.vehicles.items():
-                vehicleList.append(vehicle.get_location())
-            testSetGlobal = []
-            groundTruthGlobal = []
-            for each in self.globalFusionList:
-                sensed_x = each[1]
-                sensed_y = each[2]
-                testSetGlobal.append([sensed_x, sensed_y])
-            for each in vehicleList:
-                sensed_x = each[0]
-                sensed_y = each[1]
-                groundTruthGlobal.append([sensed_x, sensed_y])
-            if len(testSetGlobal) >= 1 and len(groundTruthGlobal) >= 1:
-                nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSetGlobal))
-                distances, indices = nbrs.kneighbors(np.array(groundTruthGlobal))
+                self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
-                # Now calculate the score
-                for dist in distances:
-                    if dist > 1.0:
-                        # Too far away to be considered a match, add as a miss instead
-                        self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
-                    else:
-                        self.global_differences.append(dist)
-            # Check how much large the test set is from the ground truth and add that as well
-            if len(testSetGlobal) > len(groundTruthGlobal):
-                # Overdetection case
-                self.global_over_detection_miss += len(testSetGlobal) - len(groundTruthGlobal)
-            elif len(testSetGlobal) < len(groundTruthGlobal):
-                # Underdetection case, we count this differently because it may be from obstacle blocking
-                self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+                # Ground truth to the original dataset
+                # Get the last known location of all other vehicles
+                vehicleList = []
+                for idx, vehicle in self.vehicles.items():
+                    vehicleList.append(vehicle.get_location())
+                testSetGlobal = []
+                groundTruthGlobal = []
+                for each in self.globalFusionList:
+                    sensed_x = each[1]
+                    sensed_y = each[2]
+                    testSetGlobal.append([sensed_x, sensed_y])
+                for each in vehicleList:
+                    sensed_x = each[0]
+                    sensed_y = each[1]
+                    groundTruthGlobal.append([sensed_x, sensed_y])
+                if len(testSetGlobal) >= 1 and len(groundTruthGlobal) >= 1:
+                    nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSetGlobal))
+                    distances, indices = nbrs.kneighbors(np.array(groundTruthGlobal))
+
+                    # Now calculate the score
+                    for dist in distances:
+                        if dist > 1.0:
+                            # Too far away to be considered a match, add as a miss instead
+                            self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+                        else:
+                            self.global_differences.append(dist)
+                # Check how much large the test set is from the ground truth and add that as well
+                if len(testSetGlobal) > len(groundTruthGlobal):
+                    # Overdetection case
+                    self.global_over_detection_miss += len(testSetGlobal) - len(groundTruthGlobal)
+                elif len(testSetGlobal) < len(groundTruthGlobal):
+                    # Underdetection case, we count this differently because it may be from obstacle blocking
+                    self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+            else:
+                self.globalFusionList = []
 
             # We have completed fusion, unblock
             self.stepSim()
@@ -576,17 +581,17 @@ class RSU():
             vehicle=vehicle_export,
             camera_fov=camera_fov,
             camera_center=camera_center,
-            lidar_detection_raw=lidar_detection_raw,
-            lidar_detection_centroid=lidar_detection_centroid,
-            camera_detection_centroid=camera_detection_centroid,
-            sensor_fusion_centroid=sensor_fusion_centroid,
+            lidar_detection_raw=[],#lidar_detection_raw,
+            lidar_detection_centroid=[],#lidar_detection_centroid,
+            camera_detection_centroid=[],#camera_detection_centroid,
+            sensor_fusion_centroid=[],#sensor_fusion_centroid,
             localization_error=localization_error,
             sensor=sensor_export,
             sensor_camera_fov=sensor_camera_fov,
             sensor_camera_center=sensor_camera_center,
-            sensor_camera_detection_centroid=sensor_camera_detection_centroid,
-            sensor_sensor_fusion_centroid=sensor_sensor_fusion_centroid,
-            sensor_localization_error=sensor_localization_error,
+            sensor_camera_detection_centroid=[],#sensor_camera_detection_centroid,
+            sensor_sensor_fusion_centroid=[],#sensor_sensor_fusion_centroid,
+            sensor_localization_error=[],#sensor_localization_error,
             global_sensor_fusion_centroid=self.globalFusionList,
             traffic_light=self.trafficLightArray,
             returned=True

@@ -1137,25 +1137,30 @@ class MainWindow(QMainWindow):
         painter = QPainter(self)
         pen = QPen()
 
-        ### DRAW INTERSECTION ###
-        if self.drawIntersection:
-            self.paint_lane_lines(pen, painter)
+        try:
 
-        ### DRAW TRAFFIC LIGHT STATE ###
-        if self.drawCoordinates:
-            self.draw_tfl_and_waypoints(pen, painter)
+            ### DRAW INTERSECTION ###
+            if self.drawIntersection:
+                self.paint_lane_lines(pen, painter)
 
-        ### DRAW CAVS ###
-        if self.drawVehicle:
-            self.paint_vehicles(pen, painter)
+            ### DRAW TRAFFIC LIGHT STATE ###
+            if self.drawCoordinates:
+                self.draw_tfl_and_waypoints(pen, painter)
 
-        ### DRAW CISS ###
-        if self.drawCamera:
-            self.paint_sensors(pen, painter)
+            ### DRAW CAVS ###
+            if self.drawVehicle:
+                self.paint_vehicles(pen, painter)
 
-        ### GLOBAL FUSION ###
-        if self.display_global_fusion:
-            self.paint_global_fusion(pen, painter)
+            ### DRAW CISS ###
+            # if self.drawCamera:
+            #     self.paint_sensors(pen, painter)
+
+            ### GLOBAL FUSION ###
+            # if self.display_global_fusion:
+            #     self.paint_global_fusion(pen, painter)
+
+        except Exception as e:
+            print(str(e))
 
     def draw_tfl_and_waypoints(self, pen, painter):
         pen.setWidth(2)
@@ -1425,7 +1430,7 @@ class MainWindow(QMainWindow):
                 pen.setBrush(brush_color['wheel_angle'])
                 pen.setWidth(1)
                 painter.setPen(pen)
-                self.drawTargetArc(localizationPositionX, localizationPositionY, (rear_axle_offset_x+driver_rear_center_x)/2, 
+                self.drawTargetArc(localizationPositionX, localizationPositionY, (rear_axle_offset_x+driver_rear_center_x)/2,
                 (rear_axle_offset_y+driver_rear_center_y)/2, targetIndexX, targetIndexY, painter)
 
             self.labelVehicleSpeedActual[idx].setText('VA=' + str(round(velocity, 2)))
