@@ -59,6 +59,9 @@ class Planner:
         self.followDistance = self.Lfc
         self.followDistanceGain = .5
         self.targetFollowDistance = 1
+        self.tfl_mode = 0
+        self.av_intersection_permission = 0
+        self.tind = 0
 
         self.id = None
         self.simVehicle = True
@@ -178,6 +181,7 @@ class Planner:
 
         tx = self.xCoordinates[ind]
         ty = self.yCoordinates[ind]
+        self.tind = ind
 
         alpha = math.atan2(ty - self.rearAxlePositionY, tx - self.rearAxlePositionX) - self.theta
 
@@ -202,27 +206,36 @@ class Planner:
             self.targetVelocity = self.targetVelocityGeneral
             self.lastTargetWithinTL = 0
         else:
-            if self.coordinateGroupVelocities[self.vCoordinates[ind]] == 1:
-                if self.lastTargetWithinTL == 1:
-                    if self.targetVelocity == 0:
-                        # We are already stopping so keep stopping
+            # Traffic light calculation
+            if self.tfl_mode == 0:
+                if self.coordinateGroupVelocities[self.vCoordinates[ind]] == 1:
+                    if self.lastTargetWithinTL == 1:
+                        if self.targetVelocity == 0:
+                            # We are already stopping so keep stopping
+                            self.targetVelocity = 0
+                            self.distance_pid_control_overide = True
+                        else:
+                            # We have already entered the light so keep going
+                            self.targetVelocity = self.targetVelocityGeneral
+                    else:
+                        # This is the first point we have seen of this TFL, should have enought time to stop
                         self.targetVelocity = 0
                         self.distance_pid_control_overide = True
-                    else:
-                        # We have already entered the light so keep going
-                        self.targetVelocity = self.targetVelocityGeneral
+                    self.lastTargetWithinTL = 1
+                elif self.coordinateGroupVelocities[self.vCoordinates[ind]] == 2:
+                    self.targetVelocity = self.targetVelocityGeneral
+                    self.lastTargetWithinTL = 1
                 else:
-                    # This is the first point we have seen of this TFL, should have enought time to stop
+                    self.targetVelocity = 0
+                    self.lastTargetWithinTL = 1
+                    self.distance_pid_control_overide = True
+            # Autonomous intersection mode calculation
+            else:
+                if self.av_intersection_permission:
+                    self.targetVelocity = self.targetVelocityGeneral
+                else:
                     self.targetVelocity = 0
                     self.distance_pid_control_overide = True
-                self.lastTargetWithinTL = 1
-            elif self.coordinateGroupVelocities[self.vCoordinates[ind]] == 2:
-                self.targetVelocity = self.targetVelocityGeneral
-                self.lastTargetWithinTL = 1
-            else:
-                self.targetVelocity = 0
-                self.lastTargetWithinTL = 1
-                self.distance_pid_control_overide = True
 
         if alpha != 0:
             turningRadius = self.wheelbaseLength / math.tan(alpha)

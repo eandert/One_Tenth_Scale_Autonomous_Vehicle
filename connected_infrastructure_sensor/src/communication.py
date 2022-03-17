@@ -83,6 +83,7 @@ class connectServer:
                 'motorAcceleration':0.0, 
                 'targetIndexX':0, 
                 'targetIndexY':0,
+                'targetIntersection':0,
                 'detections':detections}
   
         try:

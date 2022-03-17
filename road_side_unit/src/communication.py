@@ -176,9 +176,10 @@ class MainClass(Resource):
                 motorAcceleration = float(request_data['motorAcceleration'])
                 targetIndexX = float(request_data['targetIndexX'])
                 targetIndexY = float(request_data['targetIndexY'])
+                targetIntersection = int(request_data['targetIntersection'])
                 detections = request_data['detections']
 
-                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, detections)
+                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, targetIntersection, detections)
 
                 #flask_app.config['RSUQueue'].put([key, id, type, timestamp, x, y, yaw, detections])
 
@@ -295,13 +296,11 @@ class MainClass(Resource):
 
             returnObject = flask_app.config['RSUClass'].getGuiValues(coordinates)
 
-            #print ( returnObject )
-
             return jsonify(
                 returnObject
             )
         except Exception as e:
-            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+            name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error." + str(e), statusCode="500")
 
 @name_space.route("/guisend/", methods=['GET'])
 class MainClass(Resource):

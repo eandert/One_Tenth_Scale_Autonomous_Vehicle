@@ -13,7 +13,7 @@ from connected_autonomous_vehicle.src import cav
 from connected_autonomous_vehicle.src import planning_control as vehicle_planning
 from connected_infrastructure_sensor.src import cis
 from connected_infrastructure_sensor.src import planning_stationary as camera_planning
-from shared_library import sensor, global_fusion
+from shared_library import sensor, global_fusion, shared_math
 from road_side_unit.src import mapGenerator, communication
 
 class RSU():
@@ -36,6 +36,8 @@ class RSU():
         self.time = 1.0 # Time MUST start positive or it will be considered none!
         self.interval = config.interval
         self.no_global_fusion = config.no_global_fusion
+        self.intersection_mode = 0
+        self.intersection_serving = [-99,-99]
 
         # Unit test settings
         self.unit_test_state = 0
@@ -250,7 +252,7 @@ class RSU():
 
             return registerResponse
 
-    def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, detections):
+    def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, targetIntersection, detections):
         if type == 0:
             # Double check our security, this is pretty naive at this point
             #if self.vehicles[id].key == key:
@@ -282,11 +284,31 @@ class RSU():
                 if idx != id:
                     vehicleList.append(vehicle.get_location())
 
+            # Calculate intersection
+            if self.intersection_mode == 1:
+                # In the tfl 2 directions are considered, but for autonomous they need to be merged
+                targetIntersection = int((targetIntersection+1) / 2)
+                if targetIntersection > 0:
+                    print("intersection request: ", id, targetIntersection)
+                    intersection_pos = self.mapSpecs.iCoordinates[targetIntersection-1]
+                    request_distance = math.hypot(self.vehicles[id].localizationPositionX-intersection_pos[0], self.vehicles[id].localizationPositionY-intersection_pos[1])
+                    if (-(1/2*math.pi) <= shared_math.angleDifference(math.atan2(self.vehicles[id].localizationPositionY-intersection_pos[1], self.vehicles[id].localizationPositionX-intersection_pos[0]), self.vehicles[id].theta)):
+                        request_distance = -request_distance
+                    print("intersection request dist: ", request_distance, shared_math.angleDifference(math.atan2(self.vehicles[id].localizationPositionY-intersection_pos[1], self.vehicles[id].localizationPositionX-intersection_pos[0]), self.vehicles[id].theta))
+                    av_intersection_permission = self.intersection_manager(id, request_distance, targetIntersection-1)
+                else:
+                    # Not approaching an interseciton, allow travel
+                    av_intersection_permission = True
+            else:
+                av_intersection_permission = True
+
             # Finally we can create the return messages
             response = dict(
                 v_t=self.vehicles[id].targetVelocityGeneral,
                 tfl_state=self.trafficLightArray,
                 veh_locations=vehicleList,
+                intersection_mode=self.intersection_mode,
+                av_intersection_permission=av_intersection_permission,
                 timestep=self.getTime()
             )
 
@@ -503,6 +525,7 @@ class RSU():
             self.simulate_error = button_states['simulate_error']
             self.real_lidar = button_states['full_simulation']
             self.unit_test_state = button_states['unit_test']
+            self.intersection_mode = button_states['intersection_mode']
 
             print( " got values from gui! ")
 
@@ -581,17 +604,17 @@ class RSU():
             vehicle=vehicle_export,
             camera_fov=camera_fov,
             camera_center=camera_center,
-            lidar_detection_raw=[],#lidar_detection_raw,
-            lidar_detection_centroid=[],#lidar_detection_centroid,
-            camera_detection_centroid=[],#camera_detection_centroid,
-            sensor_fusion_centroid=[],#sensor_fusion_centroid,
+            lidar_detection_raw=lidar_detection_raw,
+            lidar_detection_centroid=lidar_detection_centroid,
+            camera_detection_centroid=camera_detection_centroid,
+            sensor_fusion_centroid=sensor_fusion_centroid,
             localization_error=localization_error,
             sensor=sensor_export,
             sensor_camera_fov=sensor_camera_fov,
             sensor_camera_center=sensor_camera_center,
-            sensor_camera_detection_centroid=[],#sensor_camera_detection_centroid,
-            sensor_sensor_fusion_centroid=[],#sensor_sensor_fusion_centroid,
-            sensor_localization_error=[],#sensor_localization_error,
+            sensor_camera_detection_centroid=sensor_camera_detection_centroid,
+            sensor_sensor_fusion_centroid=sensor_sensor_fusion_centroid,
+            sensor_localization_error=sensor_localization_error,
             global_sensor_fusion_centroid=self.globalFusionList,
             traffic_light=self.trafficLightArray,
             returned=True
@@ -620,6 +643,39 @@ class RSU():
                     self.trafficLightArray[2] = 0
             else:
                 self.lightTime += 1
+
+    def intersection_manager(self, request_id, request_distance, intersection_id):
+        # Check that the current vehicle has not left the intersection yet
+        if self.intersection_serving[intersection_id] != -99:
+            intersection_pos = self.mapSpecs.iCoordinates[intersection_id]
+            intersection_vid = self.intersection_serving[intersection_id]
+            request_distance = math.hypot(self.vehicles[intersection_vid].localizationPositionX-intersection_pos[0], self.vehicles[intersection_vid].localizationPositionY-intersection_pos[1])
+            if (-(1/2*math.pi) <= shared_math.angleDifference(math.atan2(self.vehicles[intersection_vid].localizationPositionY-intersection_pos[1], self.vehicles[intersection_vid].localizationPositionX-intersection_pos[0]), self.vehicles[intersection_vid].theta)):
+                request_distance = -request_distance
+            if request_distance < .25:
+                # Confirm the vehicle is through and reset the intersection
+                self.intersection_serving[intersection_id] = -99
+        # Check that we are not already in the intersection
+        print( request_id, " requested at ", request_distance, " current vehicle ", self.intersection_serving) 
+        if request_distance >= .25:
+            # Check if there is a request, if not then enter
+            if self.intersection_serving[intersection_id] == -99 and request_distance > .25:
+                self.intersection_serving[intersection_id] = request_id
+                return True
+            # Check if we are being served, and whether the vehicle has entered the intersection or not
+            if self.intersection_serving[intersection_id] == request_id:
+                # We are still approaching so continue priority
+                return True
+            # It is not our turn, brake
+            else:
+                return False
+        # If the vehicle is this close, then it has entered the interseciton and shall be the go ahead
+        else:
+            # Check if we are the vehicle in the intersection and remove from the queue
+            if self.intersection_serving[intersection_id] == request_id:
+                self.intersection_serving[intersection_id] = -99
+            return True
+
 
 # def BackendProcessor(q, vehicles, sensors, trafficLightArray):
 #     while True:

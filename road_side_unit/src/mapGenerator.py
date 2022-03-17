@@ -24,10 +24,10 @@ class MapSpecs():
         # Generating a figure 8 for now TODO: incorporate SUMO/ATLAS
         self.map = map
         if self.map == 0:
-            self.xCoordinates, self.yCoordinates, self.vCoordinates = self.generateFigureEight(
+            self.xCoordinates, self.yCoordinates, self.vCoordinates, self.iCoordinates = self.generateFigureEight(
                 self.intersectionStraightLength, self.intersectionWidth, self.distanceInterval)
         else:
-            self.xCoordinates, self.yCoordinates, self.vCoordinates = self.generateDoubleFigureEight(
+            self.xCoordinates, self.yCoordinates, self.vCoordinates, self.iCoordinates = self.generateDoubleFigureEight(
                 self.intersectionStraightLength, self.intersectionWidth, self.distanceInterval)
 
     def generateFigureEight(self, intersectionStraightLength, intersectionWidth, distanceInterval):
@@ -148,7 +148,9 @@ class MapSpecs():
             # No light group, no control
             vCoordinates.append(0)
 
-        return xCoordinates, yCoordinates, vCoordinates
+        iCoordinates = [[0.0,0.0]]
+
+        return xCoordinates, yCoordinates, vCoordinates, iCoordinates
 
     def generateDoubleFigureEight(self, intersectionStraightLength, intersectionWidth, distanceInterval):
 
@@ -378,5 +380,6 @@ class MapSpecs():
             # No light group, no control
             vCoordinates.append(0)
 
+        iCoordinates = [[0.0,0.0], [-1.5,-1.5]]
 
-        return xCoordinates, yCoordinates, vCoordinates
+        return xCoordinates, yCoordinates, vCoordinates, iCoordinates

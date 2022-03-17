@@ -25,6 +25,7 @@ brush_color = {
     "traffic_light_green": Qt.green,
     "traffic_light_yellow": Qt.yellow,
     "traffic_light_red": Qt.red,
+    "traffic_light_autonomous": Qt.lightGray,
     "waypoint": Qt.darkGray,
     "target_point": Qt.darkRed,
     "wheel_angle": Qt.red,
@@ -69,114 +70,8 @@ class MainWindow(QMainWindow):
         self.global_sensor_fusion_centroid = init_response['global_sensor_fusion_centroid']
         self.trafficLightArray = init_response['traffic_light']
 
-        # self.vehicles = cav
-        # self.cis = cis
-        # self.trafficLightArray = trafficLightArray
-        # self.pause_simulation = True
-        # self.vehiclesLock = vehiclesLock
-
         # # Set to engage a full simulation world w/ no real vehicles and fake time
         self.full_simulation = False
-
-        # # Check the fusion mode from unit tests
-        # if unitTestEnable:
-        #     # self.unitTest = [[0,0,1],
-        #     #                  [0,0,0],
-        #     #                  [0,0,0],
-        #     #                  [0,0,1]]
-        #     self.unitTest = [[2,2,0],
-        #                      [2,2,1],
-        #                      [1,1,0],
-        #                      [1,1,1],
-        #                      [0,0,0],
-        #                      [0,0,1],
-        #                      #[1,1,0],
-        #                      #[1,1,1],
-        #                      #[2,2,0],
-        #                      #[2,2,1],
-        #                      #[0,2,1],
-        #                      [0,0,0]]
-        #     # self.unitTest = [[0,0],
-        #     #             [1,1],
-        #     #             [2,2]]
-        #     # self.unitTest = [[0,0],
-        #     #             [1,0],
-        #     #             [2,0],
-        #     #             [0,1],
-        #     #             [1,1],
-        #     #             [2,1],
-        #     #             [0,2],
-        #     #             [1,2],
-        #     #             [2,2]]
-        #     self.local_fusion_mode = self.unitTest[0][0]
-        #     self.global_fusion_mode = self.unitTest[0][1]
-        # else:
-        #     # Default to 1
-        #     # TODO: add a button for this
-        #     self.local_fusion_mode = 0
-        #     self.global_fusion_mode = 0
-
-        # # Create the simulated LIDARs, planner, etc.
-        # self.localizationsList = []
-        # self.lidarRecognitionList = []
-        # self.localFusionCAV = []
-        # self.localFusionCIS = []
-        # self.globalFusionList = []
-        # self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
-        # # Add in the arrays for local fusion storage for CAV vehicles
-        # for idx, veh in self.vehicles.items():
-        #     if veh.simVehicle:
-        #         self.lidarRecognitionList.append(lidar_recognition.LIDAR(0.0))
-        #         self.localFusionCAV.append(local_fusion.FUSION(self.local_fusion_mode, idx))
-        #     else:
-        #         self.lidarRecognitionList.append(None)
-        #         self.localFusionCAV.append(None)
-        # # Add in the arrays for local fusion storage for CIS sensors
-        # for idx, sens in self.cis.items():
-        #     if sens.simCIS:
-        #         # 1000 is to make sure our sensor ids are different for CIS vs CAV
-        #         self.localFusionCIS.append(local_fusion.FUSION(self.local_fusion_mode, 1000 + idx))
-        #     else:
-        #         self.localFusionCIS.append(None)
-
-        # # Keep track of stats if this is a simulation
-        # self.unit_test_state = 0
-        # self.unit_test_idx = 0
-        # self.unit_test_local_over_detection_miss_results = []
-        # self.unit_test_local_under_detection_miss_results = []
-        # self.unit_test_local_rmse_results = []
-        # self.unit_test_local_variance_results = []
-        # self.local_over_detection_miss = 0
-        # self.local_under_detection_miss = 0
-        # self.local_differences = []
-
-        # # localization stats
-        # self.unit_test_localization_rmse_results = []
-        # self.unit_test_localization_variance_results = []
-        # self.localization_differences = []
-
-        # # Global stats
-        # self.unit_test_global_over_detection_miss_results = []
-        # self.unit_test_global_under_detection_miss_results = []
-        # self.unit_test_global_rmse_results = []
-        # self.unit_test_global_variance_results = []
-        # self.global_over_detection_miss = 0
-        # self.global_under_detection_miss = 0
-        # self.global_differences = []
-
-        # self.localization_differences = []
-        # self.localization_velocity = []
-
-        # self.real_lidar = True
-
-        # # Parameters of test
-        # self.mapSpecs = mapSpecs
-
-        # # Time params
-        # self.time = 0
-        # self.lastPositionUpdate = 0
-        # self.lastLocalizationUpdate = 0
-        # self.lightTime = 0
 
         self.end_simulation = False
         self.pause_simulation = True
@@ -185,6 +80,7 @@ class MainWindow(QMainWindow):
         # Draw params
         self.drawTrafficLight = False
         self.display_localization = True
+        self.intersection_mode = 0
 
         QMainWindow.__init__(self)
 
@@ -242,7 +138,7 @@ class MainWindow(QMainWindow):
         self.covarianceDisplayButton.clicked.connect(self.on_display_covariance_clicked)
         self.display_covariance = False
 
-        # self.covarianceDisplayButton = QPushButton('Display Covariance Off', self)
+        # self.covarianceDisplayButton = QPushButton('Display Global Fusion Off', self)
         # self.covarianceDisplayButton.resize(140, 32)
         # self.covarianceDisplayButton.move(1000, 590)
         # self.covarianceDisplayButton.clicked.connect(self.on_display_covariance_clicked)
@@ -253,14 +149,14 @@ class MainWindow(QMainWindow):
         self.radioTrafficLight = QRadioButton("Traffic Light", self)
         self.radioTrafficLight.resize(200, 32)
         self.radioTrafficLight.move(1000, 630)
-        # self.radioTrafficLight.clicked.connect(self.showCustomOptions)
+        self.radioTrafficLight.clicked.connect(self.on_intersection_clicked)
         self.radioTrafficLight.toggle()  # start in traffic test
         self.testGroup.addButton(self.radioTrafficLight)
 
         self.radioAutonomousIntersection = QRadioButton("Autonomous Intersection", self)
         self.radioAutonomousIntersection.resize(200, 32)
         self.radioAutonomousIntersection.move(1000, 660)
-        # self.radioAutonomousIntersection.clicked.connect(self.showCustomOptions)
+        self.radioAutonomousIntersection.clicked.connect(self.on_intersection_clicked)
         self.testGroup.addButton(self.radioAutonomousIntersection)
 
         self.startButton = QPushButton('Start Test', self)
@@ -363,7 +259,8 @@ class MainWindow(QMainWindow):
             camera_debug=self.camera_debug,
             fusion_debug=self.fusion_debug,
             display_covariance=self.display_covariance,
-            unit_test=self.unit_test
+            unit_test=self.unit_test,
+            intersection_mode=self.intersection_mode
         )
 
         print ( " GUI Init end ")
@@ -459,212 +356,11 @@ class MainWindow(QMainWindow):
     def on_end_clicked(self):
         self.end_simulation = True
 
-    # def updateVehicleInSim(self, idx, full_simulation, vehicleList, thread_idx):
-    #     # Update ourself
-    #     vehicle = self.vehicles[idx]
-    #     vehicle.update_localization()
-    #     vehicle.recieve_coordinate_group_commands(self.trafficLightArray)
-    #     vehicle.pure_pursuit_control()
-
-    #     # Filter out ourself
-    #     tempList = vehicleList.copy()
-    #     tempList.pop(idx)
-
-    #     localization_error = [0.0, 0.0]
-
-    #     if full_simulation:
-    #         # Create that fake LIDAR
-    #         if self.lidarRecognitionList[idx] != None:
-    #             localization_error_gaussian, localization_error = vehicle.localization.getErrorParamsAtVelocity(abs(vehicle.velocity), vehicle.theta)
-    #             if self.estimate_covariance:
-    #                 temp_covariance = localization_error_gaussian
-    #             else:
-    #                 temp_covariance = sensor.BivariateGaussian(0.175, 0.175, 0)
-    #             point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(vehicle, tempList, [], 15.0, 15.0, 0.0, 160.0, l_error = localization_error, l_error_gauss = temp_covariance)
-    #             if self.simulate_error:
-    #                 vehicle.cameraDetections = camera_error_array
-    #                 vehicle.localizationError = localization_error_gaussian
-    #                 if self.real_lidar:
-    #                     lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud_error, self.time/1000.0,
-    #                         vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
-    #                     vehicle.rawLidarDetections = point_cloud_error
-    #                     vehicle.lidarDetections = lidarcoordinates
-    #                 else:
-    #                     vehicle.lidarDetections = lidar_detected_error
-    #             else:
-    #                 vehicle.cameraDetections = camera_array
-    #                 lidarcoordinates, lidartimestamp = self.lidarRecognitionList[idx].processLidarFrame(point_cloud, self.time/1000.0,
-    #                     vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, vehicle.lidarSensor)
-    #                 vehicle.rawLidarDetections = point_cloud
-    #                 vehicle.lidarDetections = lidarcoordinates
-    #             vehicle.groundTruth = camera_array
-
-    #             # Vehicle position can be the map centroid in sim
-    #             # because we are generating the detection WRT the centroid
-    #             #pos = [vehicle.localizationPositionX - vehicle.positionX_offset, vehicle.localizationPositionY - vehicle.positionY_offset, vehicle.theta - vehicle.theta_offset]
-    #             #pos = [0,0,0]
-
-    #             # Lets add the detections to the vehicle class
-    #             # vehicle.lidarDetections = []
-    #             # for each in lidarcoordinates:
-    #             #     new = rotate((0, 0), (float(each[1]), float(each[2])), pos[2])
-    #             #     sensed_x = new[0] + pos[0]
-    #             #     sensed_y = new[1] + pos[1]
-    #             #     vehicle.lidarDetections.append((sensed_x, sensed_y, each[6]))
-
-    #             # Raw LIDAR for debug
-    #             vehicle.lidarPoints = point_cloud
-
-    #             # Do the local fusion like we would on the vehicle
-    #             self.localFusionCAV[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, vehicle.cameraDetections, .25, self.estimate_covariance)
-    #             self.localFusionCAV[idx].processDetectionFrame(local_fusion.LIDAR, self.time/1000.0, vehicle.lidarDetections, .25, self.estimate_covariance)
-    #             results = self.localFusionCAV[idx].fuseDetectionFrame(self.estimate_covariance, vehicle)
-
-    #             # Add to the GUI
-    #             vehicle.fusionDetections = []
-    #             for each in results:
-    #                 sensed_x = each[1]
-    #                 sensed_y = each[2]
-    #                 vehicle.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
-    #             # Add ourself to this
-    #             self.localizationsList.append((vehicle.localizationPositionX + localization_error[0],
-    #                                             vehicle.localizationPositionY + localization_error[1],
-    #                                             localization_error_gaussian.covariance, 0, 0, -1))
-
-    #     else:
-    #         # Quick fake of sensor values
-    #         vehicle.fusionDetections = []
-    #         for each in tempList:
-    #             sensed_x = each[0]
-    #             sensed_y = each[1]
-    #             vehicle.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
-
-    #     # Now update our current PID with respect to other vehicles
-    #     vehicle.check_positions_of_other_vehicles_adjust_velocity(tempList)
-
-    #     # We can't update the PID controls until after all positions are known
-    #     vehicle.update_pid()
-
-    #     # Ground truth to the original dataset
-    #     testSet = []
-    #     groundTruth = []
-    #     for each in vehicle.fusionDetections:
-    #         sensed_x = each[0]
-    #         sensed_y = each[1]
-    #         testSet.append([sensed_x, sensed_y])
-    #     for each in vehicle.groundTruth:
-    #         sensed_x = each[0]
-    #         sensed_y = each[1]
-    #         groundTruth.append([sensed_x, sensed_y])
-
-    #     local_differences = []
-    #     local_over_detection_miss = 0
-    #     local_under_detection_miss = 0
-
-    #     if len(testSet) >= 1 and len(groundTruth) >= 1:
-    #         nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
-    #         distances, indices = nbrs.kneighbors(np.array(groundTruth))
-
-    #         # Now calculate the score
-    #         for dist in distances:
-    #             local_differences.append(dist)
-
-    #     # Check how much large the test set is from the ground truth and add that as well
-    #     if len(testSet) > len(groundTruth):
-    #         # Overdetection case
-    #         local_over_detection_miss += len(testSet) - len(groundTruth)
-    #     elif len(testSet) < len(groundTruth):
-    #         # Underdetection case, we count this differently because it may be from obstacle blocking
-    #         local_under_detection_miss += len(groundTruth) - len(testSet)
-
-    #     if self.useThreading:
-    #         self.threads_results[thread_idx] = [local_differences, local_over_detection_miss, local_under_detection_miss, localization_error]
-    #     else:
-    #         return local_differences, local_over_detection_miss, local_under_detection_miss, localization_error
-
-    # def updateCISInSim(self, idx, full_simulation, vehicleList, thread_idx):
-    #     cis = self.cis[idx]
-    #     # Don't filter the list at all
-    #     tempList = vehicleList.copy()
-    #     if full_simulation:
-    #         # Create that fake camera
-    #         if self.lidarRecognitionList[idx] != None:
-    #             point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(cis, tempList, [], 15.0, 15.0, 0.0, 160.0)
-    #             if self.simulate_error:
-    #                 cis.cameraDetections = camera_error_array
-    #             else:
-    #                 cis.cameraDetections = camera_array
-    #             cis.groundTruth = camera_array
-                
-    #             # f = open("data_" + str(idx) + ".txt", "a")
-    #             # f.write(str(idx) + "," + str(self.time))
-    #             # for each in cis.cameraDetections:
-    #             #     f.write("," + str(each[0]) + "," + str(each[1]))
-    #             # f.write("\n")
-    #             # f.close()
-
-    #             # CIS position can be the map centroid in sim
-    #             # because we are generating the detection WRT the centroid
-    #             # pos = [cis.localizationPositionX - cis.positionX_offset, cis.localizationPositionY - cis.positionY_offset, cis.theta - cis.theta_offset]
-    #             pos = [0, 0, 0]
-
-    #             # Fusion detection frame is the same as single camera (for now)
-    #             # Add to the GUI
-    #             # Do the local fusion like we would on the vehicle
-    #             self.localFusionCIS[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, cis.cameraDetections, .25, self.estimate_covariance)
-    #             results = self.localFusionCIS[idx].fuseDetectionFrame(self.estimate_covariance, cis)
-
-    #             # Add to the GUI
-    #             cis.fusionDetections = []
-    #             for each in results:
-    #                 sensed_x = each[1]
-    #                 sensed_y = each[2]
-    #                 cis.fusionDetections.append((sensed_x, sensed_y, each[3], each[4], each[5], each[0]))
-    #     else:
-    #         # Quick fake of sensor values
-    #         cis.fusionDetections = []
-    #         cis.groundTruth = []
-    #         for each in vehicleList:
-    #             sensed_x = each[0]
-    #             sensed_y = each[1]
-    #             cis.fusionDetections.append((sensed_x, sensed_y, np.array([[1.0, 0.0],[0.0, 1.0]]), 0, 0, each[5]))
-
-    #     # Ground truth to the original dataset
-    #     testSet = []
-    #     groundTruth = []
-    #     for each in cis.fusionDetections:
-    #         sensed_x = each[0]
-    #         sensed_y = each[1]
-    #         testSet.append([sensed_x, sensed_y])
-    #     for each in cis.groundTruth:
-    #         sensed_x = each[0]
-    #         sensed_y = each[1]
-    #         groundTruth.append([sensed_x, sensed_y])
-
-    #     local_differences = []
-    #     local_over_detection_miss = 0
-    #     local_under_detection_miss = 0
-
-    #     if len(testSet) >= 1 and len(groundTruth) >= 1:
-    #         nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
-    #         distances, indices = nbrs.kneighbors(np.array(groundTruth))
-
-    #         # Now calculate the score
-    #         for dist in distances:
-    #             local_differences.append(dist)
-
-    #     # Check how much large the test set is from the ground truth and add that as well
-    #     if len(testSet) > len(groundTruth):
-    #         # Overdetection case
-    #         local_over_detection_miss += len(testSet) - len(groundTruth)
-    #     elif len(testSet) < len(groundTruth):
-    #         # Underdetection case, we count this differently because it may be from obstacle blocking
-    #         local_under_detection_miss += len(groundTruth) - len(testSet)
-
-    #     if self.useThreading:
-    #         self.threads_results[thread_idx] = [local_differences, local_over_detection_miss, local_under_detection_miss, [0.0, 0.0]]
-    #     else:
-    #         return local_differences, local_over_detection_miss, local_under_detection_miss
+    def on_intersection_clicked(self):
+        if self.radioAutonomousIntersection.isChecked():
+            self.intersection_mode = 1
+        else:
+            self.intersection_mode = 0
 
     def calcResultsOfUnitTest(self):
         # Calculate the prior results
@@ -771,280 +467,6 @@ class MainWindow(QMainWindow):
         self.trafficLightArray = [0, 2, 0]
 
     def stepTime(self):
-        # if self.unit_test:
-        #     test_time = 60000
-        #     test_time_print = 10000
-        #     if self.time % test_time_print == 0:
-        #         print("Test: ", 100 * (self.time % test_time)/test_time, "% num:", self.unit_test_idx)
-        #     if self.time % test_time == 0:
-        #         # Reset the map, unit testing has been selected
-        #         self.resetTest()
-
-        #         # Determing mode
-        #         if self.unit_test_state == 0:
-        #             for idx, vehicle in self.vehicles.items():
-        #                 self.lineVehicleSpeed[idx].setText("0.5")
-        #                 self.lineVehicleSpeed[idx].setReadOnly(True)
-        #             self.sensorsButton.setEnabled(False)
-        #             self.errorButton.setEnabled(False)
-        #             self.covarianceButton.setEnabled(False)
-        #             self.endButton.setEnabled(True)
-        #             self.pauseButton.setEnabled(False)
-        #             self.startButton.setEnabled(False)
-        #             self.unitTestButton.setEnabled(False)
-        #             self.full_simulation = True
-        #             self.simulate_error = True
-        #             self.estimate_covariance = False
-        #             self.pause_simulation = False
-        #             self.real_lidar = False
-        #             self.unit_test_idx = 0
-
-        #             # Set the fusion modes
-        #             self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
-        #             self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
-        #             self.estimate_covariance = self.unitTest[self.unit_test_idx][2]
-        #             self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
-        #             for idx, veh in self.vehicles.items():
-        #                 if veh.simVehicle:
-        #                     self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode
-        #             for idx, sens in self.cis.items():
-        #                 if sens.simCIS:
-        #                     self.localFusionCIS[idx].fusion_mode = self.local_fusion_mode
-
-        #             # Reset the stats
-        #             self.resetUnitTestStats()
-    
-        #             # Increment the unit test counter for those long tests
-        #             self.unit_test_state = 1
-        #             self.unit_test_idx += 1
-        #         elif len(self.unitTest) <= self.unit_test_idx:
-        #             # Calculate the prior results
-        #             self.calcResultsOfUnitTest()
-        #             self.resetUnitTestStats()
-        #             self.printUnitTestStats()
-                    
-        #             # Set everythign back to normal
-        #             self.real_lidar = True
-
-        #             for idx, vehicle in self.vehicles.items():
-        #                 self.lineVehicleSpeed[idx].setText("0.0")
-        #                 self.lineVehicleSpeed[idx].setReadOnly(False)
-
-        #             # Test over
-        #             self.sensorsButton.setEnabled(True)
-        #             self.errorButton.setEnabled(True)
-        #             self.covarianceButton.setEnabled(True)
-        #             self.endButton.setEnabled(True)
-        #             self.pauseButton.setEnabled(False)
-        #             self.startButton.setEnabled(True)
-        #             self.unit_test_state = 0
-        #             self.full_simulation = False
-        #             self.simulate_error = False
-        #             self.estimate_covariance = False
-        #             self.pause_simulation = True
-        #             self.unitTestButton.setEnabled(True)
-        #             self.unit_test = False
-        #             self.unitTestButton.setText('Unit Test Off')
-        #             self.unitTestButton.setEnabled(True)
-
-        #             sys.exit()
-        #         else:
-        #             # Calculate the prior results
-        #             self.calcResultsOfUnitTest()
-        #             self.resetUnitTestStats()
-
-        #             for idx, vehicle in self.vehicles.items():
-        #                 self.lineVehicleSpeed[idx].setText("0.5")
-        #             self.full_simulation = True
-        #             self.simulate_error = True
-        #             self.pause_simulation = False
-
-        #             # Set the fusion modes
-        #             self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
-        #             self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
-        #             self.estimate_covariance = self.unitTest[self.unit_test_idx][2]
-        #             self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
-        #             for idx, veh in self.vehicles.items():
-        #                 if veh.simVehicle:
-        #                     self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode
-        #             for idx, sens in self.cis.items():
-        #                 if sens.simCIS:
-        #                     self.localFusionCIS[idx].fusion_mode = self.local_fusion_mode
-
-        #             # Incrememt the unit test state
-        #             self.unit_test_idx += 1
-
-
-        # if not self.pause_simulation:
-        #     if self.full_simulation:
-        #             self.time += 125
-        #     else:
-        #         self.time = round(time.time() * 1000)
-
-        # # 8HZ
-        # if self.full_simulation:
-        #     if (self.time - self.lastPositionUpdate) >= 125:
-        #         self.lastPositionUpdate = self.time
-        #         self.vehiclesLock.acquire()
-        #         for key, vehicle in self.vehicles.items():
-        #             # Update vehicle position based on physics
-        #             if vehicle.simVehicle:
-        #                 vehicle.updatePosition(.125)
-        #         self.vehiclesLock.release()
-        #         self.drawTrafficLight = True
-
-        # # 8HZ
-        # if (self.time - self.lastLocalizationUpdate) >= 125:
-        #     # print ( self.time )
-        #     self.lastLocalizationUpdate = self.time
-        #     # Traffic light update sequence
-        #     if self.lightTime > self.mapSpecs.lightTimePeriod:
-        #         self.lightTime = 0
-        #         if self.trafficLightArray[1] == 2:
-        #             self.trafficLightArray[1] = 1
-        #             self.trafficLightArray[2] = 0
-        #             lightTimePeriod = 0 * 8
-        #         elif self.trafficLightArray[2] == 2:
-        #             self.trafficLightArray[1] = 0
-        #             self.trafficLightArray[2] = 1
-        #             lightTimePeriod = 0 * 8
-        #         elif self.trafficLightArray[1] == 1:
-        #             self.trafficLightArray[1] = 0
-        #             self.trafficLightArray[2] = 2
-        #             lightTimePeriod = 5 * 8
-        #         elif self.trafficLightArray[2] == 1:
-        #             self.trafficLightArray[1] = 2
-        #             self.trafficLightArray[2] = 0
-        #             lightTimePeriod = 5 * 8
-        #     else:
-        #         self.lightTime += 1
-
-        #     #self.vehiclesLock.acquire()
-
-        #     start_vehicles = time.time()
-
-        #     # Make the vehicle list before we move the vehicles
-        #     # Get the last known location of all other vehicles
-        #     vehicleList = []
-        #     for otherIdx, otherVehicle in self.vehicles.items():
-        #         vehicleList.append(otherVehicle.get_location())
-
-        #     self.localizationsList = []
-        #     for idx, vehicle in self.vehicles.items():
-        #         if self.pause_simulation:
-        #             # Make sure we relay the pause to our vehicles
-        #             vehicle.targetVelocityGeneral = 0.0
-        #         elif self.lineVehicleSpeed[idx].text() == "" or self.lineVehicleSpeed[idx].text() == ".":
-        #             # Need to pass here in case the user is still typing
-        #             pass
-        #         else:
-        #             vehicle.targetVelocityGeneral = float(self.lineVehicleSpeed[idx].text())
-        #         if vehicle.simVehicle:
-        #             if self.pause_simulation:
-        #                 vehicle.update_localization()
-        #                 vehicle.distance_pid_control_overide = True
-        #                 vehicle.targetVelocity = 0.0
-        #                 vehicle.update_pid()
-        #             else:
-        #                 if self.useThreading:
-        #                     self.threads[idx] = threading.Thread(target=self.updateVehicleInSim, args=(idx, self.full_simulation, vehicleList, idx))      
-        #                     self.threads[idx].start() # start the thread we just created
-        #                 else:
-        #                     local_differences_c, local_over_detection_miss_c, local_under_detection_miss_c, localization_error_c = self.updateVehicleInSim(idx, self.full_simulation, vehicleList, idx)
-        #                     self.local_under_detection_miss += local_under_detection_miss_c
-        #                     self.local_over_detection_miss += local_over_detection_miss_c
-        #                     self.local_differences += local_differences_c
-        #                     self.localization_differences.append(math.hypot(localization_error_c[0], localization_error_c[1]))
-        #                 # self.localization_velocity.append(vehicle.velocity)
-
-        #     for idx, cis in self.cis.items():
-        #         #print ( " CIS:", idx )
-        #         # Do this if we are not in a full sim
-        #         if not self.full_simulation and cis.simCIS:
-        #             # CISs should not move but we can do this anyway just in case
-        #             cis.updatePosition(.125)
-        #         if cis.simCIS:
-        #             if self.pause_simulation:
-        #                 cis.update_localization()
-        #             else:
-        #                 # Update ourself
-        #                 cis.update_localization()
-
-        #                 if self.useThreading:
-        #                     thread_num = len(self.vehicles) + idx
-        #                     self.threads[thread_num] = threading.Thread(target=self.updateCISInSim, args=(idx, self.full_simulation, vehicleList, thread_num))
-        #                     self.threads[thread_num].start() # start the thread we just created  
-        #                 else:
-        #                     local_differences_c, local_over_detection_miss_c, local_under_detection_miss_c = self.updateCISInSim(idx, self.full_simulation, vehicleList, idx)
-
-        #                     self.local_under_detection_miss += local_under_detection_miss_c
-        #                     self.local_over_detection_miss += local_over_detection_miss_c
-        #                     self.local_differences += local_differences_c
-
-        #     if self.useThreading:
-        #         # wait for all threads to finish                                            
-        #         for idx, t in enumerate(self.threads):                                                           
-        #             t.join()
-        #             if self.threads_results[idx] != None:
-        #                 local_differences_c, local_over_detection_miss_c, local_under_detection_miss_c, localization_error_c = self.threads_results[idx]
-        #                 self.local_under_detection_miss += local_under_detection_miss_c
-        #                 self.local_over_detection_miss += local_over_detection_miss_c
-        #                 self.local_differences += local_differences_c
-
-        #     #print ( "v:", time.time() - start_vehicles )
-
-        #     #self.vehiclesLock.release()
-
-        #     start_global = time.time()
-
-        #     # First we need to add the localization frame, since it should be the basis
-        #     self.globalFusion.processDetectionFrame(-1, self.time/1000.0, self.localizationsList, .25, self.estimate_covariance)
-
-        #     for idx, vehicle in self.vehicles.items():
-        #         # Add to the global sensor fusion
-        #         self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
-
-        #     for idx, cis in self.cis.items(): 
-        #         # Add to the global sensor fusion
-        #         self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
-
-        #     self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
-
-        #     # Ground truth to the original dataset
-        #     testSetGlobal = []
-        #     groundTruthGlobal = []
-        #     for each in self.globalFusionList:
-        #         sensed_x = each[1]
-        #         sensed_y = each[2]
-        #         testSetGlobal.append([sensed_x, sensed_y])
-        #     for each in vehicleList:
-        #         sensed_x = each[0]
-        #         sensed_y = each[1]
-        #         groundTruthGlobal.append([sensed_x, sensed_y])
-        #     if len(testSetGlobal) >= 1 and len(groundTruthGlobal) >= 1:
-        #         nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSetGlobal))
-        #         distances, indices = nbrs.kneighbors(np.array(groundTruthGlobal))
-
-        #         # Now calculate the score
-        #         for dist in distances:
-        #             if dist > 1.0:
-        #                 # Too far away to be considered a match, add as a miss instead
-        #                 self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
-        #             else:
-        #                 self.global_differences.append(dist)
-        #     # Check how much large the test set is from the ground truth and add that as well
-        #     if len(testSetGlobal) > len(groundTruthGlobal):
-        #         # Overdetection case
-        #         self.global_over_detection_miss += len(testSetGlobal) - len(groundTruthGlobal)
-        #     elif len(testSetGlobal) < len(groundTruthGlobal):
-        #         # Underdetection case, we count this differently because it may be from obstacle blocking
-        #         self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
-
-        #     #print ( "g:", time.time() - start_global )
-
-        #     #print ( " over misses: ", self.local_over_detection_miss, " under misses: ", self.local_under_detection_miss )
-        #     #print ( " over misses: ", self.global_over_detection_miss, " under misses: ", self.global_under_detection_miss )
-
         response = self.rsu_connection.getGuiValues(True)
 
         if len(response) > 5:
@@ -1076,7 +498,7 @@ class MainWindow(QMainWindow):
 
         # Check if our button have chagned, and if so create a new packet
         button_states_changed = False
-        if self.button_states['full_simulation'] != self.full_simulation or self.button_states['simulate_error'] != self.simulate_error or self.button_states['estimate_covariance'] != self.estimate_covariance:
+        if self.button_states['full_simulation'] != self.full_simulation or self.button_states['simulate_error'] != self.simulate_error or self.button_states['estimate_covariance'] != self.estimate_covariance or self.button_states['intersection_mode'] != self.intersection_mode:
             self.button_states = dict(
                 full_simulation=self.full_simulation,
                 simulate_error=self.simulate_error,
@@ -1086,7 +508,8 @@ class MainWindow(QMainWindow):
                 camera_debug=self.camera_debug,
                 fusion_debug=self.fusion_debug,
                 display_covariance=self.display_covariance,
-                unit_test=self.unit_test
+                unit_test=self.unit_test,
+                intersection_mode=self.intersection_mode
             )
             button_states_changed = True
 
@@ -1152,15 +575,15 @@ class MainWindow(QMainWindow):
                 self.paint_vehicles(pen, painter)
 
             ### DRAW CISS ###
-            # if self.drawCamera:
-            #     self.paint_sensors(pen, painter)
+            if self.drawCamera:
+                self.paint_sensors(pen, painter)
 
             ### GLOBAL FUSION ###
-            # if self.display_global_fusion:
-            #     self.paint_global_fusion(pen, painter)
+            if self.display_global_fusion:
+                self.paint_global_fusion(pen, painter)
 
         except Exception as e:
-            print(str(e))
+            print(" GUI render error: ", str(e))
 
     def draw_tfl_and_waypoints(self, pen, painter):
         pen.setWidth(2)
@@ -1168,19 +591,29 @@ class MainWindow(QMainWindow):
         for x, y, intersection in zip(self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates):
             # painter.translate(self.mapSpecs.centerX-15, self.mapSpecs.centerY-30);
             # painter.rotate(90);
+            
             if intersection == 0:
                 # No inersection here
                 pen.setBrush(brush_color['waypoint'])
                 pen.setWidth(2)
             elif self.trafficLightArray[intersection] == 2:
                 pen.setWidth(4)
-                pen.setBrush(brush_color['traffic_light_green'])
+                if self.intersection_mode == 0:
+                    pen.setBrush(brush_color['traffic_light_green'])
+                else:
+                    pen.setBrush(brush_color['traffic_light_autonomous'])
             elif self.trafficLightArray[intersection] == 1:
                 pen.setWidth(4)
-                pen.setBrush(brush_color['traffic_light_yellow'])
+                if self.intersection_mode == 0:
+                    pen.setBrush(brush_color['traffic_light_yellow'])
+                else:
+                    pen.setBrush(brush_color['traffic_light_autonomous'])
             else:
                 pen.setWidth(4)
-                pen.setBrush(brush_color['traffic_light_red'])
+                if self.intersection_mode == 0:
+                    pen.setBrush(brush_color['traffic_light_red'])
+                else:
+                    pen.setBrush(brush_color['traffic_light_autonomous'])
             painter.setPen(pen)
             painter.drawPoint(self.translateX(self.mapSpecs.meters_to_print_scale * x),
                                 self.translateY(self.mapSpecs.meters_to_print_scale * y))
@@ -1190,12 +623,14 @@ class MainWindow(QMainWindow):
 
         # N/S direction
         pen.setWidth(4)
-        if self.trafficLightArray[2] == 2:
-            pen.setBrush(Qt.green)
+        if self.intersection_mode == 1:
+            pen.setBrush(brush_color['traffic_light_autonomous'])
+        elif self.trafficLightArray[2] == 2:
+            pen.setBrush(brush_color['traffic_light_green'])
         elif self.trafficLightArray[2] == 1:
-            pen.setBrush(Qt.yellow)
+            pen.setBrush(brush_color['traffic_light_yellow'])
         else:
-            pen.setBrush(Qt.red)
+            pen.setBrush(brush_color['traffic_light_red'])
         painter.setPen(pen)
         painter.drawLine(self.mapSpecs.centerX - (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
@@ -1208,12 +643,14 @@ class MainWindow(QMainWindow):
 
         # E/W direction
         pen.setWidth(4)
-        if self.trafficLightArray[1] == 2:
-            pen.setBrush(Qt.green)
+        if self.intersection_mode == 1:
+            pen.setBrush(brush_color['traffic_light_autonomous'])
+        elif self.trafficLightArray[1] == 2:
+            pen.setBrush(brush_color['traffic_light_green'])
         elif self.trafficLightArray[1] == 1:
-            pen.setBrush(Qt.yellow)
+            pen.setBrush(brush_color['traffic_light_yellow'])
         else:
-            pen.setBrush(Qt.red)
+            pen.setBrush(brush_color['traffic_light_red'])
         painter.setPen(pen)
         painter.drawLine(self.mapSpecs.centerX + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
                             self.mapSpecs.centerY + (self.mapSpecs.intersectionWidth * self.mapSpecs.meters_to_print_scale / 2),
@@ -1801,7 +1238,7 @@ class MainWindow(QMainWindow):
                 if self.sensor_localization_error != []:
                     pos = ( self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
                             self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale) )
-                    a, b, phi = shared_math.ellipsify(self.localization_error[idx], 3.0)
+                    a, b, phi = shared_math.ellipsify(self.sensor_localization_error[idx], 3.0)
                     a = a * self.mapSpecs.meters_to_print_scale
                     b = b * self.mapSpecs.meters_to_print_scale
                     # Save the previous painter envinronment so we don't mess up the other things

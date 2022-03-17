@@ -161,9 +161,9 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
     while 1:
         if not comm_q.empty():
             got = comm_q.get()
-            x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, objectPackage = got
+            x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage = got
 
-            response_message = rsu.checkin(vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, objectPackage)
+            response_message = rsu.checkin(vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage)
 
             # Check if our result is valid
             if response_message == None:
@@ -468,7 +468,7 @@ def cav(config, vid):
 
                 if config.simulation:
                     response_message = rsu_sim_check.checkin(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
-                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, objectPackage)
+                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind], objectPackage)
 
                     # Check if our result is valid
                     if response_message == None:
@@ -484,12 +484,14 @@ def cav(config, vid):
                         response["v_t"] = response_message["v_t"]
                         response["tfl_state"] = response_message["tfl_state"]
                         response["veh_locations"] = response_message["veh_locations"]
+                        response["intersection_mode"] = response_message["intersection_mode"]
+                        response["av_intersection_permission"] = response_message["av_intersection_permission"]
                         response["error"] = 0
                         fails = 0
                 else:
                     comm_q.put(
                         [planner.rearAxlePositionX, planner.rearAxlePositionY, 0.0, 0.0, 0.0, planner.theta,
-                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, objectPackage])
+                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.ind], objectPackage])
 
                     # This should not take long but we will delay just a bit
                     time.sleep(.01)
@@ -504,6 +506,8 @@ def cav(config, vid):
                     #     index += 1
                 else:
                     # Update our various pieces
+                    planner.tfl_mode = int(response["intersection_mode"])
+                    planner.av_intersection_permission = int(response["av_intersection_permission"])
                     planner.targetVelocityGeneral = float(response["v_t"])
                     planner.recieve_coordinate_group_commands(response["tfl_state"])
                     planner.pure_pursuit_control()
