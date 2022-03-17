@@ -14,7 +14,6 @@ To Install on physical Jetson hardware:
  * TODO: Place google drive link here for Jetseon TX2
  * Clone this repo on the Home/Projects/ folder.
  * TODO: Place google drive link here for Jetson Nano
- * Clone this repo on the Home/Projects/ folder.
 
 In order to recognise the 1/10th scale vehicles you will need the retrained version of YoloV4 tiny. Be sure to download and add the following YoloV4 files into the darknet folder: 
  * [yolov4-tiny-cav.cfg](https://drive.google.com/file/d/1yMQntYWsVbJ8h7x0r0Hv5y34o2IGRVJ2/view?usp=sharing), needs to be located in /cfg
