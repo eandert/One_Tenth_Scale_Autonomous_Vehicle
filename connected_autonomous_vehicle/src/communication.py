@@ -1,7 +1,6 @@
 import socket
 import time
 import sys
-import fcntl
 import struct
 import math
 import os
@@ -16,13 +15,14 @@ import timeout_decorator
 
 
 ''' A utility function for determining our IP address for printing or watnot via python.'''
-def get_ip_address(ifname):
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    return socket.inet_ntoa(fcntl.ioctl(
-        s.fileno(),
-        0x8915,
-        struct.pack('256s', ifname[:15])
-    )[20:24])
+# import fcntl
+# def get_ip_address(ifname):
+#     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#     return socket.inet_ntoa(fcntl.ioctl(
+#         s.fileno(),
+#         0x8915,
+#         struct.pack('256s', ifname[:15])
+#     )[20:24])
 
 
 ''' This class creates a connection with the RSU server which is set using an IP address.
@@ -33,10 +33,10 @@ class connectServer:
     # TODO: Protect everything within TLS
     # RECEIVE: pk_RSU, symk_session
     # SEND: pk_CAV
-    def __init__(self):
+    def __init__(self, rsu_ip):
         self.key = secrets.token_urlsafe(32)
-        self.rsu_ip_address = 'http://192.168.100.198:5000'
-        #self.rsu_ip_address = 'http://192.168.1.162:5000'
+        #self.rsu_ip_address = 'http://192.168.100.198:5000'
+        self.rsu_ip_address = 'http://' + str(rsu_ip) + ':5000'
 
     def register(self, vehicle_id, x, y, z, roll, pitch, yaw):
         # data to be sent to api 
@@ -64,8 +64,9 @@ class connectServer:
                 return response
             except:
                 print ( "Error: Failed to message RSU, trying again" )
+                time.sleep(.01)
 
-    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, detections):
+    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, detections):
   
         # data to be sent to api 
         packet = {'key':self.key, 
@@ -78,11 +79,16 @@ class connectServer:
                 'roll':roll,
                 'pitch':pitch,
                 'yaw':yaw,
+                'steeringAcceleration':steeringAcceleration, 
+                'motorAcceleration':motorAcceleration, 
+                'targetIndexX':targetIndexX, 
+                'targetIndexY':targetIndexY,
+                'targetIntersection':intersection_id,
                 'detections':detections}
   
         try:
             # sending post request
-            r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = .25)
+            r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = 1)
             # extracting response text
             response = r.json()
 
@@ -90,7 +96,76 @@ class connectServer:
             #print("The response is:%s"%response)
 
             return response
-        except requests.exceptions.Timeout as e:
+        except Exception as e:
+            print ( "Timeout! TODO: add fallback option" + str(e) )
+            response = None
+
+    def getSimPositions(self, vehicle_id):
+  
+        # data to be sent to api 
+        packet = {'key':self.key, 
+                'id':vehicle_id, 
+                'type':0}
+  
+        try:
+            # sending post request
+            r = requests.get(url = self.rsu_ip_address + "/RSU/getsimpositions/", json = packet, timeout = 1)
+            # extracting response text
+            response = r.json()
+
+            # TODO: Verify this better
+            #print("The response is:%s"%response)
+
+            return response
+        except Exception as e:
+            print ( "Timeout! TODO: add fallback option" + str(e) )
+            response = {}
+
+    def getSimTime(self):
+  
+        # data to be sent to api 
+        packet = {}
+  
+        try:
+            # sending post request
+            r = requests.get(url = self.rsu_ip_address + "/RSU/getsimtime/", json = packet, timeout = 1)
+            # extracting response text
+            response = r.json()
+
+            # TODO: Verify this better
+            #print("The response is:%s"%response)
+
+            return response
+        except Exception as e:
+            print ( "Timeout! TODO: add fallback option" + str(e) )
+            response = {'time':-99}
+            return response
+
+    def sendSimPosition(self, vehicle_id, x, y, z, roll, pitch, yaw, velocity):
+  
+        # data to be sent to api 
+        packet = {'key':self.key, 
+                'id':vehicle_id,
+                'type':0,
+                'x':x,
+                'y':y,
+                'z':z,
+                'roll':roll,
+                'pitch':pitch,
+                'yaw':yaw,
+                'velocity':velocity}
+  
+        try:
+            # sending post request
+            r = requests.get(url = self.rsu_ip_address + "/RSU/sendsimposition/", json = packet, timeout = 1)
+            # extracting response text
+            response = r.json()
+
+            # TODO: Verify this better
+            #print("The response is:%s"%response)
+
+            return response
+        except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
             response = None
 
@@ -183,7 +258,7 @@ class connectLIDAR:
         return fromc.read()
 
     def runLIDARCode(self):
-        cmd = "./slamware_sdk_linux-armv7hf-gcc4.8/linux-armv7hf-release/output/ttcomp"
+        cmd = "/home/jetson/Projects/slamware/slamware_sdk_linux-armv7hf-gcc4.8/linux-armv7hf-release/output/ttcomp"
         pro = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
                            shell=True, preexec_fn=os.setsid) 
         return pro

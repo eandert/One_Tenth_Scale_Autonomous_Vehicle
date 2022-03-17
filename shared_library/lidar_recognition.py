@@ -4,6 +4,8 @@ from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
 
+from shared_library import shared_math
+
 
 '''This object tracks a single object that has been detected in a LIDAR frame.
 We use this primarily to match objects seen between frames and included in here
@@ -285,17 +287,31 @@ class LIDAR:
         # Indicate our success
         print('Started LIDAR successfully...')
 
-    def processLidarFrame(self, output, timestamp):
+    def processLidarFrame(self, output, timestamp, vehicle_x, vehicle_y, vehicle_theta, lidar_sensor):
         debug = False
 
         if len(output) < 1:
-            return [[],timestamp]
+            # probably the LIDAR is not on, skip
+            return [], timestamp
 
         #print ( "got", output )
 
-        array = np.array(output)
+        unfiltered_array = np.array(output)
 
-        #print ( "conv", array )
+        # FIlter points outside of our route
+        # Create an empty list
+        filter_arr = []
+
+        # Go through each element in the list
+        # for element in unfiltered_array:
+        #     if bounding_box[0][0] >= element[0] <= bounding_box[0][1] and bounding_box[1][0] >= element[1] <= bounding_box[1][1]:
+        #         filter_arr.append(True)
+        #     else:
+        #         filter_arr.append(False)
+
+        # array = unfiltered_array[filter_arr]
+
+        array = unfiltered_array
 
         db = DBSCAN(eps=0.1, min_samples=3).fit(array)
         y_pred = db.fit_predict(array)
@@ -337,7 +353,7 @@ class LIDAR:
         smallX = []
         smallY = []
         for clusterRange, x, y in zip(clusterMaxRange, centerPointsX, centerPointsY):
-            if clusterRange > 1.0:
+            if clusterRange > 1.5:
                 bigX.append(x)
                 bigY.append(y)
             else:
@@ -349,7 +365,11 @@ class LIDAR:
         detections_position_list = []
         detections_list = []
 
+        # For the small detections we should add .25 to offset for the center of the vehicle from the edge
         for x, y in zip(smallX, smallY):
+            det_dir = math.atan2(vehicle_y - y, vehicle_x - x) - math.radians(180)
+            x = x + (.25 * math.cos(det_dir))
+            y = y + (.25 * math.sin(det_dir))
             detections_position_list.append(
                 [x - self.min_size, y - self.min_size, x + self.min_size, y + self.min_size])
             detections_list.append([0, 90, x, y, self.min_size * 2])
@@ -381,7 +401,12 @@ class LIDAR:
         result = []
         for track in self.trackedList:
             if track.lastHistory >= 5:
-                result.append([track.id, track.x, track.y, track.crossSection, track.velocity, "L"])
+                # Calculate the covariance
+                relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
+                    vehicle_x, vehicle_y, vehicle_theta, track.x, track.y)
+                success_lidar, expected_error_gaussian_lidar, actual_sim_error_lidar = lidar_sensor.calculateErrorGaussian(
+                    relative_angle_to_detector, target_line_angle, relative_distance, True)
+                result.append([track.x, track.y, expected_error_gaussian_lidar.covariance.tolist()])
 
         return result, timestamp
 

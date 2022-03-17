@@ -355,7 +355,7 @@ class YOLO:
 
         # If we have set this to create an output video, create the video
         if self.write:
-            self.out = cv2.VideoWriter(settings.self.outputFilename, (cv2.VideoWriter_fourcc)(*'MJPG'), 10.0, (
+            self.out = cv2.VideoWriter(settings.outputFilename, (cv2.VideoWriter_fourcc)(*'MJPG'), 10.0, (
              self.frame_width, self.frame_height))
 
         # If we have set this to show the output via opencv, start that here
@@ -507,6 +507,13 @@ class YOLO:
                 result.append([track.id, track.x, track.y, track.crossSection, track.velocity, "C"])
         return result, timestamp
 
+    def writeFrame(self, frame_read):
+        frame_rgb = cv2.cvtColor(frame_read, cv2.COLOR_BGR2RGB)
+        frame_resized = cv2.resize(frame_rgb, (
+         self.frame_width, self.frame_height),
+          interpolation=(cv2.INTER_LINEAR))
+        image = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+        self.out.write(image)
 
     def matchDetections(self, detections_list_positions, detection_list, timestamp):
         self.time += 1
@@ -641,6 +648,7 @@ class Camera:
         self.yolo = YOLO()
         height, width = frame_read.shape[:2]
         self.yolo.init(width, height, time.time(), settings, camSpecs)
+        self.frame = 0
 
     def takeCameraFrame(self):
         start_time = time.time()
@@ -648,6 +656,15 @@ class Camera:
         end_time = time.time()
         coordinates, timestamp = self.yolo.readFrame(frame_read, start_time)
         return coordinates, start_time, end_time
+
+    def takeCameraFrameRaw(self):
+        start_time = time.time()
+        frame_read = self.camera.read()
+        end_time = time.time()
+        self.yolo.write = True
+        self.yolo.writeFrame(frame_read)
+        self.frame += 1
+        return start_time, self.frame - 1
 
     def closeCamera(self):
         # close the camera instance

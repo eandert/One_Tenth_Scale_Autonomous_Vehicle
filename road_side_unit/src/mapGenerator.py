@@ -5,9 +5,9 @@ import math
 a simple figure 8 intersection and this is done using some parameters. Later this 
 class will be ammended to work with SUMO and allow more complex maps to be generated. '''
 class MapSpecs():
-    def __init__(self, map=0):
+    def __init__(self, map=0, map_length=1.0):
         # Intersection Params
-        self.intersectionStraightLength = 1.0
+        self.intersectionStraightLength = map_length
         self.intersectionWidth = .5
         self.centerX = 500
         self.centerY = 500
@@ -19,14 +19,15 @@ class MapSpecs():
         # Simulation/Real Params
         self.isSimulation = 1
         self.lightTime = 0
-        self.lightTimePeriod = 8 * 5  # 5 seconds * 8 hz
+        self.lightTimePeriod = 8 * 1.5  # 5 seconds * 8 hz
 
         # Generating a figure 8 for now TODO: incorporate SUMO/ATLAS
-        if map == 0:
-            self.xCoordinates, self.yCoordinates, self.vCoordinates = self.generateFigureEight(
+        self.map = map
+        if self.map == 0:
+            self.xCoordinates, self.yCoordinates, self.vCoordinates, self.iCoordinates = self.generateFigureEight(
                 self.intersectionStraightLength, self.intersectionWidth, self.distanceInterval)
         else:
-            self.xCoordinates, self.yCoordinates, self.vCoordinates = self.generateDoubleFigureEight(
+            self.xCoordinates, self.yCoordinates, self.vCoordinates, self.iCoordinates = self.generateDoubleFigureEight(
                 self.intersectionStraightLength, self.intersectionWidth, self.distanceInterval)
 
     def generateFigureEight(self, intersectionStraightLength, intersectionWidth, distanceInterval):
@@ -147,7 +148,9 @@ class MapSpecs():
             # No light group, no control
             vCoordinates.append(0)
 
-        return xCoordinates, yCoordinates, vCoordinates
+        iCoordinates = [[0.0,0.0]]
+
+        return xCoordinates, yCoordinates, vCoordinates, iCoordinates
 
     def generateDoubleFigureEight(self, intersectionStraightLength, intersectionWidth, distanceInterval):
 
@@ -377,5 +380,6 @@ class MapSpecs():
             # No light group, no control
             vCoordinates.append(0)
 
+        iCoordinates = [[0.0,0.0], [-1.5,-1.5]]
 
-        return xCoordinates, yCoordinates, vCoordinates
+        return xCoordinates, yCoordinates, vCoordinates, iCoordinates

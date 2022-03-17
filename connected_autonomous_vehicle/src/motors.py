@@ -22,7 +22,7 @@ class Motors:
 
         # Create a simple PCA9685 class instance
         self.pca = PCA9685(i2c)
-        self.pca.frequency = 50
+        self.pca.frequency = 256
 
         # Start the PWM for the motor at 0
         self.motor = self.pca.channels[self.motorPIN]
