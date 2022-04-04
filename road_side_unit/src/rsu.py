@@ -14,7 +14,7 @@ from connected_autonomous_vehicle.src import planning_control as vehicle_plannin
 from connected_infrastructure_sensor.src import cis
 from connected_infrastructure_sensor.src import planning_stationary as camera_planning
 from shared_library import sensor, global_fusion, shared_math
-from road_side_unit.src import mapGenerator, communication
+from road_side_unit.src import mapGenerator, communication, sensor_verification
 
 class RSU():
     def __init__(self, config):
@@ -59,6 +59,9 @@ class RSU():
         # init global fusion
         self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
         self.globalFusionList = []
+
+        # init trust score method
+        self.trust = sensor_verification.TruPercept()
 
         # Lets create the vehicles
         self.step_sim_vehicle_tracker = []
