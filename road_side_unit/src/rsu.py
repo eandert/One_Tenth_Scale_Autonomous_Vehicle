@@ -33,7 +33,7 @@ class RSU():
         self.simulate_error = False
         self.real_lidar = False
         self.simulation = config.simulation
-        self.time = 1.0 # Time MUST start positive or it will be considered none!
+        self.time = 1.0 # Time MUST start positive or it will be considered none! #ORIG
         self.interval = config.interval
 
         # Unit test settings
@@ -82,13 +82,13 @@ class RSU():
         # Start the falsk server for communication
         self.initFlask(config.rsu_ip)
 
-        time.sleep(5)
+        time.sleep(5) #ORIG
 
         # If we are in a simulation, this will start the threads
         self.initSimulation(config)
 
-        self.timeout = math.ceil(self.getTime())
-        self.last_light = self.getTime()
+        self.timeout = math.ceil(self.getTime()) #ORIG
+        self.last_light = self.getTime() #ORIG
 
     def initUnitTestParams(self):
         # Keep track of stats if this is a simulation
@@ -119,23 +119,23 @@ class RSU():
         self.localization_differences = []
         self.localization_velocity = []
 
-    def getTime(self):
-        if self.simulation:
-            return self.time
-        else:
-            return time.time()
+    def getTime(self): #ORIG
+        if self.simulation: #ORIG
+            return self.time #ORIG
+        else: #ORIG
+            return time.time() #ORIG_NETWORKING
 
-    def initFlask(self, rsu_ip):
+    def initFlask(self, rsu_ip): #ORIG_NETWORKING
         # Start up the Flask front end processor as it's own thread
-        frontend = Thread(target=self.FlaskProccess, args=(self.q, self, rsu_ip, ))
-        frontend.daemon = True
-        frontend.start()
+        frontend = Thread(target=self.FlaskProccess, args=(self.q, self, rsu_ip, )) #ORIG_NETWORKING
+        frontend.daemon = True #ORIG_NETWORKING
+        frontend.start() #ORIG_NETWORKING
 
-    def FlaskProccess(self, q, rsu_instance, rsu_ip):
+    def FlaskProccess(self, q, rsu_instance, rsu_ip): #ORIG_NETWORKING
         # Startup the web service
-        communication.flask_app.config['RSUClass'] = rsu_instance
-        communication.flask_app.config['RSUQueue'] = q
-        communication.flask_app.run(host=rsu_ip, debug=True, use_reloader=False)
+        communication.flask_app.config['RSUClass'] = rsu_instance #ORIG_NETWORKING
+        communication.flask_app.config['RSUQueue'] = q #ORIG_NETWORKING
+        communication.flask_app.run(host=rsu_ip, debug=True, use_reloader=False) #ORIG_NETWORKING
 
     def initSimulation(self, config):
          # If this is a simulation, we need to start up the CAVs and CISs as threads
@@ -392,16 +392,16 @@ class RSU():
 
     def check_state(self):
         # Check if we are ready for sensor fusion
-        continue_blocker_check = False
-        for each in self.step_sim_vehicle_tracker:
-            if each:
-                continue_blocker_check = True
-        for each in self.step_sim_sensor_tracker:
-            if each:
-                continue_blocker_check = True
+        continue_blocker_check = False #ORIG
+        for each in self.step_sim_vehicle_tracker: #ORIG
+            if each: #ORIG
+                continue_blocker_check = True #ORIG
+        for each in self.step_sim_sensor_tracker: #ORIG
+            if each: #ORIG
+                continue_blocker_check = True #ORIG
 
-        if continue_blocker_check == False or (not self.simulation and self.getTime() > self.timeout):
-            self.step_sim_vehicle = False
+        if continue_blocker_check == False or (not self.simulation and self.getTime() > self.timeout): #ORIG
+            self.step_sim_vehicle = False #ORIG
             # Fusion time!
             # First we need to add the localization frame, since it should be the basis
             localizationsList = []
@@ -467,15 +467,15 @@ class RSU():
             self.timeout += self.interval
             
 
-    def stepSim(self):
-        if self.simulation:
-            self.step_sim_vehicle = True
-            for idx, thing in enumerate(self.step_sim_vehicle_tracker):
-                self.step_sim_vehicle_tracker[idx] = True
-            for idx, thing in enumerate(self.step_sim_sensor_tracker):
-                self.step_sim_sensor_tracker[idx] = True
-            self.time += self.interval
-            print ( "Sim time Stepped @: " , self.time)
+    def stepSim(self): #ORIG
+        if self.simulation: #ORIG
+            self.step_sim_vehicle = True #ORIG
+            for idx, thing in enumerate(self.step_sim_vehicle_tracker): #ORIG
+                self.step_sim_vehicle_tracker[idx] = True #ORIG
+            for idx, thing in enumerate(self.step_sim_sensor_tracker): #ORIG
+                self.step_sim_sensor_tracker[idx] = True #ORIG
+            self.time += self.interval #ORIG
+            print ( "Sim time Stepped @: " , self.time) #ORIG
 
     def sendGuiValues(self, velocity_targets, pause, end, button_states):
         # Check if the user has ended it all
@@ -590,7 +590,7 @@ class RSU():
             global_sensor_fusion_centroid=self.globalFusionList,
             traffic_light=self.trafficLightArray,
             returned=True
-        )
+        ) #ORIG
 
         return response
 
