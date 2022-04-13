@@ -50,6 +50,7 @@ class Tracked:
         self.track_count = 0
         self.fusion_steps = 0
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
+        self.last_frame_trackers = []
 
         # Build the match list and add our match to it
         self.match_list = []
@@ -214,8 +215,10 @@ class Tracked:
         lidarMeasureH = [0, 0]
         camMeasureH = [0, 0]
 
+        # Clear the old frame sensors
         lidar_added = False
         cam_added = False
+        self.last_frame_trackers = []
 
         # Time to go through the track list and fuse!
         for match in self.match_list:
@@ -238,6 +241,7 @@ class Tracked:
                 lidarMeasure = [match.x, match.y]
                 lidarMeasureH = [1, 1]
                 lidar_added = True
+                self.last_frame_trackers.append(0)
             elif match.id == CAMERA:
                 if estimate_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
@@ -255,6 +259,7 @@ class Tracked:
                 camMeasure = [match.x, match.y]
                 camMeasureH = [1, 1]
                 cam_added = True
+                self.last_frame_trackers.append(1)
 
         # Now do the kalman thing!
         if self.idx == 0:

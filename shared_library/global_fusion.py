@@ -388,6 +388,21 @@ class ResizableKalman:
                         self.X_hat_t = X_t
                         self.P_hat_t = self.P_t
 
+                # Lets check the accuracy of each sensing platform
+                error_tracker_temp = []
+                for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
+                    Z_t = (mu).transpose()
+                    Z_t = Z_t.reshape(Z_t.shape[0], -1)
+                    #print(Z_t, self.h_t(h_t_type).dot(self.X_hat_t))
+                    y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
+                    #print(y_t_temp)
+                    location_error = math.hypot(y_t_temp[0], y_t_temp[1])
+                    expected_location_error = math.hypot(cov[0][0], cov[1][1])
+                    #cov
+                    location_error_std = location_error / expected_location_error
+                    #self.error_tracker_temp.append([id, location_error, angle_error])
+                    print(" error: ", id, location_error, location_error_std)
+
                 self.prev_time = self.lastTracked
                 self.x = X_t[0][0]
                 self.y = X_t[1][0]
