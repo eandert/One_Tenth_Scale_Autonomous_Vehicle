@@ -523,45 +523,45 @@ class GlobalFUSION:
             
                 # Lets do the trust math here
                 # Add to the trust system
-                for frame in vehicle.fusionDetections:
-                    #result.append([universal_id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
-                    #addTrustFrame(self, cavID, trackId, confidenceScore, evlauationScore, visibilityScore, trustFrameScore, visibilityScore2, trustFrameScore2, time)
+                # for frame in vehicle.fusionDetections:
+                #     #result.append([universal_id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
+                #     #addTrustFrame(self, cavID, trackId, confidenceScore, evlauationScore, visibilityScore, trustFrameScore, visibilityScore2, trustFrameScore2, time)
 
-                    cav_id = 
+                #     cav_id = 
 
-                    # Get the expected error distance
-                    a, b, phi = shared_math.ellipsify(frame[3], 3.0)
-                    error_expected = math.hypot(a, b)
-                    # TODO: change this, for now all visibility is 1
-                    # Method 1 from peper
-                    angle = math.atan(observation.horizontalCrossSection/observation.detectionDistance)
-                    visibilitySum += angle
-                    visibilityScore = 1
-                    # Method 2, new method from
-                    visibilitySum2 += error_expected
-                    visibilityScore2.append(visibilitySum)
-                    # TODO: change this, for now all IOU is 1
-                    iou = 1
-                    if iou > self.iouThreshold:
-                        error_actual = math.hypot(observation.errorX_actual, observation.errorY_actual)
-                        # Calculate the standard deviations away, 0 is on the mean
-                        std_deviations_away = error_actual/error_expected
-                        # Divide this by 2 to give
-                        confidence = (1 - st.norm.cdf(std_deviations_away))/2.0
-                        evaluation = confidence
-                        iouMatchSum += confidence
-                        iouMatchSum2 += error_actual
-                    else:
-                        confidence = 0.0
-                        evaluation = confidence
-                        iouMatchSum += 0.0
-                        iouMatchSum2 += 0.0
-                    confidenceScore.append(confidence)
-                    evaluationScore.append(evaluation)
-                    vehicleTrustValue = iouMatchSum / visibilitySum
-                    vehicleTrustValue2 = iouMatchSum2 / visibilitySum2
+                #     # Get the expected error distance
+                #     a, b, phi = shared_math.ellipsify(frame[3], 3.0)
+                #     error_expected = math.hypot(a, b)
+                #     # TODO: change this, for now all visibility is 1
+                #     # Method 1 from peper
+                #     angle = math.atan(observation.horizontalCrossSection/observation.detectionDistance)
+                #     visibilitySum += angle
+                #     visibilityScore = 1
+                #     # Method 2, new method from
+                #     visibilitySum2 += error_expected
+                #     visibilityScore2.append(visibilitySum)
+                #     # TODO: change this, for now all IOU is 1
+                #     iou = 1
+                #     if iou > self.iouThreshold:
+                #         error_actual = math.hypot(observation.errorX_actual, observation.errorY_actual)
+                #         # Calculate the standard deviations away, 0 is on the mean
+                #         std_deviations_away = error_actual/error_expected
+                #         # Divide this by 2 to give
+                #         confidence = (1 - st.norm.cdf(std_deviations_away))/2.0
+                #         evaluation = confidence
+                #         iouMatchSum += confidence
+                #         iouMatchSum2 += error_actual
+                #     else:
+                #         confidence = 0.0
+                #         evaluation = confidence
+                #         iouMatchSum += 0.0
+                #         iouMatchSum2 += 0.0
+                #     confidenceScore.append(confidence)
+                #     evaluationScore.append(evaluation)
+                #     vehicleTrustValue = iouMatchSum / visibilitySum
+                #     vehicleTrustValue2 = iouMatchSum2 / visibilitySum2
 
-                    self.trust.addTrustFrame(cav_id, track.id, track.error_covariance.tolist(), )
+                #     self.trust.addTrustFrame(cav_id, track.id, track.error_covariance.tolist(), )
             # Clear the previous detection list
             track.clearLastFrame()
             # Clean up the tracks for next time
