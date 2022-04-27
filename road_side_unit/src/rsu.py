@@ -61,21 +61,24 @@ class RSU():
         self.globalFusionList = []
 
         # init trust score method
-        self.trust = sensor_verification.TruPercept()
+        self.error_dict = {}
 
         # Lets create the vehicles
         self.step_sim_vehicle_tracker = []
         self.step_sim_sensor_tracker = []
         for idx, vehicle in enumerate(config.cav):
             new_vehicle = vehicle_planning.Planner()
-            new_vehicle.initialVehicleAtPosition(vehicle[0], vehicle[1], vehicle[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, 0, vehicle[3])
+            new_vehicle.initialVehicleAtPosition(vehicle[0], vehicle[1], vehicle[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, idx, vehicle[3])
             self.vehicles[idx] = new_vehicle
             self.step_sim_vehicle_tracker.append(False)
+
+        # Offset the IDs for the cis sensors
+        self.cis_offset = len(config.cis) * global_fusion.max_id
 
         # Lets create the sensors
         for idx, cis in enumerate(config.cis):
             new_sensor = camera_planning.Planner()
-            new_sensor.initialSensorAtPosition(cis[0], cis[1], cis[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, 0, cis[3])
+            new_sensor.initialSensorAtPosition(cis[0], cis[1], cis[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, self.cis_offset, cis[3])
             self.sensors[idx] = new_sensor
             self.step_sim_sensor_tracker.append(False)
 
@@ -95,6 +98,10 @@ class RSU():
 
         self.timeout = math.ceil(self.getTime())
         self.last_light = self.getTime()
+
+        # Create the special id for localization data from each cav
+        self.localizationid = (1 + len(config.cav) + len(config.cis)) * global_fusion.max_id
+
 
     def initUnitTestParams(self):
         # Keep track of stats if this is a simulation
@@ -167,7 +174,7 @@ class RSU():
 
             for idx, sensor in self.sensors.items():
                 # Old way that is slow because of the Global Interpreter Lock
-                self.thread["cis"+str(idx)] = Thread(target=cis.cis, args=(config, idx, ))
+                self.thread["cis"+str(idx)] = Thread(target=cis.cis, args=(config, self.cis_offset + idx, ))
                 self.thread["cis"+str(idx)].daemon = True
                 self.thread["cis"+str(idx)].start()
 
@@ -219,6 +226,9 @@ class RSU():
             return registerResponse
 
         elif type == 1:
+            # subtract the id offset
+            id = id - self.cis_offset
+
             # Check if this vehicle ID is taken or not
             if id in self.sensors:
                 print(" Warning: Sensor ID already in use!")
@@ -323,6 +333,7 @@ class RSU():
         elif type == 1:
             # Double check our security, this is pretty naive at this point
             #if self.sensors[id].key == key:
+            id = id - self.cis_offset
             # Lets add the detections to the CIS class
             self.sensors[id].cameraDetections = detections["cam_obj"]
             self.sensors[id].lidarDetections = detections["lidar_obj"]
@@ -355,6 +366,7 @@ class RSU():
             if step_temp:
                 self.step_sim_vehicle_tracker[id] = False
         elif type == 1:
+            id = id - self.cis_offset
             step_temp = self.step_sim_sensor_tracker[id] and self.step_sim_vehicle
             if step_temp:
                 self.step_sim_sensor_tracker[id] = False
@@ -435,24 +447,55 @@ class RSU():
                 localizationsList = []
                 for idx, vehicle in self.vehicles.items():
                     # Add to the global sensor fusion
-                    localizationsList.append((vehicle.id-10,
+                    localizationsList.append((idx+self.localizationid,
                                               vehicle.localizationPositionX,
                                               vehicle.localizationPositionY,
                                               vehicle.localizationCovariance,
                                               0,
                                               0,
                                               -1))
-                self.globalFusion.processDetectionFrame(-1, self.getTime(), localizationsList, .25, self.estimate_covariance)
+                self.globalFusion.processDetectionFrame(0, self.getTime(), localizationsList, .25, self.estimate_covariance)
 
                 for idx, vehicle in self.vehicles.items():
                     # Add to the global sensor fusion
-                    self.globalFusion.processDetectionFrame(idx, self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
+                    self.globalFusion.processDetectionFrame(0, self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
 
                 for idx, sensor in self.sensors.items():
                     # Add to the global sensor fusion
-                    self.globalFusion.processDetectionFrame(idx, self.getTime(), sensor.fusionDetections, .25, self.estimate_covariance)
+                    self.globalFusion.processDetectionFrame(0, self.getTime(), sensor.fusionDetections, .25, self.estimate_covariance)
 
-                self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+                self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+
+                # Add our covariance data to the global sensor list
+                revolving_buffer_size = 100
+                for error_frame in error_data:
+                    # Check if this is a localizer or a sensor
+                    if error_frame[0]/self.localizationid >= 1:
+                        sensor_platform_id = error_frame[0]
+                    else:
+                        sensor_platform_id = math.floor(error_frame[0]/10000)
+                    if sensor_platform_id in self.error_dict:
+                        # Moving revolving_buffer_size place average
+                        if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
+                            self.error_dict[sensor_platform_id][0] += 1
+                            self.error_dict[sensor_platform_id][2].append(error_frame[2])
+                        # We have filled revolving_buffer_size places, time to revolve the buffer now
+                        else:
+                            if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
+                                # Replace the element with the next one
+                                self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                                self.error_dict[sensor_platform_id][1] += 1
+                            else:
+                                self.error_dict[sensor_platform_id][1] = 0
+                                self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                                self.error_dict[sensor_platform_id][1] += 1
+                    else:
+                        self.error_dict[sensor_platform_id] = [1,0,[error_frame[2]]]
+
+                for key in self.error_dict.keys():
+                    if self.error_dict[key][0] > 5:
+                        average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
+                        print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
 
                 # Ground truth to the original dataset
                 # Get the last known location of all other vehicles

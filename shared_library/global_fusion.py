@@ -50,6 +50,9 @@ class ResizableKalman:
         self.x = x
         self.y = y
 
+        # Store the covariance vs. expected
+        self.error_tracker_temp = []
+
         # Arbitrary to start with, updated each iteration
         self.elapsed = 0.125
 
@@ -388,6 +391,21 @@ class ResizableKalman:
                         self.X_hat_t = X_t
                         self.P_hat_t = self.P_t
 
+                # Lets check the accuracy of each sensing platform
+                self.error_tracker_temp = []
+                for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
+                    Z_t = (mu).transpose()
+                    Z_t = Z_t.reshape(Z_t.shape[0], -1)
+                    #print(Z_t, self.h_t(h_t_type).dot(self.X_hat_t))
+                    y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
+                    #print(y_t_temp)
+                    location_error = math.hypot(y_t_temp[0], y_t_temp[1])
+                    expected_location_error = math.hypot(cov[0][0], cov[1][1])
+                    #cov
+                    location_error_std = location_error / expected_location_error
+                    self.error_tracker_temp.append([id, location_error, location_error_std])
+                    #print(" error: ", id, location_error, location_error_std)
+
                 self.prev_time = self.lastTracked
                 self.x = X_t[0][0]
                 self.y = X_t[1][0]
@@ -443,6 +461,7 @@ class GlobalTracked:
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
         self.match_list = []
         self.fusion_steps = 0
+        self.error_monitor = []
 
         # Add this first match
         new_match = MatchClass(sensed_id, x, y, covariance, dx, dy, dcovariance, object_type, time)
@@ -487,6 +506,7 @@ class GlobalTracked:
         self.dx = self.kalman.dx
         self.dy = self.kalman.dy
         self.d_covariance = self.kalman.d_covariance
+        self.error_monitor = self.kalman.error_tracker_temp
         self.fusion_steps += 1
 
     def clearLastFrame(self):
@@ -515,11 +535,13 @@ class GlobalFUSION:
     def fuseDetectionFrame(self, estimate_covariance):
         # Time to go through each track list and fuse!
         result = []
+        cooperative_monitoring = []
         for track in self.trackedList:
             track.fusion(estimate_covariance)
             if track.fusion_steps >= self.trackShowThreshold:
-                #print ( track.id, track.x, track.y, track.error_covariance )
                 result.append([track.id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
+                if track.error_monitor:
+                    cooperative_monitoring = cooperative_monitoring + track.error_monitor
             
                 # Lets do the trust math here
                 # Add to the trust system
@@ -567,7 +589,7 @@ class GlobalFUSION:
             # Clean up the tracks for next time
             self.cleanDetections()
 
-        return result
+        return result, cooperative_monitoring
 
     def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimateCovariance):
         # We need to generate and add the detections from this detector

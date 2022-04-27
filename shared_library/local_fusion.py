@@ -16,7 +16,7 @@ MAX_ID = 10000
 
 
 class MatchClass:
-    def __init__(self, x, y, covariance, dx, dy, d_confidence, object_type, time, id):
+    def __init__(self, x, y, covariance, dx, dy, d_confidence, object_type, time, sensor_id):
         self.x = x
         self.y = y
         self.covariance = covariance
@@ -25,7 +25,7 @@ class MatchClass:
         self.velocity_confidence = d_confidence
         self.type = object_type
         self.last_tracked = time
-        self.id = id
+        self.sensor_id = sensor_id
 
 
 class Tracked:
@@ -219,7 +219,7 @@ class Tracked:
 
         # Time to go through the track list and fuse!
         for match in self.match_list:
-            if match.id == LIDAR:
+            if match.sensor_id == LIDAR:
                 if estimate_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                         vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
@@ -238,7 +238,7 @@ class Tracked:
                 lidarMeasure = [match.x, match.y]
                 lidarMeasureH = [1, 1]
                 lidar_added = True
-            elif match.id == CAMERA:
+            elif match.sensor_id == CAMERA:
                 if estimate_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                         vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
@@ -557,6 +557,7 @@ class FUSION:
         self.prev_time = -99.0
         self.min_size = 0.5
         self.fusion_mode = fusion_mode
+        self.current_tracked_id = 0
 
         # Indicate our success
         print('Started FUSION successfully...')
@@ -745,20 +746,20 @@ class FUSION:
                         if add_this:
                             added.append(add)
                             new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
-                                        detection_list[add][3], timestamp, self.id, self.fusion_mode)
-                            if self.id < MAX_ID:
-                                self.id += 1
+                                        detection_list[add][3], timestamp, self.current_tracked_id, self.fusion_mode)
+                            if self.current_tracked_id < MAX_ID:
+                                self.current_tracked_id += 1
                             else:
-                                self.id = 0
+                                self.current_tracked_id = 0
                             self.trackedList.append(new)
 
                 else:
                     for dl in detection_list:
-                        new = Tracked(dl[0], dl[1], dl[2], dl[3], timestamp, self.id, self.fusion_mode)
-                        if self.id < MAX_ID:
-                            self.id += 1
+                        new = Tracked(dl[0], dl[1], dl[2], dl[3], timestamp, self.current_tracked_id, self.fusion_mode)
+                        if self.current_tracked_id < MAX_ID:
+                            self.current_tracked_id += 1
                         else:
-                            self.id = 0
+                            self.current_tracked_id = 0
                         self.trackedList.append(new)
 
             remove = []
