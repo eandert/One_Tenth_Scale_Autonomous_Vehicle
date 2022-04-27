@@ -73,7 +73,7 @@ class RSU():
             self.step_sim_vehicle_tracker.append(False)
 
         # Offset the IDs for the cis sensors
-        self.cis_offset = len(config.cis) * global_fusion.max_id
+        self.cis_offset = len(config.cav)
 
         # Lets create the sensors
         for idx, cis in enumerate(config.cis):
@@ -302,12 +302,12 @@ class RSU():
                 # In the tfl 2 directions are considered, but for autonomous they need to be merged
                 targetIntersection = int((targetIntersection+1) / 2)
                 if targetIntersection > 0:
-                    print("intersection request: ", id, targetIntersection)
+                    #print("intersection request: ", id, targetIntersection)
                     intersection_pos = self.mapSpecs.iCoordinates[targetIntersection-1]
                     request_distance = math.hypot(self.vehicles[id].localizationPositionX-intersection_pos[0], self.vehicles[id].localizationPositionY-intersection_pos[1])
                     if (-(1/2*math.pi) <= shared_math.angleDifference(math.atan2(self.vehicles[id].localizationPositionY-intersection_pos[1], self.vehicles[id].localizationPositionX-intersection_pos[0]), self.vehicles[id].theta)):
                         request_distance = -request_distance
-                    print("intersection request dist: ", request_distance, shared_math.angleDifference(math.atan2(self.vehicles[id].localizationPositionY-intersection_pos[1], self.vehicles[id].localizationPositionX-intersection_pos[0]), self.vehicles[id].theta))
+                    #print("intersection request dist: ", request_distance, shared_math.angleDifference(math.atan2(self.vehicles[id].localizationPositionY-intersection_pos[1], self.vehicles[id].localizationPositionX-intersection_pos[0]), self.vehicles[id].theta))
                     av_intersection_permission = self.intersection_manager(id, request_distance, targetIntersection-1)
                 else:
                     # Not approaching an interseciton, allow travel
@@ -446,7 +446,7 @@ class RSU():
                 # First we need to add the localization frame, since it should be the basis
                 localizationsList = []
                 for idx, vehicle in self.vehicles.items():
-                    # Add to the global sensor fusion
+                    # Add to the global sensor fusion w/ unique ID
                     localizationsList.append((idx+self.localizationid,
                                               vehicle.localizationPositionX,
                                               vehicle.localizationPositionY,
@@ -454,20 +454,20 @@ class RSU():
                                               0,
                                               0,
                                               -1))
-                self.globalFusion.processDetectionFrame(0, self.getTime(), localizationsList, .25, self.estimate_covariance)
+                self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.estimate_covariance)
 
                 for idx, vehicle in self.vehicles.items():
                     # Add to the global sensor fusion
-                    self.globalFusion.processDetectionFrame(0, self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
+                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
 
                 for idx, sensor in self.sensors.items():
                     # Add to the global sensor fusion
-                    self.globalFusion.processDetectionFrame(0, self.getTime(), sensor.fusionDetections, .25, self.estimate_covariance)
+                    self.globalFusion.processDetectionFrame(self.getTime(), sensor.fusionDetections, .25, self.estimate_covariance)
 
                 self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
 
                 # Add our covariance data to the global sensor list
-                revolving_buffer_size = 100
+                revolving_buffer_size = 1000
                 for error_frame in error_data:
                     # Check if this is a localizer or a sensor
                     if error_frame[0]/self.localizationid >= 1:
@@ -564,7 +564,7 @@ class RSU():
             for idx, each in enumerate(velocity_targets):
                 self.vehicles[idx].targetVelocityGeneral = each
 
-            print( " trying to get values from gui! ")
+            #print( " trying to get values from gui! ")
 
             # Get other gui button states
             self.estimate_covariance = button_states['estimate_covariance']
@@ -573,7 +573,7 @@ class RSU():
             self.unit_test_state = button_states['unit_test']
             self.intersection_mode = button_states['intersection_mode']
 
-            print( " got values from gui! ")
+            #print( " got values from gui! ")
 
         response = dict(
             returned = True
@@ -702,7 +702,7 @@ class RSU():
                 # Confirm the vehicle is through and reset the intersection
                 self.intersection_serving[intersection_id] = -99
         # Check that we are not already in the intersection
-        print( request_id, " requested at ", request_distance, " current vehicle ", self.intersection_serving) 
+        #print( request_id, " requested at ", request_distance, " current vehicle ", self.intersection_serving) 
         if request_distance >= .25:
             # Check if there is a request, if not then enter
             if self.intersection_serving[intersection_id] == -99 and request_distance > .25:

@@ -99,8 +99,8 @@ class Localization:
         self.lateral_error_b = lateral_error_b
 
     def getErrorParamsAtVelocity(self, velocity, theta):
-        elipse_a_expected = self.longitudinal_error_x * velocity + self.longitudinal_error_b
-        elipse_b_expected = self.lateral_error_x * velocity + self.lateral_error_b
+        elipse_longitudinal_expected = self.longitudinal_error_x * velocity + self.longitudinal_error_b
+        elipse_lateral_expected = self.lateral_error_x * velocity + self.lateral_error_b
         elipse_angle_expected = theta
         # if elipse_a_expected > elipse_b_expected:
         #     elipse_angle_expected = theta
@@ -109,13 +109,13 @@ class Localization:
         #     elipse_a_expected = elipse_b_expected
         #     elipse_b_expected = elipse_temp
         #     elipse_angle_expected = theta + math.radians(90)
-        expected_error_gaussian = BivariateGaussian(elipse_a_expected,
-                                    elipse_b_expected,
+        expected_error_gaussian = BivariateGaussian(elipse_longitudinal_expected,
+                                    elipse_lateral_expected,
                                     elipse_angle_expected)
-        locErrorA_actual = np.random.normal(0, elipse_a_expected, 1)[0]
-        locErrorB_actual = np.random.normal(0, elipse_b_expected, 1)[0]
-        x_error_generated = (locErrorA_actual * math.cos(theta)) - (locErrorB_actual * math.sin(theta))
-        y_error_generated = (locErrorA_actual * math.sin(theta)) - (locErrorB_actual * math.cos(theta))
+        loc_error_longitudinal_actual = np.random.normal(0, elipse_longitudinal_expected, 1)[0]
+        loc_error_lateral_actual = np.random.normal(0, elipse_lateral_expected, 1)[0]
+        x_error_generated = (loc_error_longitudinal_actual * math.cos(theta)) - (loc_error_lateral_actual * math.sin(theta))
+        y_error_generated = (loc_error_longitudinal_actual * math.sin(theta)) - (loc_error_lateral_actual * math.cos(theta))
         actual_sim_error = [x_error_generated, y_error_generated]
         return expected_error_gaussian, actual_sim_error
 
@@ -172,7 +172,7 @@ class Sensor:
             if simulation:
                 # Calculate our expected errors in x,y coordinates
                 #print("de:", distal_error, " re:", object_distance * math.sin(radial_error))
-                actualRadialError = 0.0#np.random.normal(0, radial_error, 1)[0]
+                actualRadialError = np.random.normal(0, radial_error, 1)[0]
                 actualDistanceError = np.random.normal(0, distal_error, 1)[0]
                 x_actual = ((object_distance) * math.cos(
                     target_line_angle))

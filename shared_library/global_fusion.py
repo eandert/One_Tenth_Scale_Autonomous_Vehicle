@@ -444,17 +444,17 @@ class GlobalTracked:
     # We use this primarily to match objects seen between frames and included in here
     # is a function for kalman filter to smooth the x and y values as well as a
     # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, sensed_id, x, y, covariance, dx, dy, dcovariance, object_type, time, id, fusion_mode):
+    def __init__(self, sensor_id, x, y, covariance, dx, dy, dcovariance, time, track_id, fusion_mode):
         self.x = x
         self.y = y
         self.dx = 0
         self.dy = 0
         self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
-        self.typeArray = [0, 0, 0, 0]
-        self.typeArray[object_type] += 1
-        self.type = self.typeArray.index(max(self.typeArray))
+        #self.typeArray = [0, 0, 0, 0]
+        #self.typeArray[object_type] += 1
+        #self.type = self.typeArray.index(max(self.typeArray))
         self.lastTracked = time
-        self.id = id
+        self.id = track_id
         self.idx = 0
         self.min_size = 0.5
         self.track_count = 0
@@ -464,7 +464,7 @@ class GlobalTracked:
         self.error_monitor = []
 
         # Add this first match
-        new_match = MatchClass(sensed_id, x, y, covariance, dx, dy, dcovariance, object_type, time)
+        new_match = MatchClass(sensor_id, x, y, covariance, dx, dy, dcovariance, 0, time)
         self.match_list.append(new_match)
 
         # Kalman stuff
@@ -473,7 +473,7 @@ class GlobalTracked:
 
     # Update adds another detection to this track
     def update(self, other, time):
-        new_match = MatchClass(other[0], other[1], other[2], other[3], other[4], other[5], other[6], other[7], time)
+        new_match = MatchClass(other[0], other[1], other[2], other[3], other[4], other[5], other[6], 0, time)
         self.match_list.append(new_match)
 
         self.lastTracked = time
@@ -591,7 +591,7 @@ class GlobalFUSION:
 
         return result, cooperative_monitoring
 
-    def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimateCovariance):
+    def processDetectionFrame(self, timestamp, observations, cleanupTime, estimateCovariance):
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
@@ -615,7 +615,7 @@ class GlobalFUSION:
             #     # Use an arbitrary size if we have no covariance estimate
             detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
             #detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([det[0], det[1], det[2], np.array(det[3]), det[4], det[5], np.array(det[6]), sensor_id])
+            detections_list.append([det[0], det[1], det[2], np.array(det[3]), det[4], det[5], np.array(det[6])])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
@@ -723,7 +723,7 @@ class GlobalFUSION:
                         added.append(add)
                         new = GlobalTracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
                                       detection_list[add][3], detection_list[add][4], detection_list[add][5],
-                                      detection_list[add][6], detection_list[add][7], timestamp, self.id, self.fusion_mode)
+                                      detection_list[add][6], timestamp, self.id, self.fusion_mode)
                         if self.id < max_id:
                             self.id += 1
                         else:
@@ -732,7 +732,7 @@ class GlobalFUSION:
 
             else:
                 for dl in detection_list:
-                    new = GlobalTracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], dl[6], dl[7], timestamp, self.id, self.fusion_mode)
+                    new = GlobalTracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], dl[6], timestamp, self.id, self.fusion_mode)
                     if self.id < max_id:
                         self.id += 1
                     else:
