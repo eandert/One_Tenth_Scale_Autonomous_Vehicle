@@ -60,7 +60,7 @@ class ResizableKalman:
         self.min_size = .5
 
         # Process varaition guess
-        process_variation = 1
+        process_variation = .0625
 
         # Track the time of the last track
         self.lastTracked = time
@@ -87,12 +87,13 @@ class ResizableKalman:
             self.P_hat_t = self.P_t
             # Process cov
             four = process_variation * (.125*.125*.125*.125)/4.0
-            three = process_variation * (.125*.125*.125)/2.0
-            two = process_variation * (.125*.125)
-            self.Q_t = np.array([[four, 0, three, 0],
-                                [0, four, 0, three],
-                                [three, 0, two, 0],
-                                [0, three, 0, two]], dtype = 'float')
+            three = process_variation * (.125*.125*.125)/3.0
+            two = process_variation * (.125*.125)/2.0
+            one = process_variation * (.125)
+            self.Q_t = np.array([[three, 0, two, 0],
+                                [0, three, 0, two],
+                                [two, 0, process_variation, 0],
+                                [0, two, 0, process_variation]], dtype = 'float')
             # Control matrix
             self.B_t = np.array([[0], [0], [0], [0]], dtype = 'float')
             # Control vector

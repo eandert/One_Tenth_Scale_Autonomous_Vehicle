@@ -492,11 +492,6 @@ class RSU():
                     else:
                         self.error_dict[sensor_platform_id] = [1,0,[error_frame[2]]]
 
-                for key in self.error_dict.keys():
-                    if self.error_dict[key][0] > 5:
-                        average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
-                        print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
-
                 # Ground truth to the original dataset
                 # Get the last known location of all other vehicles
                 vehicleList = []
@@ -603,6 +598,13 @@ class RSU():
         else:
             map_specs = None
 
+        error_monitoring = []
+        for key in self.error_dict.keys():
+            if self.error_dict[key][0] > 5:
+                average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
+                error_monitoring.append(key, average_error, self.error_dict[key][0])
+                #print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
+
         for idx, vehicle in self.vehicles.items():
             # Add to the global sensor fusion
             vehicle_export.append([vehicle.localizationPositionX,
@@ -663,6 +665,7 @@ class RSU():
             sensor_localization_error=sensor_localization_error,
             global_sensor_fusion_centroid=self.globalFusionList,
             traffic_light=self.trafficLightArray,
+            error_monitoring=error_monitoring,
             returned=True
         )
 
