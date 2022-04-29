@@ -85,11 +85,11 @@ class Planner:
         self.lidarDetectionsRaw = []
 
         # Start sensors with standard error model
-        self.localization = sensor.Localization(0.075, .25, 0.1, .025)
+        self.localization = sensor.Localization(0.0782, 0.0428, 0.0841, 0.0241)
         self.lidarSensor = sensor.Sensor("M1M1", 0.0, 360, 15.0,
-                                               0, .05, .05, .083)
+                                               0.0097, 0.0361, 0.0165, 0.0607)
         self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
-                                               0, .025, .05, .15)
+                                               0.0117, 0.023, 0.0517, 0.0126)
         
     def initialVehicleAtPosition(self, x_init, y_init, theta_init, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
         self.targetVelocityGeneral = 0

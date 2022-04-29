@@ -105,8 +105,8 @@ class MainWindow(QMainWindow):
         self.covarianceButton = QPushButton('Estimate Local Covariance Off', self)
         self.covarianceButton.resize(140, 32)
         self.covarianceButton.move(1000, 390)
-        self.covarianceButton.clicked.connect(self.on_estimate_covariance_clicked)
-        self.estimate_covariance = False
+        self.covarianceButton.clicked.connect(self.on_parameterized_covariance_clicked)
+        self.parameterized_covariance = False
 
         self.pathButton = QPushButton('Path Debug Off', self)
         self.pathButton.resize(140, 32)
@@ -253,7 +253,7 @@ class MainWindow(QMainWindow):
         self.button_states = dict(
             full_simulation=self.full_simulation,
             simulate_error=self.simulate_error,
-            estimate_covariance=self.estimate_covariance,
+            parameterized_covariance=self.parameterized_covariance,
             path_debug=self.path_debug,
             lidar_debug=self.lidar_debug,
             camera_debug=self.camera_debug,
@@ -330,13 +330,13 @@ class MainWindow(QMainWindow):
                 self.simulate_error = False
                 self.errorButton.setText('Simulate Error Off')
 
-    def on_estimate_covariance_clicked(self):
+    def on_parameterized_covariance_clicked(self):
         if not self.unit_test:
             if self.covarianceButton.text() == 'Estimate Local Covariance Off':
-                self.estimate_covariance = True
+                self.parameterized_covariance = True
                 self.covarianceButton.setText('Estimate Local Covariance On')
             else:
-                self.estimate_covariance = False
+                self.parameterized_covariance = False
                 self.covarianceButton.setText('Estimate Local Covariance Off')
 
     def on_display_covariance_clicked(self):
@@ -498,11 +498,11 @@ class MainWindow(QMainWindow):
 
         # Check if our button have chagned, and if so create a new packet
         button_states_changed = False
-        if self.button_states['full_simulation'] != self.full_simulation or self.button_states['simulate_error'] != self.simulate_error or self.button_states['estimate_covariance'] != self.estimate_covariance or self.button_states['intersection_mode'] != self.intersection_mode:
+        if self.button_states['full_simulation'] != self.full_simulation or self.button_states['simulate_error'] != self.simulate_error or self.button_states['parameterized_covariance'] != self.parameterized_covariance or self.button_states['intersection_mode'] != self.intersection_mode:
             self.button_states = dict(
                 full_simulation=self.full_simulation,
                 simulate_error=self.simulate_error,
-                estimate_covariance=self.estimate_covariance,
+                parameterized_covariance=self.parameterized_covariance,
                 path_debug=self.path_debug,
                 lidar_debug=self.lidar_debug,
                 camera_debug=self.camera_debug,

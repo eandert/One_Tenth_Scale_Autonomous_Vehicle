@@ -29,7 +29,7 @@ class RSU():
 
         # Settings for the simulation
         self.step_sim_vehicle = False
-        self.estimate_covariance = False
+        self.parameterized_covariance = False
         self.simulate_error = False
         self.real_lidar = False
         self.simulation = config.simulation
@@ -78,7 +78,7 @@ class RSU():
         # Lets create the sensors
         for idx, cis in enumerate(config.cis):
             new_sensor = camera_planning.Planner()
-            new_sensor.initialSensorAtPosition(cis[0], cis[1], cis[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, self.cis_offset, cis[3])
+            new_sensor.initialSensorAtPosition(cis[0], cis[1], cis[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, self.cis_offset + idx, cis[3])
             self.sensors[idx] = new_sensor
             self.step_sim_sensor_tracker.append(False)
 
@@ -240,21 +240,21 @@ class RSU():
             if not self.simulation:
                 self.sensors[id].update_localization(False,[x, y, yaw, 0.0])
 
-            # Get the last known location of all other vehicles
+            # Get the last known location of all other sensors
             vehicleList = []
-            for idx, vehicle in self.vehicles.items():
+            for idx, vehicle in self.sensors.items():
                 if idx != id:
                     vehicleList.append(vehicle.get_location())
 
             # Finally we can create the return messages
             registerResponse = dict(
-                v_t=self.vehicles[id].targetVelocityGeneral,
-                t_x=self.vehicles[id].positionX_offset,
-                t_y=self.vehicles[id].positionY_offset,
+                v_t=self.sensors[id].targetVelocityGeneral,
+                t_x=self.sensors[id].positionX_offset,
+                t_y=self.sensors[id].positionY_offset,
                 t_z="0.0",
                 t_roll="0.0",
                 t_pitch="0.0",
-                t_yaw=self.vehicles[id].theta_offset,
+                t_yaw=self.sensors[id].theta_offset,
                 route_x=self.mapSpecs.xCoordinates,
                 route_y=self.mapSpecs.yCoordinates,
                 route_TFL=self.mapSpecs.vCoordinates,
@@ -379,7 +379,7 @@ class RSU():
             # Finally we can create the return messages
             response = dict(
                 step_sim_vehicle=step_temp,
-                estimate_covariance=self.estimate_covariance,
+                parameterized_covariance=self.parameterized_covariance,
                 simulate_error=self.simulate_error,
                 real_lidar=self.real_lidar,
                 veh_locations=vehicleList
@@ -454,17 +454,17 @@ class RSU():
                                               0,
                                               0,
                                               -1))
-                self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.estimate_covariance)
+                self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance)
 
                 for idx, vehicle in self.vehicles.items():
                     # Add to the global sensor fusion
-                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.estimate_covariance)
+                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.parameterized_covariance)
 
                 for idx, sensor in self.sensors.items():
                     # Add to the global sensor fusion
-                    self.globalFusion.processDetectionFrame(self.getTime(), sensor.fusionDetections, .25, self.estimate_covariance)
+                    self.globalFusion.processDetectionFrame(self.getTime(), sensor.fusionDetections, .25, self.parameterized_covariance)
 
-                self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+                self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance)
 
                 # Add our covariance data to the global sensor list
                 revolving_buffer_size = 1000
@@ -567,7 +567,7 @@ class RSU():
             #print( " trying to get values from gui! ")
 
             # Get other gui button states
-            self.estimate_covariance = button_states['estimate_covariance']
+            self.parameterized_covariance = button_states['parameterized_covariance']
             self.simulate_error = button_states['simulate_error']
             self.real_lidar = button_states['full_simulation']
             self.unit_test_state = button_states['unit_test']
@@ -799,7 +799,7 @@ class RSU():
 #             # Create that fake LIDAR
 #             if self.lidarRecognitionList[idx] != None:
 #                 localization_error_gaussian, localization_error = vehicle.localization.getErrorParamsAtVelocity(abs(vehicle.velocity), vehicle.theta)
-#                 if self.estimate_covariance:
+#                 if self.parameterized_covariance:
 #                     temp_covariance = localization_error_gaussian
 #                 else:
 #                     temp_covariance = sensor.BivariateGaussian(0.175, 0.175, 0)
@@ -839,9 +839,9 @@ class RSU():
 #                 vehicle.lidarPoints = point_cloud
 
 #                 # Do the local fusion like we would on the vehicle
-#                 self.localFusionCAV[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, vehicle.cameraDetections, .25, self.estimate_covariance)
-#                 self.localFusionCAV[idx].processDetectionFrame(local_fusion.LIDAR, self.time/1000.0, vehicle.lidarDetections, .25, self.estimate_covariance)
-#                 results = self.localFusionCAV[idx].fuseDetectionFrame(self.estimate_covariance, vehicle)
+#                 self.localFusionCAV[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, vehicle.cameraDetections, .25, self.parameterized_covariance)
+#                 self.localFusionCAV[idx].processDetectionFrame(local_fusion.LIDAR, self.time/1000.0, vehicle.lidarDetections, .25, self.parameterized_covariance)
+#                 results = self.localFusionCAV[idx].fuseDetectionFrame(self.parameterized_covariance, vehicle)
 
 #                 # Add to the GUI
 #                 vehicle.fusionDetections = []
@@ -934,8 +934,8 @@ class RSU():
 #                 # Fusion detection frame is the same as single camera (for now)
 #                 # Add to the GUI
 #                 # Do the local fusion like we would on the vehicle
-#                 self.localFusionCIS[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, cis.cameraDetections, .25, self.estimate_covariance)
-#                 results = self.localFusionCIS[idx].fuseDetectionFrame(self.estimate_covariance, cis)
+#                 self.localFusionCIS[idx].processDetectionFrame(local_fusion.CAMERA, self.time/1000.0, cis.cameraDetections, .25, self.parameterized_covariance)
+#                 results = self.localFusionCIS[idx].fuseDetectionFrame(self.parameterized_covariance, cis)
 
 #                 # Add to the GUI
 #                 cis.fusionDetections = []
@@ -1117,7 +1117,7 @@ class RSU():
 #                     self.unitTestButton.setEnabled(False)
 #                     self.full_simulation = True
 #                     self.simulate_error = True
-#                     self.estimate_covariance = False
+#                     self.parameterized_covariance = False
 #                     self.pause_simulation = False
 #                     self.real_lidar = False
 #                     self.unit_test_idx = 0
@@ -1125,7 +1125,7 @@ class RSU():
 #                     # Set the fusion modes
 #                     self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
 #                     self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
-#                     self.estimate_covariance = self.unitTest[self.unit_test_idx][2]
+#                     self.parameterized_covariance = self.unitTest[self.unit_test_idx][2]
 #                     self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
 #                     for idx, veh in self.vehicles.items():
 #                         if veh.simVehicle:
@@ -1163,7 +1163,7 @@ class RSU():
 #                     self.unit_test_state = 0
 #                     self.full_simulation = False
 #                     self.simulate_error = False
-#                     self.estimate_covariance = False
+#                     self.parameterized_covariance = False
 #                     self.pause_simulation = True
 #                     self.unitTestButton.setEnabled(True)
 #                     self.unit_test = False
@@ -1185,7 +1185,7 @@ class RSU():
 #                     # Set the fusion modes
 #                     self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
 #                     self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
-#                     self.estimate_covariance = self.unitTest[self.unit_test_idx][2]
+#                     self.parameterized_covariance = self.unitTest[self.unit_test_idx][2]
 #                     self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
 #                     for idx, veh in self.vehicles.items():
 #                         if veh.simVehicle:
@@ -1321,17 +1321,17 @@ class RSU():
 #             start_global = time.time()
 
 #             # First we need to add the localization frame, since it should be the basis
-#             self.globalFusion.processDetectionFrame(-1, self.time/1000.0, self.localizationsList, .25, self.estimate_covariance)
+#             self.globalFusion.processDetectionFrame(-1, self.time/1000.0, self.localizationsList, .25, self.parameterized_covariance)
 
 #             for idx, vehicle in self.vehicles.items():
 #                 # Add to the global sensor fusion
-#                 self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.estimate_covariance)
+#                 self.globalFusion.processDetectionFrame(idx, self.time/1000.0, vehicle.fusionDetections, .25, self.parameterized_covariance)
 
 #             for idx, cis in self.cis.items(): 
 #                 # Add to the global sensor fusion
-#                 self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.estimate_covariance)
+#                 self.globalFusion.processDetectionFrame(idx, self.time/1000.0, cis.fusionDetections, .25, self.parameterized_covariance)
 
-#             self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.estimate_covariance)
+#             self.globalFusionList = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance)
 
 #             # Ground truth to the original dataset
 #             testSetGlobal = []

@@ -284,7 +284,7 @@ def cav(config, vid):
                                     init["route_TFL"], vehicle_id, config.simulation)
     if debug: print( " Vehicle ", vehicle_id, " planner initialized " , planner.localizationPositionX, planner.localizationPositionY, planner.theta, planner.positionX_offset, planner.positionY_offset, planner.theta_offset)
 
-    # Do a quick check of the coordinates to make abounding box filter so that we can take out uneccessary points
+    # Do a quick check of the coordinates to make a bounding box filter so that we can take out uneccessary points
     min_x = 99.0
     max_x = -99.0
     min_y = 99.0
@@ -344,42 +344,8 @@ def cav(config, vid):
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                     if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
                 
-                tempList = sim_values['veh_locations']
-                lidar_returned = [[], [], None]
-                cam_returned = [[], None]
-                
-                # Faking sensor values according to configuration
-                localization_error_gaussian, localization_error = planner.localization.getErrorParamsAtVelocity(abs(planner.velocity), planner.theta)
-                if sim_values["estimate_covariance"]:
-                    temp_covariance = localization_error_gaussian
-                else:
-                    temp_covariance = sensor.BivariateGaussian(0.175, 0.175, 0)
-                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(planner, tempList, [], 15.0, 15.0, 0.0, 160.0)
-                lidar_returned[0] = [planner.localizationPositionX + localization_error[0], planner.localizationPositionY + localization_error[1],
-                                    planner.theta, planner.velocity, temp_covariance.covariance.tolist()]
-                if sim_values["simulate_error"]:
-                    cam_returned[0] = camera_error_array
-                    cam_returned[1] = fetch_time(simulation_time, global_time)
-                    planner.localizationError = localization_error_gaussian
-                    if sim_values["real_lidar"]:
-                        # TODO: check this seems wrong
-                        lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud_error, fetch_time(simulation_time, global_time),
-                            lidar_returned[0][0], lidar_returned[0][1], lidar_returned[0][2], planner.lidarSensor)
-                        planner.rawLidarDetections = point_cloud_error
-                    else:
-                        lidar_returned[1] = lidar_detected_error
-                        lidar_returned[2] = fetch_time(simulation_time, global_time)
-                        planner.rawLidarDetections = point_cloud_error
-                else:
-                    cam_returned[0] = camera_array
-                    cam_returned[1] = fetch_time(simulation_time, global_time)
-                    lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud, fetch_time(simulation_time, global_time),
-                        lidar_returned[0][0], lidar_returned[0][1], lidar_returned[0][2], planner.lidarSensor)
-                    planner.rawLidarDetections = point_cloud
-                planner.groundTruth = camera_array
-
-                # Raw LIDAR for debug
-                planner.lidarPoints = point_cloud
+                vehicle_object_positions = sim_values['veh_locations']
+                cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
 
                 lidar_recieved = True
                 camera_recieved = True

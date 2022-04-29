@@ -526,7 +526,7 @@ class GlobalFUSION:
         self.id = 0
         self.prev_time = -99.0
         self.min_size = 0.5
-        self.trackShowThreshold = 5
+        self.trackShowThreshold = 10
         self.fusion_mode = fusion_mode
 
         # Indicate our success

@@ -75,6 +75,7 @@ def cis(config, sid):
     sensor_planner = planning_stationary.Planner()
     sensor_planner.initialSensorAtPosition(response["t_x"], response["t_y"], response["t_yaw"], response["route_x"], response["route_y"],
                                     response["route_TFL"], sensor_id, config.simulation)
+    if debug: print( " CIS ", sensor_id, " planner initialized " , sensor_planner.localizationPositionX, sensor_planner.localizationPositionY, sensor_planner.theta, sensor_planner.positionX_offset, sensor_planner.positionY_offset, sensor_planner.theta_offset)
 
     # Fails keeps track of how many tries to connect with 
     fails = 0
@@ -103,33 +104,20 @@ def cis(config, sid):
                     sim_values = rsu.getSimPositions(sensor_id)
                     if debug: print( " CIS ", sensor_id, " requesting simulation positions" )
                 
-                tempList = sim_values['veh_locations']
-                cam_returned = [[], None]
+                vehicle_object_positions = sim_values['veh_locations']
 
-                # Faking sensor values according to configuration
-                localization_error_gaussian, localization_error = sensor_planner.localization.getErrorParamsAtVelocity(abs(sensor_planner.velocity), sensor_planner.theta)
-                if sim_values["estimate_covariance"]:
-                    temp_covariance = localization_error_gaussian
-                else:
-                    temp_covariance = sensor.BivariateGaussian(0.01, 0.01, 0)
-                point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = sensor.fake_lidar_and_camera(sensor_planner, tempList, [], 15.0, 15.0, 0.0, 160.0)
-                
-                if sim_values["simulate_error"]:
-                    cam_returned[0] = camera_error_array
-                    cam_returned[1] = fetch_time(simulation_time, global_time)
-                else:
-                    cam_returned[0] = camera_array
-                    cam_returned[1] = fetch_time(simulation_time, global_time)
+                cam_returned, lidar_returned = sensor.simulate_sensors(sensor_planner, None, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
                 camcoordinates = cam_returned[0]
-                camtimestamp =cam_returned[1]
+                camtimestamp = cam_returned[1]
+
             else:
                 # Process the camera frame
                 localization_error_gaussian, localization_error = sensor_planner.localization.getErrorParamsAtVelocity(abs(sensor_planner.velocity), sensor_planner.theta)
                 camcoordinates, camtimestamp = cameraRecognition.takeCameraFrame(settings, camSpecs)
 
-            # There is no LIDAR but this contains our localization
-            lidar_returned = [[], [], None]
-            lidar_returned[0] = [specs[0], specs[1], specs[2], 0.0, temp_covariance.covariance.tolist()]
+                # There is no LIDAR but this contains our localization
+                lidar_returned = [[], [], None]
+                lidar_returned[0] = [specs[0], specs[1], specs[2], 0.0, localization_error_gaussian.covariance.tolist()]
 
             localization = lidar_returned[0]
 

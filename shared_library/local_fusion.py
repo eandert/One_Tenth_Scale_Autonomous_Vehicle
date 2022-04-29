@@ -50,6 +50,7 @@ class Tracked:
         self.track_count = 0
         self.fusion_steps = 0
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
+        self.first = True
 
         # Build the match list and add our match to it
         self.match_list = []
@@ -206,7 +207,7 @@ class Tracked:
         ret_val[3][3] = ret_val[3][1] * x[3]
         return ret_val
 
-    def fusion(self, estimate_covariance, vehicle):
+    def fusion(self, parameterized_covariance, vehicle, predictive):
         lidarCov = np.array([[0.0, 0.0], [0.0, 0.0]])
         camCov = np.array([[0.0, 0.0], [0.0, 0.0]])
         lidarMeasure = [0, 0]
@@ -220,7 +221,7 @@ class Tracked:
         # Time to go through the track list and fuse!
         for match in self.match_list:
             if match.sensor_id == LIDAR:
-                if estimate_covariance:
+                if parameterized_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                         vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
                     success, lidar_expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(
@@ -239,7 +240,7 @@ class Tracked:
                 lidarMeasureH = [1, 1]
                 lidar_added = True
             elif match.sensor_id == CAMERA:
-                if estimate_covariance:
+                if parameterized_covariance:
                     relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                         vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
                     success, camera_expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(
@@ -392,7 +393,8 @@ class Tracked:
             #     self.P_t = self.ukf.P
             #     print(X_t, self.P_t)
             # else:
-            X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+
+            self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             # print ( "m ", measure )
             #print ( self.tempH_t )
@@ -443,10 +445,14 @@ class Tracked:
             Z_t = (measure).transpose()
             Z_t = Z_t.reshape(Z_t.shape[0], -1)
             # print ( "z_t2", Z_t )
-            X_t, self.P_t = shared_math.kalman_update(X_hat_t, self.P_hat_t, Z_t, covariance, H_t)
+            X_t, P_hat_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, covariance, H_t)
             self.X_hat_t = X_t
+            self.P_t = P_hat_t
 
-            self.P_hat_t = self.P_t
+            # Here we run an extra predictive step since it takes 125 ms to compute our data, but
+            # we do not save any of this and will re-run next time
+            if predictive:
+                X_t, P_hat_t = shared_math.kalman_prediction(X_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             self.prev_time = self.lastTracked
 
@@ -460,11 +466,11 @@ class Tracked:
                 self.dx = X_t[2][0]
                 self.dy = X_t[3][0]
             self.idx += 1
-            if self.P_t[0][0] != 0.0 or self.P_t[0][1] != 0.0:
-                self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]], dtype = 'float')
-                self.d_covariance = np.array([[self.P_t[2][2], self.P_t[2][3]], [self.P_t[3][2], self.P_t[3][3]]], dtype = 'float')
+            if P_hat_t[0][0] != 0.0 or P_hat_t[0][1] != 0.0:
+                self.error_covariance = np.array([[P_hat_t[0][0], P_hat_t[0][1]], [P_hat_t[1][0], P_hat_t[1][1]]], dtype = 'float')
+                self.d_covariance = np.array([[P_hat_t[2][2], P_hat_t[2][3]], [P_hat_t[3][2], P_hat_t[3][3]]], dtype = 'float')
             else:
-                #print ( " what the heck: ", self.P_t)
+                #print ( " what the heck: ", P_hat_t)
                 self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
                 self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
 
@@ -558,16 +564,18 @@ class FUSION:
         self.min_size = 0.5
         self.fusion_mode = fusion_mode
         self.current_tracked_id = 0
+        self.trackShowThreshold = 10
+        self.predictive =True
 
         # Indicate our success
         print('Started FUSION successfully...')
 
-    def fuseDetectionFrame(self, estimate_covariance, vehicle):
+    def fuseDetectionFrame(self, parameterized_covariance, vehicle):
         # Time to go through each track list and fuse!
         result = []
         for track in self.trackedList:
-            track.fusion(estimate_covariance, vehicle)
-            if track.fusion_steps >= 5:
+            track.fusion(parameterized_covariance, vehicle, self.predictive)
+            if track.fusion_steps >= self.trackShowThreshold:
                 # Calculate a custom ID that encodes the sensorid and local fusion track number
                 universal_id = self.id * MAX_ID + track.id
                 result.append([universal_id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])

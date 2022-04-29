@@ -27,16 +27,14 @@ class BivariateGaussian:
 
     def calculateRadiusAtAngle(self, a, b, phi, measurementAngle):
         denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
-        if denominator == 0:
-            print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
-            #print ( a, b, phi, measurementAngle )
-            return 0
+        if denominator == 0.0:
+            #print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
+            return 0.0
         else:
             return ( a * b ) / math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
 
     def calcSelfRadiusAtAnlge(self, angle, num_std_deviations):
         a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian(num_std_deviations)
-        #print ( a, b, phi)
         return self.calculateRadiusAtAngle(a, b, phi, angle)
 
     def eigsorted(self):
@@ -53,17 +51,30 @@ class BivariateGaussian:
         Source: http://stackoverflow.com/a/12321306/1391441
         """
 
+        if np.all((self.covariance == 0.0)):
+            return 0, 0, 0.0
+
         vals, vecs = self.eigsorted()
         phi = np.arctan2(*vecs[:, 0][::-1])
 
         # A and B are radii
-        a, b = num_std_deviations * np.sqrt(vals)
+        # if vals[0] > 0.00001 or vals[0] < -0.00001:
+        #     a = num_std_deviations * math.sqrt(abs(vals[0]))
+        # else:
+        #     a = 0.0
+        # if vals[1] > 0.00001 or vals[1] < -0.00001:
+        #     b = num_std_deviations * math.sqrt(abs(vals[1]))
+        # else:
+        #     b = 0.0
+
+        a = num_std_deviations * vals[0]
+        b = num_std_deviations * vals[1]
 
         return a, b, phi
 
     def calcXYComponents(self):
-        x_comp = abs(self.calcSelfRadiusAtAnlge(math.radians(0)), 1)
-        y_comp = abs(self.calcSelfRadiusAtAnlge(math.radians(90)), 1)
+        x_comp = self.calcSelfRadiusAtAnlge(math.radians(0), 1)
+        y_comp = self.calcSelfRadiusAtAnlge(math.radians(90), 1)
         return x_comp, y_comp
 
     def unionBivariateGaussians(self, gaussianB):
@@ -97,26 +108,34 @@ class Localization:
         self.longitudinal_error_b = longitudinal_error_b
         self.lateral_error_x = lateral_error_x
         self.lateral_error_b = lateral_error_b
+        self.static_error_range_average = .25
+        self.static_error = math.hypot(longitudinal_error_b + longitudinal_error_x * self.static_error_range_average, \
+                                    lateral_error_b + lateral_error_x * self.static_error_range_average)
 
     def getErrorParamsAtVelocity(self, velocity, theta):
         elipse_longitudinal_expected = self.longitudinal_error_x * velocity + self.longitudinal_error_b
         elipse_lateral_expected = self.lateral_error_x * velocity + self.lateral_error_b
         elipse_angle_expected = theta
-        # if elipse_a_expected > elipse_b_expected:
-        #     elipse_angle_expected = theta
-        # else:                
-        #     elipse_temp = elipse_a_expected
-        #     elipse_a_expected = elipse_b_expected
-        #     elipse_b_expected = elipse_temp
-        #     elipse_angle_expected = theta + math.radians(90)
         expected_error_gaussian = BivariateGaussian(elipse_longitudinal_expected,
                                     elipse_lateral_expected,
                                     elipse_angle_expected)
         loc_error_longitudinal_actual = np.random.normal(0, elipse_longitudinal_expected, 1)[0]
         loc_error_lateral_actual = np.random.normal(0, elipse_lateral_expected, 1)[0]
-        x_error_generated = (loc_error_longitudinal_actual * math.cos(theta)) - (loc_error_lateral_actual * math.sin(theta))
-        y_error_generated = (loc_error_longitudinal_actual * math.sin(theta)) - (loc_error_lateral_actual * math.cos(theta))
-        actual_sim_error = [x_error_generated, y_error_generated]
+        actual_error_gaussian = BivariateGaussian(loc_error_longitudinal_actual,
+                                    loc_error_lateral_actual,
+                                    elipse_angle_expected)
+        actual_sim_error = actual_error_gaussian.calcXYComponents()
+        print("loc: ", actual_sim_error)
+        return expected_error_gaussian, actual_sim_error
+
+    def getStaticErrorParams(self):
+        expected_error_gaussian = BivariateGaussian(self.static_error,
+                                    self.static_error,
+                                    0.0)
+        # It's just a circle so both are the same
+        loc_error_x = np.random.normal(0, self.static_error, 1)[0]
+        loc_error_y = np.random.normal(0, self.static_error, 1)[0]
+        actual_sim_error = [loc_error_x, loc_error_y]
         return expected_error_gaussian, actual_sim_error
 
 
@@ -153,36 +172,23 @@ class Sensor:
             radial_error = self.getRadialErrorAtDistance(object_distance)
             distal_error = self.getDistanceErrorAtDistance(object_distance)
             # Calculate our expected elipse error bounds
-            elipse_a_expected = distal_error
-            elipse_b_expected = object_distance * math.sin(radial_error)
             elipse_angle_expected = target_line_angle
-            # if elipse_a_expected > elipse_b_expected:
-            #     elipse_angle_expected = target_line_angle
-            # else:                
-            #     elipse_temp = elipse_a_expected
-            #     elipse_a_expected = elipse_b_expected
-            #     elipse_b_expected = elipse_temp
-            #     elipse_angle_expected = target_line_angle + math.radians(90)
-            expected_error_gaussian = BivariateGaussian(elipse_a_expected,
-                                      elipse_b_expected,
+            expected_error_gaussian = BivariateGaussian(distal_error,
+                                      radial_error,
                                       elipse_angle_expected)
-            #print("ae: ", elipse_a_expected, elipse_b_expected, math.degrees(target_line_angle), math.degrees(elipse_angle_expected))
-            #print("ae2: ", expected_error_gaussian.calcSelfRadiusAtAnlge(elipse_angle_expected, 1))
             # Calcuate the actual error if this is a simulation, otherwise just return
             if simulation:
                 # Calculate our expected errors in x,y coordinates
-                #print("de:", distal_error, " re:", object_distance * math.sin(radial_error))
                 actualRadialError = np.random.normal(0, radial_error, 1)[0]
                 actualDistanceError = np.random.normal(0, distal_error, 1)[0]
+                actual_error_gaussian = BivariateGaussian(actualDistanceError,
+                                      actualRadialError,
+                                      elipse_angle_expected)
                 x_actual = ((object_distance) * math.cos(
                     target_line_angle))
                 y_actual = ((object_distance) * math.sin(
                     target_line_angle))
-                # add the inline component distal error
-                x_error_generated = ((object_distance + actualDistanceError) * math.cos(elipse_angle_expected + actualRadialError))
-                y_error_generated = ((object_distance + actualDistanceError) * math.sin(elipse_angle_expected + actualRadialError))
-                actual_sim_error = [x_error_generated - x_actual, y_error_generated - y_actual]
-                #print( actual_sim_error )
+                actual_sim_error = actual_error_gaussian.calcXYComponents()
                 return True, expected_error_gaussian, actual_sim_error
             else:
                 actual_sim_error = [0.0, 0.0]
@@ -200,6 +206,47 @@ def addBivariateGaussians(gaussianA, gaussianB):
 
     return covariance_new
 
+# This function is parses the setting from the simulation and calls necessary functions to simulate
+# the sensors and their respective errors
+def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object_positions):
+    lidar_returned = [[], [], None]
+    cam_returned = [[], None]
+    if sim_values["parameterized_covariance"]:
+        localization_error_gaussian, localization_error = planner.localization.getErrorParamsAtVelocity(abs(planner.velocity), planner.theta)
+    else:
+        localization_error_gaussian, localization_error = planner.localization.getStaticErrorParams()
+    point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = fake_lidar_and_camera(planner, vehicle_object_positions, [], 15.0, 15.0, 0.0, 160.0)
+    if sim_values["simulate_error"]:
+        # Error injection
+        cam_returned[0] = camera_error_array
+        cam_returned[1] = time
+        planner.localizationError = localization_error_gaussian
+        lidar_returned[0] = [planner.localizationPositionX + localization_error[0], planner.localizationPositionY + localization_error[1],
+                    planner.theta, planner.velocity, localization_error_gaussian.covariance.tolist()]
+        if lidarRecognition != None:
+            if sim_values["real_lidar"]:
+                # TODO: check this seems wrong
+                lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud_error, time, 
+                    lidar_returned[0][0], lidar_returned[0][1], lidar_returned[0][2], planner.lidarSensor)
+                planner.rawLidarDetections = point_cloud_error
+            else:
+                lidar_returned[1] = lidar_detected_error
+                lidar_returned[2] = time
+                planner.rawLidarDetections = point_cloud_error
+    else:
+        # No error injection at all!
+        cam_returned[0] = camera_array
+        cam_returned[1] = time
+        lidar_returned[0] = [planner.localizationPositionX, planner.localizationPositionY,
+                    planner.theta, planner.velocity, np.array([[0.001,0.0],[0.0,0.001]]).tolist()]
+        if lidarRecognition != None:
+            lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud, time, 
+                lidar_returned[0][0], lidar_returned[0][1], lidar_returned[0][2], planner.lidarSensor)
+            planner.rawLidarDetections = point_cloud
+    planner.groundTruth = camera_array
+    planner.lidarPoints = point_cloud
+
+    return cam_returned, lidar_returned
 
 # This function is for full simulation where we fake both LIDAR and camera
 # TODO: modularize this more so we can consider other sensor locations and facing angles
