@@ -263,6 +263,18 @@ class MainWindow(QMainWindow):
             intersection_mode=self.intersection_mode
         )
 
+        if config.unit_test:
+            for idx, vehicle in enumerate(self.vehicles):
+                self.lineVehicleSpeed[idx].setText(str(config.unit_test_velocity))
+                self.lineVehicleSpeed[idx].setReadOnly(True)
+            self.sensorsButton.setEnabled(False)
+            self.errorButton.setEnabled(False)
+            self.covarianceButton.setEnabled(False)
+            self.endButton.setEnabled(True)
+            self.pauseButton.setEnabled(False)
+            self.startButton.setEnabled(False)
+            self.unitTestButton.setEnabled(False)
+
         print ( " GUI Init end ")
 
         # Do this forevvvvveerrrrr!!!
@@ -467,7 +479,7 @@ class MainWindow(QMainWindow):
         self.trafficLightArray = [0, 2, 0]
 
     def stepTime(self):
-        response = self.rsu_connection.getGuiValues(True)
+        response = self.rsu_connection.getGuiValues(False)
 
         if len(response) > 5:
 

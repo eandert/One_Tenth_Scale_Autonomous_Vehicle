@@ -24,10 +24,7 @@ def initGui(config):
     gui_handler.daemon = True
     gui_handler.start()
 
-if __name__ == "__main__":
-    # Configure the settings
-    conf = config.Setting("four_cav_simulation")
-
+def run_single_test(conf):
     # Setup the RSU
     rsu_instance = rsu.RSU(conf)
 
@@ -47,5 +44,35 @@ if __name__ == "__main__":
             sys.exit()
 
         time.sleep(.001)
+
+def run_unit_tests(conf):
+    # Setup the RSU
+    rsu_instance = rsu.RSU(conf)
+
+    time.sleep(1)
+
+    # Start the GUI
+    initGui(conf)
+
+    time.sleep(5)
+
+    rsu_instance.stepSim()
+
+    while(True):
+        rsu_instance.check_state()
+
+        if rsu_instance.end:
+            sys.exit()
+
+        time.sleep(.001)
+
+if __name__ == "__main__":
+    # Configure the settings
+    conf = config.Setting("four_cav_simulation")
+
+    if conf.unit_test:
+        run_unit_tests(conf)
+    else:
+        run_single_test(conf)
 
 sys.exit()

@@ -125,7 +125,7 @@ class Localization:
                                     loc_error_lateral_actual,
                                     elipse_angle_expected)
         actual_sim_error = actual_error_gaussian.calcXYComponents()
-        print("loc: ", actual_sim_error)
+        #print("loc: ", actual_sim_error)
         return expected_error_gaussian, actual_sim_error
 
     def getStaticErrorParams(self):

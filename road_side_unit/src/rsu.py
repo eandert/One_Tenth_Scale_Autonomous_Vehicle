@@ -38,6 +38,7 @@ class RSU():
         self.no_global_fusion = config.no_global_fusion
         self.intersection_mode = 0
         self.intersection_serving = [-99,-99]
+        self.unit_test = config.unit_test
 
         # Unit test settings
         self.unit_test_state = 0
@@ -47,9 +48,13 @@ class RSU():
 
         # Check the fusion mode from unit tests
         if config.unit_test:
-            self.unitTest = config.unit_test_config
-            self.local_fusion_mode = self.unitTest[0][0]
-            self.global_fusion_mode = self.unitTest[0][1]
+            self.local_fusion_mode = self.unit_test_config[0][0]
+            self.global_fusion_mode = self.unit_test_config[0][1]
+            self.full_simulation = True
+            self.simulate_error = True
+            self.parameterized_covariance = self.unit_test_config[0][2]
+            self.pause_simulation = False
+            self.real_lidar = False
         else:
             # Default to 1
             # TODO: add a button for this
@@ -492,39 +497,42 @@ class RSU():
                     else:
                         self.error_dict[sensor_platform_id] = [1,0,[error_frame[2]]]
 
-                # Ground truth to the original dataset
-                # Get the last known location of all other vehicles
-                vehicleList = []
-                for idx, vehicle in self.vehicles.items():
-                    vehicleList.append(vehicle.get_location())
-                testSetGlobal = []
-                groundTruthGlobal = []
-                for each in self.globalFusionList:
-                    sensed_x = each[1]
-                    sensed_y = each[2]
-                    testSetGlobal.append([sensed_x, sensed_y])
-                for each in vehicleList:
-                    sensed_x = each[0]
-                    sensed_y = each[1]
-                    groundTruthGlobal.append([sensed_x, sensed_y])
-                if len(testSetGlobal) >= 1 and len(groundTruthGlobal) >= 1:
-                    nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSetGlobal))
-                    distances, indices = nbrs.kneighbors(np.array(groundTruthGlobal))
+                if self.unit_test:
+                    # Ground truth to the original dataset
+                    # Get the last known location of all other vehicles
+                    vehicleList = []
+                    for idx, vehicle in self.vehicles.items():
+                        vehicleList.append(vehicle.get_location())
+                    testSetGlobal = []
+                    groundTruthGlobal = []
+                    for each in self.globalFusionList:
+                        sensed_x = each[1]
+                        sensed_y = each[2]
+                        testSetGlobal.append([sensed_x, sensed_y])
+                    for each in vehicleList:
+                        sensed_x = each[0]
+                        sensed_y = each[1]
+                        groundTruthGlobal.append([sensed_x, sensed_y])
+                    if len(testSetGlobal) >= 1 and len(groundTruthGlobal) >= 1:
+                        nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSetGlobal))
+                        distances, indices = nbrs.kneighbors(np.array(groundTruthGlobal))
 
-                    # Now calculate the score
-                    for dist in distances:
-                        if dist > 1.0:
-                            # Too far away to be considered a match, add as a miss instead
-                            self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
-                        else:
-                            self.global_differences.append(dist)
-                # Check how much large the test set is from the ground truth and add that as well
-                if len(testSetGlobal) > len(groundTruthGlobal):
-                    # Overdetection case
-                    self.global_over_detection_miss += len(testSetGlobal) - len(groundTruthGlobal)
-                elif len(testSetGlobal) < len(groundTruthGlobal):
-                    # Underdetection case, we count this differently because it may be from obstacle blocking
-                    self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+                        # Now calculate the score
+                        for dist in distances:
+                            if dist > 1.0:
+                                # Too far away to be considered a match, add as a miss instead
+                                self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+                            else:
+                                self.global_differences.append(dist)
+                    # Check how much large the test set is from the ground truth and add that as well
+                    if len(testSetGlobal) > len(groundTruthGlobal):
+                        # Overdetection case
+                        self.global_over_detection_miss += len(testSetGlobal) - len(groundTruthGlobal)
+                    elif len(testSetGlobal) < len(groundTruthGlobal):
+                        # Underdetection case, we count this differently because it may be from obstacle blocking
+                        self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+
+                    self.calcunitTestState()
             else:
                 self.globalFusionList = []
 
@@ -533,6 +541,8 @@ class RSU():
             self.update_traffic_lights()
 
             self.timeout += self.interval
+
+            self.packGuiValues(False)
             
 
     def stepSim(self):
@@ -576,7 +586,7 @@ class RSU():
 
         return response
     
-    def getGuiValues(self, coordinates):
+    def packGuiValues(self, coordinates):
         vehicle_export = []
         camera_fov = []
         camera_center = []
@@ -602,7 +612,7 @@ class RSU():
         for key in self.error_dict.keys():
             if self.error_dict[key][0] > 5:
                 average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
-                error_monitoring.append(key, average_error, self.error_dict[key][0])
+                error_monitoring.append([key, average_error, self.error_dict[key][0]])
                 #print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
 
         for idx, vehicle in self.vehicles.items():
@@ -669,7 +679,13 @@ class RSU():
             returned=True
         )
 
-        return response
+        self.gui_state = response
+
+    def getGuiValues(self, coordinates):
+        if coordinates:
+            self.packGuiValues(coordinates)
+
+        return self.gui_state
 
     def update_traffic_lights(self):
         if (self.getTime() - self.last_light) >= .125:
@@ -725,6 +741,154 @@ class RSU():
                 self.intersection_serving[intersection_id] = -99
             return True
 
+    def calcunitTestState(self):
+        test_time = 60000
+        test_time_print = 10000
+        if self.time % test_time_print == 0:
+            print("Test: ", 100 * (self.time % test_time)/test_time, "% num:", self.unit_test_idx)
+        if self.time % test_time == 0:
+            # Reset the map, unit testing has been selected
+            self.resetTest()
+
+            # Determing mode
+            if self.unit_test_state == 0:
+                self.full_simulation = True
+                self.simulate_error = True
+                self.parameterized_covariance = False
+                self.pause_simulation = False
+                self.real_lidar = False
+                self.unit_test_idx = 0
+
+                # Set the fusion modes
+                self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
+                self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
+                self.parameterized_covariance = self.unitTest[self.unit_test_idx][2]
+                self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
+                for idx, veh in self.vehicles.items():
+                    if veh.simVehicle:
+                        self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode
+                for idx, sens in self.cis.items():
+                    if sens.simCIS:
+                        self.localFusionCIS[idx].fusion_mode = self.local_fusion_mode
+
+                # Reset the stats
+                self.resetUnitTestStats()
+
+                # Increment the unit test counter for those long tests
+                self.unit_test_state = 1
+                self.unit_test_idx += 1
+            elif len(self.unitTest) <= self.unit_test_idx:
+                # Calculate the prior results
+                self.calcResultsOfUnitTest()
+                self.resetUnitTestStats()
+                self.printUnitTestStats()
+                
+                # Set everythign back to normal
+                self.real_lidar = True
+
+                # Test over
+                self.unit_test_state = 0
+                self.full_simulation = False
+                self.simulate_error = False
+                self.parameterized_covariance = False
+                self.pause_simulation = True
+                self.unit_test = False
+
+                sys.exit()
+            else:
+                # Calculate the prior results
+                self.calcResultsOfUnitTest()
+                self.resetUnitTestStats()
+
+                for idx, vehicle in self.vehicles.items():
+                    self.lineVehicleSpeed[idx].setText("0.5")
+                self.full_simulation = True
+                self.simulate_error = True
+                self.pause_simulation = False
+
+                # Set the fusion modes
+                self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
+                self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
+                self.parameterized_covariance = self.unitTest[self.unit_test_idx][2]
+                self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
+                for idx, veh in self.vehicles.items():
+                    if veh.simVehicle:
+                        self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode
+                for idx, sens in self.cis.items():
+                    if sens.simCIS:
+                        self.localFusionCIS[idx].fusion_mode = self.local_fusion_mode
+
+                # Incrememt the unit test state
+                self.unit_test_idx += 1
+
+    def calcResultsOfUnitTest(self):
+        # Calculate the prior results
+        # Localization
+        differences_squared_l = np.array(self.localization_differences) ** 2
+        mean_of_differences_squared_l = differences_squared_l.mean()
+        rmse_val_l = np.sqrt(mean_of_differences_squared_l)
+        variance_l = np.var(self.localization_differences,ddof=1)
+        self.slam_rmse = rmse_val_l
+        self.slam_variance = variance_l
+
+        # self.unit_test_localization_rmse_results.append(rmse_val_l)
+        # self.unit_test_localization_variance_results.append(variance_l)
+
+        # Onboard
+        differences_squared = np.array(self.local_differences) ** 2
+        mean_of_differences_squared = differences_squared.mean()
+        rmse_val = np.sqrt(mean_of_differences_squared)
+        variance = np.var(self.local_differences,ddof=1)
+        self.local_rmse = rmse_val
+        self.local_variance = variance
+
+        # self.unit_test_local_rmse_results.append(rmse_val)
+        # self.unit_test_local_variance_results.append(variance)
+        # self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
+        # self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
+
+        # Global
+        differences_squared_g = np.array(self.global_differences) ** 2
+        mean_of_differences_squared_g = differences_squared_g.mean()
+        rmse_val_g = np.sqrt(mean_of_differences_squared_g)
+        variance_g = np.var(self.global_differences,ddof=1)
+        self.global_rmse = rmse_val_g
+        self.global_variance = variance_g
+
+        # self.unit_test_global_rmse_results.append(rmse_val_g)
+        # self.unit_test_global_variance_results.append(variance_g)
+        # self.unit_test_global_under_detection_miss_results.append(self.global_under_detection_miss)
+        # self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
+
+    def printUnitTestStats(self):
+        idx = 0
+        fails = 0
+        for l_rmse, l_var, o_rmse, o_var, o_u_miss, o_o_miss, g_rmse, g_var, g_u_miss, g_o_miss in zip(self.unit_test_localization_rmse_results, self.unit_test_localization_variance_results, 
+            self.unit_test_local_rmse_results, self.unit_test_local_variance_results,
+            self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
+            self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
+            self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
+            print( "Test: ", idx, " g_mode:", self.unitTest[idx][0], " l_mode:", self.unitTest[idx][1], " est_cov:", self.unitTest[idx][2] )
+            print( "  localization_rmse_val: ", l_rmse, " variance: ", l_var)
+            print( "  onboard_rmse_val: ", o_rmse, " variance: ", o_var, " over misses: ", o_o_miss, " under misses: ", o_u_miss)
+            print( "  global_rmse_val: ", g_rmse, " variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
+            # if idx == 0:
+            #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
+            #         fails += 1
+            # elif idx == 1:
+            #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
+            #         fails += 1
+            idx += 1
+
+    def resetUnitTestStats(self):
+        # Reset the stats
+        self.localization_differences = []
+        self.local_over_detection_miss = 0
+        self.local_under_detection_miss = 0
+        self.local_differences = []
+        self.global_over_detection_miss = 0
+        self.global_under_detection_miss = 0
+        self.global_differences = []
 
 # def BackendProcessor(q, vehicles, sensors, trafficLightArray):
 #     while True:
