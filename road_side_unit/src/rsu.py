@@ -17,7 +17,7 @@ from shared_library import sensor, global_fusion, shared_math
 from road_side_unit.src import mapGenerator, communication, sensor_verification
 
 class RSU():
-    def __init__(self, config):
+    def __init__(self, config, unit_test_idx = 0):
         # Trackers for varios things in the simulation
         self.mapSpecs = mapGenerator.MapSpecs(config.map, config.map_length)
         self.vehicles = {}
@@ -35,7 +35,7 @@ class RSU():
         self.simulation = config.simulation
         self.time = 1.0 # Time MUST start positive or it will be considered none!
         self.interval = config.interval
-        self.no_global_fusion = config.no_global_fusion
+        self.use_global_fusion = not config.use_global_fusion
         self.intersection_mode = 0
         self.intersection_serving = [-99,-99]
         self.unit_test = config.unit_test
@@ -48,13 +48,15 @@ class RSU():
 
         # Check the fusion mode from unit tests
         if config.unit_test:
-            self.local_fusion_mode = self.unit_test_config[0][0]
-            self.global_fusion_mode = self.unit_test_config[0][1]
+            self.local_fusion_mode = self.unit_test_config[unit_test_idx][0]
+            self.global_fusion_mode = self.unit_test_config[unit_test_idx][1]
             self.full_simulation = True
             self.simulate_error = True
-            self.parameterized_covariance = self.unit_test_config[0][2]
+            self.parameterized_covariance = self.unit_test_config[unit_test_idx][2]
             self.pause_simulation = False
             self.real_lidar = False
+            self.unit_test_time = config.unit_test_time
+            self.unit_test_speed_target = config.unit_test_speed_target
         else:
             # Default to 1
             # TODO: add a button for this
@@ -103,6 +105,11 @@ class RSU():
 
         self.timeout = math.ceil(self.getTime())
         self.last_light = self.getTime()
+
+        # Set unit test velocity targets
+        if self.unit_test:
+            for idx, each in enumerate(self.vehicles):
+                self.vehicles[idx].targetVelocityGeneral = self.unit_test_speed_target
 
         # Create the special id for localization data from each cav
         self.localizationid = (1 + len(config.cav) + len(config.cis)) * global_fusion.max_id
@@ -446,7 +453,7 @@ class RSU():
         if continue_blocker_check == False or (not self.simulation and self.getTime() > self.timeout):
             self.step_sim_vehicle = False
 
-            if not self.no_global_fusion:
+            if self.use_global_fusion:
                 # Fusion time!
                 # First we need to add the localization frame, since it should be the basis
                 localizationsList = []
@@ -471,31 +478,32 @@ class RSU():
 
                 self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance)
 
-                # Add our covariance data to the global sensor list
-                revolving_buffer_size = 1000
-                for error_frame in error_data:
-                    # Check if this is a localizer or a sensor
-                    if error_frame[0]/self.localizationid >= 1:
-                        sensor_platform_id = error_frame[0]
-                    else:
-                        sensor_platform_id = math.floor(error_frame[0]/10000)
-                    if sensor_platform_id in self.error_dict:
-                        # Moving revolving_buffer_size place average
-                        if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
-                            self.error_dict[sensor_platform_id][0] += 1
-                            self.error_dict[sensor_platform_id][2].append(error_frame[2])
-                        # We have filled revolving_buffer_size places, time to revolve the buffer now
+                if self.cooperative_monitoring:
+                    # Add our covariance data to the global sensor list
+                    revolving_buffer_size = 1000
+                    for error_frame in error_data:
+                        # Check if this is a localizer or a sensor
+                        if error_frame[0]/self.localizationid >= 1:
+                            sensor_platform_id = error_frame[0]
                         else:
-                            if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
-                                # Replace the element with the next one
-                                self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
-                                self.error_dict[sensor_platform_id][1] += 1
+                            sensor_platform_id = math.floor(error_frame[0]/10000)
+                        if sensor_platform_id in self.error_dict:
+                            # Moving revolving_buffer_size place average
+                            if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
+                                self.error_dict[sensor_platform_id][0] += 1
+                                self.error_dict[sensor_platform_id][2].append(error_frame[2])
+                            # We have filled revolving_buffer_size places, time to revolve the buffer now
                             else:
-                                self.error_dict[sensor_platform_id][1] = 0
-                                self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
-                                self.error_dict[sensor_platform_id][1] += 1
-                    else:
-                        self.error_dict[sensor_platform_id] = [1,0,[error_frame[2]]]
+                                if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
+                                    # Replace the element with the next one
+                                    self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                                    self.error_dict[sensor_platform_id][1] += 1
+                                else:
+                                    self.error_dict[sensor_platform_id][1] = 0
+                                    self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                                    self.error_dict[sensor_platform_id][1] += 1
+                        else:
+                            self.error_dict[sensor_platform_id] = [1,0,[error_frame[2]]]
 
                 if self.unit_test:
                     # Ground truth to the original dataset
@@ -543,6 +551,12 @@ class RSU():
             self.timeout += self.interval
 
             self.packGuiValues(False)
+
+            if self.unit_test:
+                if self.time > self.unit_test_time:
+                    return True, []
+            
+            return False, []
             
 
     def stepSim(self):
@@ -566,8 +580,9 @@ class RSU():
             self.pause_simulation = pause
 
             # Get CAV velocity targets from GUI
-            for idx, each in enumerate(velocity_targets):
-                self.vehicles[idx].targetVelocityGeneral = each
+            if not self.unit_test:
+                for idx, each in enumerate(velocity_targets):
+                    self.vehicles[idx].targetVelocityGeneral = each
 
             #print( " trying to get values from gui! ")
 
@@ -609,11 +624,12 @@ class RSU():
             map_specs = None
 
         error_monitoring = []
-        for key in self.error_dict.keys():
-            if self.error_dict[key][0] > 5:
-                average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
-                error_monitoring.append([key, average_error, self.error_dict[key][0]])
-                #print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
+        if self.cooperative_monitoring:
+            for key in self.error_dict.keys():
+                if self.error_dict[key][0] > 5:
+                    average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
+                    error_monitoring.append([key, average_error, self.error_dict[key][0]])
+                    #print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
 
         for idx, vehicle in self.vehicles.items():
             # Add to the global sensor fusion
@@ -740,86 +756,6 @@ class RSU():
             if self.intersection_serving[intersection_id] == request_id:
                 self.intersection_serving[intersection_id] = -99
             return True
-
-    def calcunitTestState(self):
-        test_time = 60000
-        test_time_print = 10000
-        if self.time % test_time_print == 0:
-            print("Test: ", 100 * (self.time % test_time)/test_time, "% num:", self.unit_test_idx)
-        if self.time % test_time == 0:
-            # Reset the map, unit testing has been selected
-            self.resetTest()
-
-            # Determing mode
-            if self.unit_test_state == 0:
-                self.full_simulation = True
-                self.simulate_error = True
-                self.parameterized_covariance = False
-                self.pause_simulation = False
-                self.real_lidar = False
-                self.unit_test_idx = 0
-
-                # Set the fusion modes
-                self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
-                self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
-                self.parameterized_covariance = self.unitTest[self.unit_test_idx][2]
-                self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
-                for idx, veh in self.vehicles.items():
-                    if veh.simVehicle:
-                        self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode
-                for idx, sens in self.cis.items():
-                    if sens.simCIS:
-                        self.localFusionCIS[idx].fusion_mode = self.local_fusion_mode
-
-                # Reset the stats
-                self.resetUnitTestStats()
-
-                # Increment the unit test counter for those long tests
-                self.unit_test_state = 1
-                self.unit_test_idx += 1
-            elif len(self.unitTest) <= self.unit_test_idx:
-                # Calculate the prior results
-                self.calcResultsOfUnitTest()
-                self.resetUnitTestStats()
-                self.printUnitTestStats()
-                
-                # Set everythign back to normal
-                self.real_lidar = True
-
-                # Test over
-                self.unit_test_state = 0
-                self.full_simulation = False
-                self.simulate_error = False
-                self.parameterized_covariance = False
-                self.pause_simulation = True
-                self.unit_test = False
-
-                sys.exit()
-            else:
-                # Calculate the prior results
-                self.calcResultsOfUnitTest()
-                self.resetUnitTestStats()
-
-                for idx, vehicle in self.vehicles.items():
-                    self.lineVehicleSpeed[idx].setText("0.5")
-                self.full_simulation = True
-                self.simulate_error = True
-                self.pause_simulation = False
-
-                # Set the fusion modes
-                self.local_fusion_mode = self.unitTest[self.unit_test_idx][0]
-                self.global_fusion_mode = self.unitTest[self.unit_test_idx][1]
-                self.parameterized_covariance = self.unitTest[self.unit_test_idx][2]
-                self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
-                for idx, veh in self.vehicles.items():
-                    if veh.simVehicle:
-                        self.localFusionCAV[idx].fusion_mode = self.local_fusion_mode
-                for idx, sens in self.cis.items():
-                    if sens.simCIS:
-                        self.localFusionCIS[idx].fusion_mode = self.local_fusion_mode
-
-                # Incrememt the unit test state
-                self.unit_test_idx += 1
 
     def calcResultsOfUnitTest(self):
         # Calculate the prior results

@@ -22,7 +22,7 @@ class Setting:
                         self.unit_test_config = None
                         self.gui_interval = 100 # 1 hz to slow down the toll on the RSU
                         self.data_collect_mode = True
-                        self.no_global_fusion = True
+                        self.use_global_fusion = False
                 elif "four_cav_simulation" in setting:
                         print("         Config: four_cav_simulation selected")
                         # Working 4 CAV simulation
@@ -45,7 +45,7 @@ class Setting:
                         self.unit_test_config = None
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
-                        self.no_global_fusion = False
+                        self.use_global_fusion = True
                 elif "four_cav_simulation_unit_test" in setting:
                         print("         Config: four_cav_simulation selected")
                         # Working 4 CAV simulation
@@ -71,7 +71,8 @@ class Setting:
                         self.unit_test_config = [[0,0,False], [0,0,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
-                        self.no_global_fusion = False
+                        self.use_global_fusion = True
+                        self.cooperative_monitoring = True
                 else:
                         print("         Config: two_cav_simulation selected")
                         # Working 2 CAV simulation
@@ -91,5 +92,5 @@ class Setting:
                         self.unit_test = False
                         self.unit_test_config = None
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
-                        self.no_global_fusion = False
+                        self.use_global_fusion = True
                 print(" Config complete, using map: ", self.map)
