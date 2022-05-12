@@ -540,7 +540,7 @@ class RSU():
                         # Underdetection case, we count this differently because it may be from obstacle blocking
                         self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
 
-                    self.calcunitTestState()
+                    self.calculate_unit_test_state()
             else:
                 self.globalFusionList = []
 
@@ -757,7 +757,7 @@ class RSU():
                 self.intersection_serving[intersection_id] = -99
             return True
 
-    def calcResultsOfUnitTest(self):
+    def calculate_unit_test_results(self):
         # Calculate the prior results
         # Localization
         differences_squared_l = np.array(self.localization_differences) ** 2
@@ -796,7 +796,7 @@ class RSU():
         # self.unit_test_global_under_detection_miss_results.append(self.global_under_detection_miss)
         # self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
 
-    def printUnitTestStats(self):
+    def calculate_unit_test_state(self):
         idx = 0
         fails = 0
         for l_rmse, l_var, o_rmse, o_var, o_u_miss, o_o_miss, g_rmse, g_var, g_u_miss, g_o_miss in zip(self.unit_test_localization_rmse_results, self.unit_test_localization_variance_results, 
@@ -816,7 +816,7 @@ class RSU():
             #         fails += 1
             idx += 1
 
-    def resetUnitTestStats(self):
+    def reset_unit_test(self):
         # Reset the stats
         self.localization_differences = []
         self.local_over_detection_miss = 0
@@ -825,6 +825,11 @@ class RSU():
         self.global_over_detection_miss = 0
         self.global_under_detection_miss = 0
         self.global_differences = []
+
+    def end_threads(self):
+        for thread in self.thread:
+            thread.kill()
+            thread.join()
 
 # def BackendProcessor(q, vehicles, sensors, trafficLightArray):
 #     while True:

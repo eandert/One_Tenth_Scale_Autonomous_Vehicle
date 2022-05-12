@@ -21,12 +21,20 @@ class UnitTest():
         self.unit_test_idx = 0
 
     def run(self, config):
-        # Determing mode
-        if self.unit_test_state == 0:
-            self.unit_test_idx = 0
+        self.unit_test_idx = 0
 
+        # Determing mode
+        if len(self.unitTest) <= self.unit_test_idx:
+            # Calculate the prior results
+            self.calcResultsOfUnitTest()
+            self.resetUnitTestStats()
+            self.printUnitTestStats()
+            
+            # Test over
+            sys.exit()
+        else:
             # Setup the RSU
-            rsu_instance = rsu.RSU(conf)
+            rsu_instance = rsu.RSU(conf, self.unit_test_idx)
 
             time.sleep(1)
 
@@ -41,7 +49,7 @@ class UnitTest():
                 test_end, stats = rsu_instance.check_state()
 
                 if test_end:
-                    rsu_instance.end = True
+                    rsu_instance.end_threads() = True
                     break
 
                 if rsu_instance.end:
@@ -53,22 +61,6 @@ class UnitTest():
             self.addUnitTestStats(stats)
 
             # Reset the stats
-            self.resetUnitTestStats()
-
-            # Increment the unit test counter for those long tests
-            self.unit_test_state = 1
-            self.unit_test_idx += 1
-        elif len(self.unitTest) <= self.unit_test_idx:
-            # Calculate the prior results
-            self.calcResultsOfUnitTest()
-            self.resetUnitTestStats()
-            self.printUnitTestStats()
-            
-            # Test over
-            sys.exit()
-        else:
-            # Calculate the prior results
-            self.calcResultsOfUnitTest()
             self.resetUnitTestStats()
 
             # Incrememt the unit test state
