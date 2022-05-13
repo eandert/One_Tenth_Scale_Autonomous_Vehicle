@@ -24,11 +24,9 @@ class UnitTest():
         self.unit_test_idx = 0
 
         # Determing mode
-        if len(self.unitTest) <= self.unit_test_idx:
+        if len(config.unit_test_config) <= self.unit_test_idx:
             # Calculate the prior results
-            self.calcResultsOfUnitTest()
-            self.resetUnitTestStats()
-            self.printUnitTestStats()
+            self.print_unit_test_stats()
             
             # Test over
             sys.exit()
@@ -45,11 +43,12 @@ class UnitTest():
 
             rsu_instance.stepSim()
 
+            stats = [0,0,0,0,0,0,0,0,0,0]
             while(True):
                 test_end, stats = rsu_instance.check_state()
 
                 if test_end:
-                    rsu_instance.end_threads() = True
+                    rsu_instance.end_threads()
                     break
 
                 if rsu_instance.end:
@@ -58,15 +57,31 @@ class UnitTest():
                 time.sleep(.001)
 
             # Add the test state
-            self.addUnitTestStats(stats)
-
-            # Reset the stats
-            self.resetUnitTestStats()
+            self.add_unit_test_stats(stats)
+            self.print_unit_test_stats()
 
             # Incrememt the unit test state
             self.unit_test_idx += 1
 
-    def printUnitTestStats(self):
+    def add_unit_test_stats(self, stats):
+        # Calculate the prior results
+        # Localization
+        self.unit_test_localization_rmse_results.append(stats[0])
+        self.unit_test_localization_variance_results.append(stats[1])
+
+        # Onboard
+        self.unit_test_local_rmse_results.append(stats[2])
+        self.unit_test_local_variance_results.append(stats[3])
+        self.unit_test_local_under_detection_miss_results.append(stats[4])
+        self.unit_test_local_over_detection_miss_results.append(stats[5])
+
+        # Global
+        self.unit_test_global_rmse_results.append(stats[6])
+        self.unit_test_global_variance_results.append(stats[7])
+        self.unit_test_global_under_detection_miss_results.append(stats[8])
+        self.unit_test_global_over_detection_miss_results.append(stats[9])
+
+    def print_unit_test_stats(self):
         idx = 0
         fails = 0
         for l_rmse, l_var, o_rmse, o_var, o_u_miss, o_o_miss, g_rmse, g_var, g_u_miss, g_o_miss in zip(self.unit_test_localization_rmse_results, self.unit_test_localization_variance_results, 
@@ -74,16 +89,10 @@ class UnitTest():
             self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
             self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
             self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
-            print( "Test: ", idx, " g_mode:", self.unitTest[idx][0], " l_mode:", self.unitTest[idx][1], " est_cov:", self.unitTest[idx][2] )
+            print( "Test: ", idx, " l_mode:", self.unitTest[idx][0], " g_mode:", self.unitTest[idx][1], " est_cov:", self.unitTest[idx][2] )
             print( "  localization_rmse_val: ", l_rmse, " variance: ", l_var)
             print( "  onboard_rmse_val: ", o_rmse, " variance: ", o_var, " over misses: ", o_o_miss, " under misses: ", o_u_miss)
             print( "  global_rmse_val: ", g_rmse, " variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
-            # if idx == 0:
-            #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
-            #         fails += 1
-            # elif idx == 1:
-            #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
-            #         fails += 1
             idx += 1
 
 def GuiProcess(config):
@@ -123,11 +132,11 @@ def run_single_test(conf):
 
 if __name__ == "__main__":
     # Configure the settings
-    conf = config.Setting("four_cav_simulation")
+    conf = config.Setting("four_cav_simulation_unit_test")
 
     if conf.unit_test:
-        UnitTest.UnitTest()
-        UnitTest.run(conf)
+        unit_test = UnitTest()
+        unit_test.run(conf)
     else:
         run_single_test(conf)
 

@@ -3,7 +3,7 @@ for the definition and slection of multiple simulation/physical
 settings for the 1/10 scale setup '''
 class Setting:
         def __init__(self, setting = "two_cav_simulation"):
-                if "two_cav_physical" in setting:
+                if "two_cav_physical" == setting:
                         print(" Config: two_cav_physical selected")
                         # Working 2 CAV Real
                         self.cav = [[-0.75, 0.0, 0, False],
@@ -23,7 +23,8 @@ class Setting:
                         self.gui_interval = 100 # 1 hz to slow down the toll on the RSU
                         self.data_collect_mode = True
                         self.use_global_fusion = False
-                elif "four_cav_simulation" in setting:
+                        self.cooperative_monitoring = False
+                elif "four_cav_simulation" == setting:
                         print("         Config: four_cav_simulation selected")
                         # Working 4 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
@@ -46,15 +47,16 @@ class Setting:
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                elif "four_cav_simulation_unit_test" in setting:
-                        print("         Config: four_cav_simulation selected")
+                        self.cooperative_monitoring = True
+                elif "four_cav_simulation_unit_test" == setting:
+                        print("         Config: four_cav_simulation_unit_test selected")
                         # Working 4 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
                                 [-1.5, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True],
                                 [0.0, 1.75, 4.71238898038469, True]]
-                        self.cis = [[-0.75, 0.75, -0.785398163, True],
-                                [0.75, -0.75, -0.785398163, True]]
+                        self.cis = [[-0.75, 0.75, -0.785398163, True]]#,
+                                #[0.75, -0.75, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0
@@ -67,7 +69,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .4
-                        self.unit_test_time = 1000 * 10
+                        self.unit_test_time = 10.0
                         self.unit_test_config = [[0,0,False], [0,0,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
@@ -88,9 +90,10 @@ class Setting:
                         self.map_length = 1.0
                         self.simulation = True
                         self.debug = False
-                        self.data_collect_mode = False
                         self.unit_test = False
                         self.unit_test_config = None
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
+                        self.data_collect_mode = False
                         self.use_global_fusion = True
+                        self.cooperative_monitoring = True
                 print(" Config complete, using map: ", self.map)

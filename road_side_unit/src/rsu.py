@@ -35,19 +35,18 @@ class RSU():
         self.simulation = config.simulation
         self.time = 1.0 # Time MUST start positive or it will be considered none!
         self.interval = config.interval
-        self.use_global_fusion = not config.use_global_fusion
+        self.use_global_fusion = config.use_global_fusion
         self.intersection_mode = 0
         self.intersection_serving = [-99,-99]
         self.unit_test = config.unit_test
-
-        # Unit test settings
-        self.unit_test_state = 0
+        self.cooperative_monitoring = config.cooperative_monitoring
 
         # Init parameters for unit testing
         self.initUnitTestParams()
 
         # Check the fusion mode from unit tests
         if config.unit_test:
+            self.unit_test_config = config.unit_test_config
             self.local_fusion_mode = self.unit_test_config[unit_test_idx][0]
             self.global_fusion_mode = self.unit_test_config[unit_test_idx][1]
             self.full_simulation = True
@@ -539,8 +538,6 @@ class RSU():
                     elif len(testSetGlobal) < len(groundTruthGlobal):
                         # Underdetection case, we count this differently because it may be from obstacle blocking
                         self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
-
-                    self.calculate_unit_test_state()
             else:
                 self.globalFusionList = []
 
@@ -552,11 +549,14 @@ class RSU():
 
             self.packGuiValues(False)
 
-            if self.unit_test:
-                if self.time > self.unit_test_time:
-                    return True, []
+        if self.unit_test:
+            if self.time > self.unit_test_time:
+                return True, self.calculate_unit_test_results()
+
+            elif self.time % 5.0 == 0:
+                print(self.calculate_unit_test_results())
             
-            return False, []
+        return False, []
             
 
     def stepSim(self):
@@ -576,24 +576,21 @@ class RSU():
 
         # Check button states from the GUI if we are not unit testing
         if self.unit_test_state == 0:
-            # Pause state from GUI
-            self.pause_simulation = pause
-
-            # Get CAV velocity targets from GUI
+            # If we are in unit test mode, do not take any values from the GUI
             if not self.unit_test:
+                # Pause state from GUI
+                self.pause_simulation = pause
+
+                # Get CAV velocity targets from GUI
                 for idx, each in enumerate(velocity_targets):
                     self.vehicles[idx].targetVelocityGeneral = each
 
-            #print( " trying to get values from gui! ")
-
-            # Get other gui button states
-            self.parameterized_covariance = button_states['parameterized_covariance']
-            self.simulate_error = button_states['simulate_error']
-            self.real_lidar = button_states['full_simulation']
-            self.unit_test_state = button_states['unit_test']
-            self.intersection_mode = button_states['intersection_mode']
-
-            #print( " got values from gui! ")
+                # Get other gui button states
+                self.parameterized_covariance = button_states['parameterized_covariance']
+                self.simulate_error = button_states['simulate_error']
+                self.real_lidar = button_states['full_simulation']
+                self.unit_test_state = button_states['unit_test']
+                self.intersection_mode = button_states['intersection_mode']
 
         response = dict(
             returned = True
@@ -759,62 +756,39 @@ class RSU():
 
     def calculate_unit_test_results(self):
         # Calculate the prior results
+        results = []
+
         # Localization
         differences_squared_l = np.array(self.localization_differences) ** 2
         mean_of_differences_squared_l = differences_squared_l.mean()
         rmse_val_l = np.sqrt(mean_of_differences_squared_l)
         variance_l = np.var(self.localization_differences,ddof=1)
-        self.slam_rmse = rmse_val_l
-        self.slam_variance = variance_l
-
-        # self.unit_test_localization_rmse_results.append(rmse_val_l)
-        # self.unit_test_localization_variance_results.append(variance_l)
+        results.append(rmse_val_l)
+        results.append(variance_l)
 
         # Onboard
-        differences_squared = np.array(self.local_differences) ** 2
-        mean_of_differences_squared = differences_squared.mean()
-        rmse_val = np.sqrt(mean_of_differences_squared)
-        variance = np.var(self.local_differences,ddof=1)
-        self.local_rmse = rmse_val
-        self.local_variance = variance
-
-        # self.unit_test_local_rmse_results.append(rmse_val)
-        # self.unit_test_local_variance_results.append(variance)
-        # self.unit_test_local_under_detection_miss_results.append(self.local_under_detection_miss)
-        # self.unit_test_local_over_detection_miss_results.append(self.local_over_detection_miss)
+        # differences_squared = np.array(self.local_differences) ** 2
+        # mean_of_differences_squared = differences_squared.mean()
+        # rmse_val = np.sqrt(mean_of_differences_squared)
+        # variance = np.var(self.local_differences,ddof=1)
+        # results.append(rmse_val)
+        # results.append(variance)
+        # results.append(self.local_under_detection_miss)
+        # results.append(self.local_over_detection_miss)
+        results.append(0)
+        results.append(0)
+        results.append(0)
+        results.append(0)
 
         # Global
         differences_squared_g = np.array(self.global_differences) ** 2
         mean_of_differences_squared_g = differences_squared_g.mean()
         rmse_val_g = np.sqrt(mean_of_differences_squared_g)
         variance_g = np.var(self.global_differences,ddof=1)
-        self.global_rmse = rmse_val_g
-        self.global_variance = variance_g
-
-        # self.unit_test_global_rmse_results.append(rmse_val_g)
-        # self.unit_test_global_variance_results.append(variance_g)
-        # self.unit_test_global_under_detection_miss_results.append(self.global_under_detection_miss)
-        # self.unit_test_global_over_detection_miss_results.append(self.global_over_detection_miss)
-
-    def calculate_unit_test_state(self):
-        idx = 0
-        fails = 0
-        for l_rmse, l_var, o_rmse, o_var, o_u_miss, o_o_miss, g_rmse, g_var, g_u_miss, g_o_miss in zip(self.unit_test_localization_rmse_results, self.unit_test_localization_variance_results, 
-            self.unit_test_local_rmse_results, self.unit_test_local_variance_results,
-            self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
-            self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
-            self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
-            print( "Test: ", idx, " g_mode:", self.unitTest[idx][0], " l_mode:", self.unitTest[idx][1], " est_cov:", self.unitTest[idx][2] )
-            print( "  localization_rmse_val: ", l_rmse, " variance: ", l_var)
-            print( "  onboard_rmse_val: ", o_rmse, " variance: ", o_var, " over misses: ", o_o_miss, " under misses: ", o_u_miss)
-            print( "  global_rmse_val: ", g_rmse, " variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
-            # if idx == 0:
-            #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
-            #         fails += 1
-            # elif idx == 1:
-            #     if rmse < .18 or rmse > 20 or O_miss > (50 * test_time):
-            #         fails += 1
-            idx += 1
+        results.append(rmse_val_g)
+        results.append(variance_g)
+        results.append(self.global_under_detection_miss)
+        results.append(self.global_over_detection_miss)
 
     def reset_unit_test(self):
         # Reset the stats

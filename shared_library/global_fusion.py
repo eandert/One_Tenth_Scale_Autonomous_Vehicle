@@ -290,7 +290,6 @@ class ResizableKalman:
                     [[self.x], [self.y], [0], [0], [0]], dtype = 'float')
             
             # Seed the covariance values directly from the measurement
-            print( " error cov ", self.error_covariance)
             self.P_t[0][0] = self.error_covariance[0][0]
             self.P_t[0][1] = self.error_covariance[0][1]
             self.P_t[1][0] = self.error_covariance[1][0]
