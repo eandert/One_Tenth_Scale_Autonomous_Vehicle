@@ -19,18 +19,26 @@ class UnitTest():
         self.pause_simulation = False
         self.real_lidar = False
         self.unit_test_idx = 0
+        self.unit_test_localization_rmse_results = []
+        self.unit_test_localization_variance_results = []
+        # Onboard
+        self.unit_test_local_rmse_results = []
+        self.unit_test_local_variance_results = []
+        self.unit_test_local_under_detection_miss_results = []
+        self.unit_test_local_over_detection_miss_results = []
+        # Global
+        self.unit_test_global_rmse_results = []
+        self.unit_test_global_variance_results = []
+        self.unit_test_global_under_detection_miss_results = []
+        self.unit_test_global_over_detection_miss_results = []
+        self.config = None
 
     def run(self, config):
         self.unit_test_idx = 0
+        self.config = config
 
         # Determing mode
-        if len(config.unit_test_config) <= self.unit_test_idx:
-            # Calculate the prior results
-            self.print_unit_test_stats()
-            
-            # Test over
-            sys.exit()
-        else:
+        if len(config.unit_test_config) > self.unit_test_idx:
             # Setup the RSU
             rsu_instance = rsu.RSU(conf, self.unit_test_idx)
 
@@ -49,6 +57,7 @@ class UnitTest():
 
                 if test_end:
                     rsu_instance.end_threads()
+                    print("Test ended")
                     break
 
                 if rsu_instance.end:
@@ -62,6 +71,12 @@ class UnitTest():
 
             # Incrememt the unit test state
             self.unit_test_idx += 1
+        else:
+            # Calculate the prior results
+            self.print_unit_test_stats()
+            
+            # Test over
+            sys.exit()
 
     def add_unit_test_stats(self, stats):
         # Calculate the prior results
@@ -89,7 +104,7 @@ class UnitTest():
             self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
             self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
             self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
-            print( "Test: ", idx, " l_mode:", self.unitTest[idx][0], " g_mode:", self.unitTest[idx][1], " est_cov:", self.unitTest[idx][2] )
+            print( "Test: ", idx, " l_mode:", self.config.unit_test_config[idx][0], " g_mode:", self.config.unit_test_config[idx][1], " est_cov:", self.config.unit_test_config[idx][2] )
             print( "  localization_rmse_val: ", l_rmse, " variance: ", l_var)
             print( "  onboard_rmse_val: ", o_rmse, " variance: ", o_var, " over misses: ", o_o_miss, " under misses: ", o_u_miss)
             print( "  global_rmse_val: ", g_rmse, " variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)

@@ -18,6 +18,8 @@ def update_time_from_rsu_sim(sensor_id, debug, rsu_sim_check = None):
         if new_time != -99 and new_time != None:
             if debug: print( " CIS ", sensor_id, " got sim time from server ", new_time)
             return new_time
+        elif new_time == -99:
+            return -99
 
 def cis(config, sid):
     sensor_id = sid
@@ -95,6 +97,8 @@ def cis(config, sid):
     while True:
         if config.simulation:
             global_time = update_time_from_rsu_sim(sensor_id, debug, rsu)
+            if global_time == -99:
+                exit(0)
         if fetch_time(simulation_time, global_time) >= next_time:
             if config.simulation:
                 # Recieve positions of other vehicles from RSU so we can fake the sensor values

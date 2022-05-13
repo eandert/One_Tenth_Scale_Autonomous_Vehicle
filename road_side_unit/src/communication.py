@@ -325,3 +325,13 @@ class MainClass(Resource):
                 #print ( returnObject )
         except Exception as e:
             name_space.abort(500, e.__doc__, status="Could not retrieve information due to unknown internal error.", statusCode="500")
+
+@name_space.route("/shutdown/", methods=['GET'])
+class MainClass(Resource):
+    def shutdown(self):
+        shutdown_func = request.environ.get('werkzeug.server.shutdown')
+        if shutdown_func is None:
+           raise RuntimeError('Not running werkzeug')
+        shutdown_func()
+        exit(0)
+        return "Shutting down..."

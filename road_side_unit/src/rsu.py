@@ -40,6 +40,7 @@ class RSU():
         self.intersection_serving = [-99,-99]
         self.unit_test = config.unit_test
         self.cooperative_monitoring = config.cooperative_monitoring
+        self.rsu_ip = config.rsu_ip
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -151,9 +152,9 @@ class RSU():
 
     def initFlask(self, rsu_ip):
         # Start up the Flask front end processor as it's own thread
-        frontend = Thread(target=self.FlaskProccess, args=(self.q, self, rsu_ip, ))
-        frontend.daemon = True
-        frontend.start()
+        self.frontend = Thread(target=self.FlaskProccess, args=(self.q, self, rsu_ip, ))
+        self.frontend.daemon = True
+        self.frontend.start()
 
     def FlaskProccess(self, q, rsu_instance, rsu_ip):
         # Startup the web service
@@ -293,6 +294,9 @@ class RSU():
                 self.vehicles[id].localizationPositionY = detections["localization"][1]
                 self.vehicles[id].velocity = detections["localization"][3]
                 self.vehicles[id].theta = detections["localization"][2]
+            else:
+                self.vehicles[id].localizationPositionX_actual = detections["localization"][0]
+                self.vehicles[id].localizationPositionY_actual = detections["localization"][1]
             self.vehicles[id].localizationCovariance = detections["localization"][4]
             self.vehicles[id].steeringAcceleration = steeringAcceleration
             self.vehicles[id].motorAcceleration = motorAcceleration
@@ -459,12 +463,15 @@ class RSU():
                 for idx, vehicle in self.vehicles.items():
                     # Add to the global sensor fusion w/ unique ID
                     localizationsList.append((idx+self.localizationid,
-                                              vehicle.localizationPositionX,
-                                              vehicle.localizationPositionY,
+                                              vehicle.localizationPositionX_actual,
+                                              vehicle.localizationPositionY_actual,
                                               vehicle.localizationCovariance,
                                               0,
                                               0,
                                               -1))
+                    if self.unit_test:
+                        self.localization_differences.append(math.hypot(vehicle.localizationPositionX-vehicle.localizationPositionX_actual,
+                                                                        vehicle.localizationPositionY-vehicle.localizationPositionY_actual))
                 self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance)
 
                 for idx, vehicle in self.vehicles.items():
@@ -505,39 +512,70 @@ class RSU():
                             self.error_dict[sensor_platform_id] = [1,0,[error_frame[2]]]
 
                 if self.unit_test:
-                    # Ground truth to the original dataset
                     # Get the last known location of all other vehicles
                     vehicleList = []
                     for idx, vehicle in self.vehicles.items():
                         vehicleList.append(vehicle.get_location())
+
+                    groundTruth = []
+                    for each in vehicleList:
+                        sensed_x = each[0]
+                        sensed_y = each[1]
+                        groundTruth.append([sensed_x, sensed_y])
+
+                    # Local ground truth
+                    # Ground truth to the original dataset
+                    for idx, vehicle in self.vehicles.items():
+                        testSet = []
+                        for each in vehicle.fusionDetections:
+                            sensed_x = each[0]
+                            sensed_y = each[1]
+                            testSet.append([sensed_x, sensed_y])
+
+                        local_differences = []
+                        local_over_detection_miss = 0
+                        local_under_detection_miss = 0
+
+                        if len(testSet) >= 1 and len(groundTruth) >= 1:
+                            nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSet))
+                            distances, indices = nbrs.kneighbors(np.array(groundTruth))
+
+                            # Now calculate the score
+                            for dist in distances:
+                                local_differences.append(dist)
+
+                        # Check how much large the test set is from the ground truth and add that as well
+                        if len(testSet) > len(groundTruth):
+                            # Overdetection case
+                            local_over_detection_miss += len(testSet) - len(groundTruth)
+                        elif len(testSet) < len(groundTruth):
+                            # Underdetection case, we count this differently because it may be from obstacle blocking
+                            local_under_detection_miss += len(groundTruth) - len(testSet)
+
+                    # Ground truth the global fusion
                     testSetGlobal = []
-                    groundTruthGlobal = []
                     for each in self.globalFusionList:
                         sensed_x = each[1]
                         sensed_y = each[2]
                         testSetGlobal.append([sensed_x, sensed_y])
-                    for each in vehicleList:
-                        sensed_x = each[0]
-                        sensed_y = each[1]
-                        groundTruthGlobal.append([sensed_x, sensed_y])
-                    if len(testSetGlobal) >= 1 and len(groundTruthGlobal) >= 1:
+                    if len(testSetGlobal) >= 1 and len(groundTruth) >= 1:
                         nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(testSetGlobal))
-                        distances, indices = nbrs.kneighbors(np.array(groundTruthGlobal))
+                        distances, indices = nbrs.kneighbors(np.array(groundTruth))
 
                         # Now calculate the score
                         for dist in distances:
                             if dist > 1.0:
                                 # Too far away to be considered a match, add as a miss instead
-                                self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+                                self.global_under_detection_miss += len(groundTruth) - len(testSetGlobal)
                             else:
                                 self.global_differences.append(dist)
                     # Check how much large the test set is from the ground truth and add that as well
-                    if len(testSetGlobal) > len(groundTruthGlobal):
+                    if len(testSetGlobal) > len(groundTruth):
                         # Overdetection case
-                        self.global_over_detection_miss += len(testSetGlobal) - len(groundTruthGlobal)
-                    elif len(testSetGlobal) < len(groundTruthGlobal):
+                        self.global_over_detection_miss += len(testSetGlobal) - len(groundTruth)
+                    elif len(testSetGlobal) < len(groundTruth):
                         # Underdetection case, we count this differently because it may be from obstacle blocking
-                        self.global_under_detection_miss += len(groundTruthGlobal) - len(testSetGlobal)
+                        self.global_under_detection_miss += len(groundTruth) - len(testSetGlobal)
             else:
                 self.globalFusionList = []
 
@@ -549,12 +587,13 @@ class RSU():
 
             self.packGuiValues(False)
 
-        if self.unit_test:
-            if self.time > self.unit_test_time:
-                return True, self.calculate_unit_test_results()
+            if self.unit_test:
+                print(self.time, self.unit_test_time)
+                if self.time > self.unit_test_time:
+                    return True, self.calculate_unit_test_results()
 
-            elif self.time % 5.0 == 0:
-                print(self.calculate_unit_test_results())
+                elif self.time % 3.0 == 0:
+                    self.calculate_unit_test_results()
             
         return False, []
             
@@ -759,36 +798,41 @@ class RSU():
         results = []
 
         # Localization
-        differences_squared_l = np.array(self.localization_differences) ** 2
-        mean_of_differences_squared_l = differences_squared_l.mean()
-        rmse_val_l = np.sqrt(mean_of_differences_squared_l)
+        differences_mse_l = np.square(np.array(self.localization_differences)).mean()
+        rmse_val_l = np.sqrt(differences_mse_l)
         variance_l = np.var(self.localization_differences,ddof=1)
         results.append(rmse_val_l)
         results.append(variance_l)
 
         # Onboard
-        # differences_squared = np.array(self.local_differences) ** 2
-        # mean_of_differences_squared = differences_squared.mean()
-        # rmse_val = np.sqrt(mean_of_differences_squared)
-        # variance = np.var(self.local_differences,ddof=1)
-        # results.append(rmse_val)
-        # results.append(variance)
-        # results.append(self.local_under_detection_miss)
-        # results.append(self.local_over_detection_miss)
-        results.append(0)
-        results.append(0)
-        results.append(0)
-        results.append(0)
+        differences_squared = np.array(self.local_differences) ** 2
+        mean_of_differences_squared = differences_squared.mean()
+        rmse_val = np.sqrt(mean_of_differences_squared)
+        variance = np.var(self.local_differences,ddof=1)
+        results.append(rmse_val)
+        results.append(variance)
+        results.append(self.local_under_detection_miss)
+        results.append(self.local_over_detection_miss)
+        # results.append(0)
+        # results.append(0)
+        # results.append(0)
+        # results.append(0)
 
         # Global
-        differences_squared_g = np.array(self.global_differences) ** 2
-        mean_of_differences_squared_g = differences_squared_g.mean()
-        rmse_val_g = np.sqrt(mean_of_differences_squared_g)
+        differences_mse_g = np.square(np.array(self.global_differences)).mean()
+        rmse_val_g = np.sqrt(differences_mse_g)
         variance_g = np.var(self.global_differences,ddof=1)
         results.append(rmse_val_g)
         results.append(variance_g)
         results.append(self.global_under_detection_miss)
         results.append(self.global_over_detection_miss)
+
+        print( "Test: ", self.unit_test_idx, " l_mode:", self.unit_test_config[self.unit_test_idx][0], " g_mode:", self.unit_test_config[self.unit_test_idx][1], " est_cov:", self.unit_test_config[self.unit_test_idx][2] )
+        print( "  localization_rmse_val: ", results[0], " variance: ", results[1])
+        print( "  onboard_rmse_val: ", results[2], " variance: ", results[3], " over misses: ", results[4], " under misses: ", results[5])
+        print( "  global_rmse_val: ", results[6], " variance: ", results[7], " over misses: ", results[8], " under misses: ", results[9])
+
+        return results
 
     def reset_unit_test(self):
         # Reset the stats
@@ -801,9 +845,16 @@ class RSU():
         self.global_differences = []
 
     def end_threads(self):
-        for thread in self.thread:
-            thread.kill()
+        # Send the kill signal (this is slightly hacky but doesnt need globals)
+        self.time = -99
+        time.sleep(5)
+        for idx, thread in self.thread.items():
             thread.join()
+            time.sleep(1)
+        time.sleep(1)
+        import requests
+        rsu_ip_address = 'http://' + str(self.rsu_ip) + ':5000'
+        resp = requests.get(rsu_ip_address+'/shutdown/')
 
 # def BackendProcessor(q, vehicles, sensors, trafficLightArray):
 #     while True:

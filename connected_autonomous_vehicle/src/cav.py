@@ -2,6 +2,7 @@ from sre_constants import JUMP
 import time
 import matplotlib.pyplot as plt
 from multiprocessing import Process, Queue, Manager
+import sys
 
 from connected_autonomous_vehicle.src import planning_control, communication
 from shared_library import local_fusion, sensor, lidar_recognition
@@ -24,6 +25,8 @@ def update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check = None):
         if new_time != -99 and new_time != None:
             if debug: print( " Vehicle ", vehicle_id, " got sim time from server ", new_time)
             return new_time
+        elif new_time == -99:
+            return -99
 
 def sourceImagesThread(out_queue, settings, camSpecs, simulation_time, data_collect_mode, start_time, interval):
     # DO our imports within this function so we dont disturb the simulation
@@ -325,6 +328,8 @@ def cav(config, vid):
     while True:
         if config.simulation:
             global_time = update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check)
+            if global_time == -99:
+                exit(0)
         if fetch_time(simulation_time, global_time) >= next_time:
             if config.simulation:
                 # Special simulation setup where we do not use the source threads

@@ -128,14 +128,13 @@ class Localization:
         #print("loc: ", actual_sim_error)
         return expected_error_gaussian, actual_sim_error
 
-    def getStaticErrorParams(self):
+    def getStaticErrorParams(self, velocity, theta):
+        # We need the real error here so call the other function
+        expected_error_gaussian, actual_sim_error = self.getErrorParamsAtVelocity(velocity, theta)
+        # It's just a circle so both are the same
         expected_error_gaussian = BivariateGaussian(self.static_error,
                                     self.static_error,
                                     0.0)
-        # It's just a circle so both are the same
-        loc_error_x = np.random.normal(0, self.static_error, 1)[0]
-        loc_error_y = np.random.normal(0, self.static_error, 1)[0]
-        actual_sim_error = [loc_error_x, loc_error_y]
         return expected_error_gaussian, actual_sim_error
 
 
@@ -214,7 +213,7 @@ def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object
     if sim_values["parameterized_covariance"]:
         localization_error_gaussian, localization_error = planner.localization.getErrorParamsAtVelocity(abs(planner.velocity), planner.theta)
     else:
-        localization_error_gaussian, localization_error = planner.localization.getStaticErrorParams()
+        localization_error_gaussian, localization_error = planner.localization.getStaticErrorParams(abs(planner.velocity), planner.theta)
     point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = fake_lidar_and_camera(planner, vehicle_object_positions, [], 15.0, 15.0, 0.0, 160.0)
     if sim_values["simulate_error"]:
         # Error injection

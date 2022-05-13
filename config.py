@@ -69,8 +69,8 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .4
-                        self.unit_test_time = 10.0
-                        self.unit_test_config = [[0,0,False], [0,0,True]]
+                        self.unit_test_time = 200.0
+                        self.unit_test_config = [[0,0,False], [0,0,True],[0,2,False], [0,2,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
@@ -85,7 +85,7 @@ class Setting:
                         self.interval = 0.125
                         self.offset_interval = 0.0
                         self.fallthrough_delay = 0.100
-                        self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
+                        self.init_time = 0.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
                         self.map_length = 1.0
                         self.simulation = True
