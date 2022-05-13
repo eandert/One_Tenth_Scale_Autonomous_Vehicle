@@ -85,7 +85,7 @@ class Setting:
                         self.interval = 0.125
                         self.offset_interval = 0.0
                         self.fallthrough_delay = 0.100
-                        self.init_time = 0.0 # Seconds to wait for the system to initialize before starting
+                        self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
                         self.map_length = 1.0
                         self.simulation = True
