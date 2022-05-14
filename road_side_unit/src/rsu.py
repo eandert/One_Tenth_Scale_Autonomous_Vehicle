@@ -41,6 +41,7 @@ class RSU():
         self.unit_test = config.unit_test
         self.cooperative_monitoring = config.cooperative_monitoring
         self.rsu_ip = config.rsu_ip
+        self.end_test = False
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -176,6 +177,7 @@ class RSU():
                 self.thread["cav"+str(idx)].start()
 
                 # New actual threading
+                # TODO: Figure out why this does not work!
                 # self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, idx))
                 # self.thread["cav"+str(idx)].daemon = True
                 # self.thread["cav"+str(idx)].start()
@@ -191,6 +193,7 @@ class RSU():
                 self.thread["cis"+str(idx)].start()
 
                 # New actual threading
+                # TODO: Figure out why this does not work!
                 # self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, idx))
                 # self.thread["cav"+str(idx)].daemon = True
                 # self.thread["cav"+str(idx)].start()
@@ -588,16 +591,14 @@ class RSU():
             self.packGuiValues(False)
 
             if self.unit_test:
-                print(self.time, self.unit_test_time)
                 if self.time > self.unit_test_time:
-                    return True, self.calculate_unit_test_results()
+                    return True, self.calculate_unit_test_results(), self.error_monitoring
 
                 elif self.time % 3.0 == 0:
                     self.calculate_unit_test_results()
             
-        return False, []
+        return False, [], []
             
-
     def stepSim(self):
         if self.simulation:
             self.step_sim_vehicle = True
@@ -659,12 +660,12 @@ class RSU():
         else:
             map_specs = None
 
-        error_monitoring = []
+        self.error_monitoring = []
         if self.cooperative_monitoring:
             for key in self.error_dict.keys():
                 if self.error_dict[key][0] > 5:
                     average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
-                    error_monitoring.append([key, average_error, self.error_dict[key][0]])
+                    self.error_monitoring.append([key, average_error, self.error_dict[key][0]])
                     #print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
 
         for idx, vehicle in self.vehicles.items():
@@ -727,7 +728,8 @@ class RSU():
             sensor_localization_error=sensor_localization_error,
             global_sensor_fusion_centroid=self.globalFusionList,
             traffic_light=self.trafficLightArray,
-            error_monitoring=error_monitoring,
+            error_monitoring=self.error_monitoring,
+            end_test=self.end_test,
             returned=True
         )
 
@@ -847,6 +849,7 @@ class RSU():
     def end_threads(self):
         # Send the kill signal (this is slightly hacky but doesnt need globals)
         self.time = -99
+        self.end_test = True
         time.sleep(5)
         for idx, thread in self.thread.items():
             thread.join()

@@ -138,7 +138,7 @@ class connectServer:
             return response
         except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
-            response = {'time':-99}
+            response = {'time':None}
             return response
 
     def sendSimPosition(self, vehicle_id, x, y, z, roll, pitch, yaw, velocity):

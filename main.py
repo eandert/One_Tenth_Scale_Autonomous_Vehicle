@@ -31,6 +31,7 @@ class UnitTest():
         self.unit_test_global_variance_results = []
         self.unit_test_global_under_detection_miss_results = []
         self.unit_test_global_over_detection_miss_results = []
+        self.error_monitor = []
         self.config = None
 
     def run(self, config):
@@ -38,14 +39,9 @@ class UnitTest():
         self.config = config
 
         # Determing mode
-        if len(config.unit_test_config) > self.unit_test_idx:
+        while len(config.unit_test_config) > self.unit_test_idx:
             # Setup the RSU
             rsu_instance = rsu.RSU(conf, self.unit_test_idx)
-
-            time.sleep(1)
-
-            # Start the GUI
-            initGui(conf)
 
             time.sleep(5)
 
@@ -53,7 +49,7 @@ class UnitTest():
 
             stats = [0,0,0,0,0,0,0,0,0,0]
             while(True):
-                test_end, stats = rsu_instance.check_state()
+                test_end, stats, error_monitor = rsu_instance.check_state()
 
                 if test_end:
                     rsu_instance.end_threads()
@@ -66,19 +62,19 @@ class UnitTest():
                 time.sleep(.001)
 
             # Add the test state
-            self.add_unit_test_stats(stats)
+            self.add_unit_test_stats(stats, error_monitor)
             self.print_unit_test_stats()
 
             # Incrememt the unit test state
             self.unit_test_idx += 1
-        else:
-            # Calculate the prior results
-            self.print_unit_test_stats()
-            
-            # Test over
-            sys.exit()
+        
+        # Calculate the prior results
+        self.print_unit_test_stats()
+        
+        # Test over
+        sys.exit()
 
-    def add_unit_test_stats(self, stats):
+    def add_unit_test_stats(self, stats, error_monitor):
         # Calculate the prior results
         # Localization
         self.unit_test_localization_rmse_results.append(stats[0])
@@ -96,6 +92,8 @@ class UnitTest():
         self.unit_test_global_under_detection_miss_results.append(stats[8])
         self.unit_test_global_over_detection_miss_results.append(stats[9])
 
+        self.error_monitor.append(error_monitor)
+
     def print_unit_test_stats(self):
         idx = 0
         fails = 0
@@ -108,6 +106,7 @@ class UnitTest():
             print( "  localization_rmse_val: ", l_rmse, " variance: ", l_var)
             print( "  onboard_rmse_val: ", o_rmse, " variance: ", o_var, " over misses: ", o_o_miss, " under misses: ", o_u_miss)
             print( "  global_rmse_val: ", g_rmse, " variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
+            print(self.error_monitor[idx])
             idx += 1
 
 def GuiProcess(config):
@@ -147,7 +146,7 @@ def run_single_test(conf):
 
 if __name__ == "__main__":
     # Configure the settings
-    conf = config.Setting("four_cav_simulation_unit_test")
+    conf = config.Setting("four_cav_simulation")
 
     if conf.unit_test:
         unit_test = UnitTest()
@@ -155,4 +154,4 @@ if __name__ == "__main__":
     else:
         run_single_test(conf)
 
-sys.exit()
+sys.exit() 

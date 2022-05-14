@@ -69,7 +69,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .4
-                        self.unit_test_time = 200.0
+                        self.unit_test_time = 100.0
                         self.unit_test_config = [[0,0,False], [0,0,True],[0,2,False], [0,2,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False

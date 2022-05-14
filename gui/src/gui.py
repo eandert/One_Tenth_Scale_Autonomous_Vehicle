@@ -399,6 +399,9 @@ class MainWindow(QMainWindow):
             self.trafficLightArray = response['traffic_light']
             self.lidar_detection_raw = response['lidar_detection_raw']
 
+            if response['end_test'] == True:
+                exit(0)
+
             self.drawIntersection = True
             self.drawCoordinates = True
             self.drawTrafficLight = True
