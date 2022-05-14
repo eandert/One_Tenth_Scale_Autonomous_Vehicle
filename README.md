@@ -11,7 +11,7 @@ To run the code in simulatuion mode (i.e. no real RC cars), simply run `pip inst
 1/10 Scale Vehicles:
 To Install on physical Jetson hardware:
  * Download the SD card image and upload to 64 GB SD card. This will save days of building the correct libraries, etc. 
- * TODO: Place google drive link here for Jetseon TX2
+ * TODO: Place google drive link here for Jetson TX2
  * Clone this repo on the Home/Projects/ folder.
  * TODO: Place google drive link here for Jetson Nano
 
