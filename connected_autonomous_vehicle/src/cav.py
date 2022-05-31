@@ -3,6 +3,7 @@ import time
 import matplotlib.pyplot as plt
 from multiprocessing import Process, Queue, Manager
 import sys
+import math
 
 from connected_autonomous_vehicle.src import planning_control, communication
 from shared_library import local_fusion, sensor, lidar_recognition
@@ -185,7 +186,7 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
                 response["error"] = 0
                 fails = 0
 
-def cav(config, vid):
+def cav(config, vid, test_idx):
     # The first thing we should always do is initialize the control module
     # This is important to make sure a rogue signal doesn't drive us away
     # We do not need this if this is simulation
@@ -350,7 +351,24 @@ def cav(config, vid):
                     if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
                 
                 vehicle_object_positions = sim_values['veh_locations']
-                cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                vehicle_object_positions2 = sim_values['veh_locations']
+                if vehicle_id == 0 and global_time > 100.0:
+                    for each in vehicle_object_positions:
+                        if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionX:
+                            print(" rotating: ", each)
+                            ox = planner.localizationPositionX
+                            oy = planner.localizationPositionX
+                            angle = math.radians(test_idx)
+                            px = each[0]
+                            py = each[1]
+                            qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
+                            qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+                            each[0] = qx
+                            each[1] = qy
+                            print(each)
+
+                cam_returned2, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions2)
 
                 lidar_recieved = True
                 camera_recieved = True

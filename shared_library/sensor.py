@@ -132,10 +132,10 @@ class Localization:
         # We need the real error here so call the other function
         expected_error_gaussian, actual_sim_error = self.getErrorParamsAtVelocity(velocity, theta)
         # It's just a circle so both are the same
-        expected_error_gaussian = BivariateGaussian(self.static_error,
+        expected_error_gaussian_2 = BivariateGaussian(self.static_error,
                                     self.static_error,
                                     0.0)
-        return expected_error_gaussian, actual_sim_error
+        return expected_error_gaussian_2, actual_sim_error
 
 
 class Sensor:

@@ -58,11 +58,13 @@ class RSU():
             self.real_lidar = False
             self.unit_test_time = config.unit_test_time
             self.unit_test_speed_target = config.unit_test_speed_target
+            self.unit_test_idx = unit_test_idx
         else:
             # Default to 1
             # TODO: add a button for this
             self.local_fusion_mode = 0
             self.global_fusion_mode = 0
+            self.unit_test_idx = 0
 
         # init global fusion
         self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
@@ -119,7 +121,6 @@ class RSU():
     def initUnitTestParams(self):
         # Keep track of stats if this is a simulation
         self.unit_test_state = 0
-        self.unit_test_idx = 0
         self.unit_test_local_over_detection_miss_results = []
         self.unit_test_local_under_detection_miss_results = []
         self.unit_test_local_rmse_results = []
@@ -172,7 +173,7 @@ class RSU():
             #mp.set_start_method('spawn')
             for idx, vehicle in self.vehicles.items():
                 # Old way that is slow because of the Global Interpreter Lock
-                self.thread["cav"+str(idx)] = Thread(target=cav.cav, args=(config, idx, ))
+                self.thread["cav"+str(idx)] = Thread(target=cav.cav, args=(config, idx, self.unit_test_idx, ))
                 self.thread["cav"+str(idx)].daemon = True
                 self.thread["cav"+str(idx)].start()
 
@@ -593,9 +594,9 @@ class RSU():
             if self.unit_test:
                 if self.time > self.unit_test_time:
                     return True, self.calculate_unit_test_results(), self.error_monitoring
-
                 elif self.time % 3.0 == 0:
                     self.calculate_unit_test_results()
+                    print(self.error_monitoring)
             
         return False, [], []
             
@@ -667,6 +668,10 @@ class RSU():
                     average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
                     self.error_monitoring.append([key, average_error, self.error_dict[key][0]])
                     #print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
+
+                # if self.time > 95 and key == 0:
+                #     with open('output.txt', 'w+') as f:
+                #         f.write(str(average_error) + "\n")
 
         for idx, vehicle in self.vehicles.items():
             # Add to the global sensor fusion

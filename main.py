@@ -146,7 +146,7 @@ def run_single_test(conf):
 
 if __name__ == "__main__":
     # Configure the settings
-    conf = config.Setting("two_cav_simulation")
+    conf = config.Setting("two_cav_simulation_unit_test")
 
     if conf.unit_test:
         unit_test = UnitTest()
