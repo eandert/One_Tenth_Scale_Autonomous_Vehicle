@@ -21,6 +21,7 @@ class UnitTest():
         self.unit_test_idx = 0
         self.unit_test_localization_rmse_results = []
         self.unit_test_localization_variance_results = []
+        self.unit_test_localization_velocity_results = []
         # Onboard
         self.unit_test_local_rmse_results = []
         self.unit_test_local_variance_results = []
@@ -79,31 +80,33 @@ class UnitTest():
         # Localization
         self.unit_test_localization_rmse_results.append(stats[0])
         self.unit_test_localization_variance_results.append(stats[1])
+        self.unit_test_localization_velocity_results.append(stats[2])
 
         # Onboard
-        self.unit_test_local_rmse_results.append(stats[2])
-        self.unit_test_local_variance_results.append(stats[3])
-        self.unit_test_local_under_detection_miss_results.append(stats[4])
-        self.unit_test_local_over_detection_miss_results.append(stats[5])
+        self.unit_test_local_rmse_results.append(stats[3])
+        self.unit_test_local_variance_results.append(stats[4])
+        self.unit_test_local_under_detection_miss_results.append(stats[5])
+        self.unit_test_local_over_detection_miss_results.append(stats[6])
 
         # Global
-        self.unit_test_global_rmse_results.append(stats[6])
-        self.unit_test_global_variance_results.append(stats[7])
-        self.unit_test_global_under_detection_miss_results.append(stats[8])
-        self.unit_test_global_over_detection_miss_results.append(stats[9])
+        self.unit_test_global_rmse_results.append(stats[7])
+        self.unit_test_global_variance_results.append(stats[8])
+        self.unit_test_global_under_detection_miss_results.append(stats[9])
+        self.unit_test_global_over_detection_miss_results.append(stats[10])
 
         self.error_monitor.append(error_monitor)
 
     def print_unit_test_stats(self):
         idx = 0
         fails = 0
-        for l_rmse, l_var, o_rmse, o_var, o_u_miss, o_o_miss, g_rmse, g_var, g_u_miss, g_o_miss in zip(self.unit_test_localization_rmse_results, self.unit_test_localization_variance_results, 
+        for l_rmse, l_var, l_vel, o_rmse, o_var, o_u_miss, o_o_miss, g_rmse, g_var, g_u_miss, g_o_miss in zip(self.unit_test_localization_rmse_results,
+            self.unit_test_localization_velocity_results, self.unit_test_localization_variance_results, 
             self.unit_test_local_rmse_results, self.unit_test_local_variance_results,
             self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
             self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
             self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
             print( "Test: ", idx, " l_mode:", self.config.unit_test_config[idx][0], " g_mode:", self.config.unit_test_config[idx][1], " est_cov:", self.config.unit_test_config[idx][2] )
-            print( "  localization_rmse_val: ", l_rmse, " variance: ", l_var)
+            print( "  localization_rmse_val: ", l_rmse, " variance: ", l_var, " velocity ", l_vel)
             print( "  onboard_rmse_val: ", o_rmse, " variance: ", o_var, " over misses: ", o_o_miss, " under misses: ", o_u_miss)
             print( "  global_rmse_val: ", g_rmse, " variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
             print(self.error_monitor[idx])

@@ -21,7 +21,7 @@ def update_time_from_rsu_sim(sensor_id, debug, rsu_sim_check = None):
         elif new_time == -99:
             return -99
 
-def cis(config, sid):
+def cis(config, sid, test_idx):
     sensor_id = sid
     debug = config.debug
     simulation_time = False
@@ -30,6 +30,10 @@ def cis(config, sid):
     bounding_box = [[0.0, 0.0],[0.0, 0.0]]
     last_response = []
     data_collect_mode = config.data_collect_mode
+    if config.unit_test:
+        local_fusion_mode = config.unit_test_config[test_idx][0]
+    else:
+        local_fusion_mode = 0
 
     print( " CIS ", sensor_id, " begin.")
 
@@ -83,7 +87,7 @@ def cis(config, sid):
     fails = 0
 
     # Start the sensor fusion pipeline
-    fusion = local_fusion.FUSION(0, sensor_id)
+    fusion = local_fusion.FUSION(local_fusion_mode, sensor_id)
     if debug: print( " CIS ", sensor_id, " started fusion node" )
 
     # Sleep until test start time

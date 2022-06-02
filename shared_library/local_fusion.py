@@ -657,7 +657,7 @@ class FUSION:
             if len(detections_list_positions) > 0:
                 if len(self.trackedList) > 0:
                     numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
-                    thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
+                    thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEuclidean)
 
                     # Need to check the tree size here in order to figure out if we can even do this
                     length = len(numpy_formatted)

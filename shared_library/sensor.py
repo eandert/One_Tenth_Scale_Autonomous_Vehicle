@@ -31,7 +31,7 @@ class BivariateGaussian:
             #print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
             return 0.0
         else:
-            return ( a * b ) / math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
+            return ( a * b ) / denominator
 
     def calcSelfRadiusAtAnlge(self, angle, num_std_deviations):
         a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian(num_std_deviations)
@@ -108,7 +108,7 @@ class Localization:
         self.longitudinal_error_b = longitudinal_error_b
         self.lateral_error_x = lateral_error_x
         self.lateral_error_b = lateral_error_b
-        self.static_error_range_average = .25
+        self.static_error_range_average = .36282835297512617
         self.static_error = math.hypot(longitudinal_error_b + longitudinal_error_x * self.static_error_range_average, \
                                     lateral_error_b + lateral_error_x * self.static_error_range_average)
 

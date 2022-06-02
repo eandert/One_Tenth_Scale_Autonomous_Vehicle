@@ -189,7 +189,7 @@ class RSU():
 
             for idx, sensor in self.sensors.items():
                 # Old way that is slow because of the Global Interpreter Lock
-                self.thread["cis"+str(idx)] = Thread(target=cis.cis, args=(config, self.cis_offset + idx, ))
+                self.thread["cis"+str(idx)] = Thread(target=cis.cis, args=(config, self.cis_offset + idx, self.unit_test_idx, ))
                 self.thread["cis"+str(idx)].daemon = True
                 self.thread["cis"+str(idx)].start()
 
@@ -476,6 +476,7 @@ class RSU():
                     if self.unit_test:
                         self.localization_differences.append(math.hypot(vehicle.localizationPositionX-vehicle.localizationPositionX_actual,
                                                                         vehicle.localizationPositionY-vehicle.localizationPositionY_actual))
+                        self.localization_velocity.append(vehicle.velocity)
                 self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance)
 
                 for idx, vehicle in self.vehicles.items():
@@ -502,6 +503,7 @@ class RSU():
                             if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
                                 self.error_dict[sensor_platform_id][0] += 1
                                 self.error_dict[sensor_platform_id][2].append(error_frame[2])
+                                self.error_dict[sensor_platform_id][1] += 1
                             # We have filled revolving_buffer_size places, time to revolve the buffer now
                             else:
                                 if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
@@ -513,7 +515,7 @@ class RSU():
                                     self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
                                     self.error_dict[sensor_platform_id][1] += 1
                         else:
-                            self.error_dict[sensor_platform_id] = [1,0,[error_frame[2]]]
+                            self.error_dict[sensor_platform_id] = [1,1,[error_frame[2]]]
 
                 if self.unit_test:
                     # Get the last known location of all other vehicles
@@ -811,9 +813,11 @@ class RSU():
         results.append(rmse_val_l)
         results.append(variance_l)
 
+        average_velocity = sum(self.localization_velocity)/len(self.localization_velocity)
+        results.append(average_velocity)
+
         # Onboard
-        differences_squared = np.array(self.local_differences) ** 2
-        mean_of_differences_squared = differences_squared.mean()
+        mean_of_differences_squared = np.square(np.array(self.local_differences)).mean()
         rmse_val = np.sqrt(mean_of_differences_squared)
         variance = np.var(self.local_differences,ddof=1)
         results.append(rmse_val)
@@ -835,9 +839,9 @@ class RSU():
         results.append(self.global_over_detection_miss)
 
         print( "Test: ", self.unit_test_idx, " l_mode:", self.unit_test_config[self.unit_test_idx][0], " g_mode:", self.unit_test_config[self.unit_test_idx][1], " est_cov:", self.unit_test_config[self.unit_test_idx][2] )
-        print( "  localization_rmse_val: ", results[0], " variance: ", results[1])
-        print( "  onboard_rmse_val: ", results[2], " variance: ", results[3], " over misses: ", results[4], " under misses: ", results[5])
-        print( "  global_rmse_val: ", results[6], " variance: ", results[7], " over misses: ", results[8], " under misses: ", results[9])
+        print( "  localization_rmse_val: ", results[0], " variance: ", results[1], " velocity ", results[2])
+        print( "  onboard_rmse_val: ", results[3], " variance: ", results[4], " over misses: ", results[5], " under misses: ", results[6])
+        print( "  global_rmse_val: ", results[7], " variance: ", results[8], " over misses: ", results[9], " under misses: ", results[10])
 
         return results
 

@@ -198,6 +198,10 @@ def cav(config, vid, test_idx):
     bounding_box = [[0.0, 0.0],[0.0, 0.0]]
     last_response = []
     data_collect_mode = config.data_collect_mode
+    if config.unit_test:
+        local_fusion_mode = config.unit_test_config[test_idx][0]
+    else:
+        local_fusion_mode = 0
 
     print( " CAV ", vid, " begin.")
 
@@ -313,7 +317,7 @@ def cav(config, vid, test_idx):
         print("global_time", global_time)
 
     # Start the sensor fusion pipeline
-    fusion = local_fusion.FUSION(0, vehicle_id)
+    fusion = local_fusion.FUSION(local_fusion_mode, vehicle_id)
     if debug: print( " Vehicle ", vehicle_id, " started fusion node" )
 
     # Sleep until test start time
@@ -355,7 +359,7 @@ def cav(config, vid, test_idx):
                 if vehicle_id == 0 and global_time > 100.0:
                     for each in vehicle_object_positions:
                         if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionX:
-                            print(" rotating: ", each)
+                            #print(" rotating: ", each)
                             ox = planner.localizationPositionX
                             oy = planner.localizationPositionX
                             angle = math.radians(test_idx)
@@ -365,7 +369,7 @@ def cav(config, vid, test_idx):
                             qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
                             each[0] = qx
                             each[1] = qy
-                            print(each)
+                            #print(each)
 
                 cam_returned2, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
                 cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions2)

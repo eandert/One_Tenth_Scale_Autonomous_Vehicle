@@ -1,7 +1,7 @@
 import math
 import numpy as np
 from shapely.geometry import Polygon
-from shapely.geometry import box
+from shapely.geometry import box, Point
 from shapely.affinity import rotate, translate
 
 
@@ -117,3 +117,31 @@ def computeDistanceEllipseBox(a, b):
         distance = 1 - iou
 
     return distance
+
+# This function turns elipses into rectanges so that an IO calculation can be done for 
+# ball tree matching
+def computeDistanceEuclidean(a, b):
+    # cx = a[0]
+    # cy = a[1]
+    # w = a[2]
+    # h = a[3]
+    # angle = a[4]
+    # c = box(-w/2.0, -h/2.0, w/2.0, h/2.0)
+    # rc = rotate(c, angle)
+    # contour_a = translate(rc, cx, cy)
+
+    cx = b[0]
+    cy = b[1]
+    w = b[2]
+    h = b[3]
+    angle = a[4]
+    c = box(-w/2.0, -h/2.0, w/2.0, h/2.0)
+    rc = rotate(c, angle)
+    contour_b = translate(rc, cx, cy)
+
+    # If the boxes intersect, then we are within the gate of both
+    if contour_b.contains(Point(a[0], a[1])):
+        distance = math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+        return distance / 100.0
+    else:
+        return 1

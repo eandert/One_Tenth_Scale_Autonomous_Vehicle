@@ -87,11 +87,19 @@ class Planner:
         self.lidarDetectionsRaw = []
 
         # Start sensors with standard error model
-        self.localization = sensor.Localization(math.sqrt(0.0782), math.sqrt(0.0428), math.sqrt(0.0841), math.sqrt(0.0241))
+        #print(math.hypot(math.sqrt(0.03733623589373042) + math.sqrt(0.0428) * 0.36282835297512617, math.sqrt(0.0841) + math.sqrt(0.0241) * 0.36282835297512617))
+        # self.localization = sensor.Localization(math.sqrt(0.0782), math.sqrt(0.0428), math.sqrt(0.0841), math.sqrt(0.0241))
+        # self.lidarSensor = sensor.Sensor("M1M1", 0.0, 360, 15.0,
+        #                                        math.sqrt(0.0097), math.sqrt(0.0361), math.sqrt(0.0165), math.sqrt(0.0607))
+        # self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
+        #                                        math.sqrt(0.0117), math.sqrt(0.023), math.sqrt(0.0517), math.sqrt(0.0126))
+
+        print(math.hypot(0.03733623589373042 + 0.02798284589109133 * 0.36282835297512617, 0.019538095885057276 + 0.02941907006456509 * 0.36282835297512617))
+        self.localization = sensor.Localization(0.02798284589109133, 0.03733623589373042, 0.02941907006456509, 0.019538095885057276)
         self.lidarSensor = sensor.Sensor("M1M1", 0.0, 360, 15.0,
-                                               math.sqrt(0.0097), math.sqrt(0.0361), math.sqrt(0.0165), math.sqrt(0.0607))
+                                               0.0097, 0.0361, 0.0517, 0.0126)
         self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
-                                               math.sqrt(0.0117), math.sqrt(0.023), math.sqrt(0.0517), math.sqrt(0.0126))
+                                               0.0117, 0.023, 0.0165, 0.0607)
 
         # self.localization = sensor.Localization(0.0782, 0.0428, 0.0841, 0.0241)
         # self.lidarSensor = sensor.Sensor("M1M1", 0.0, 360, 15.0,

@@ -80,10 +80,10 @@ class Planner:
         self.localizationError = None
  
         # Start sensors with standard error model
-        self.localization = sensor.Localization(math.sqrt(0.01), 0.0, math.sqrt(0.01), 0.0)
+        self.localization = sensor.Localization(0.01, 0.0, 0.01, 0.0)
         self.lidarSensor = None
         self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
-                                               math.sqrt(0.0117), math.sqrt(0.023), math.sqrt(0.0517), math.sqrt(0.0126))
+                                               0.0117, 0.023, 0.0165, 0.0607)
         # self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
         #                                 0.0117, 0.023, 0.0517, 0.0126)
         
