@@ -366,9 +366,12 @@ class ResizableKalman:
                     #print(y_t_temp)
                     location_error = math.hypot(y_t_temp[0], y_t_temp[1])
                     expected_a, expected_b, expected_angle = shared_math.ellipsify(cov, 1.0)
-                    expected_location_error = math.hypot(expected_a, expected_b)
+                    expected_x = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(0))
+                    expected_y = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(90))
+                    expected_location_error = math.hypot(expected_x, expected_y)
                     #cov
                     location_error_std = location_error / expected_location_error
+                    print(location_error, expected_location_error, location_error_std)
                     self.error_tracker_temp.append([id, location_error, location_error_std])
                     #print(" error: ", id, location_error, location_error_std)
 

@@ -25,17 +25,9 @@ class BivariateGaussian:
             self.mu = mu
             self.covariance = cov
 
-    def calculateRadiusAtAngle(self, a, b, phi, measurementAngle):
-        denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
-        if denominator == 0.0:
-            #print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
-            return 0.0
-        else:
-            return ( a * b ) / denominator
-
     def calcSelfRadiusAtAnlge(self, angle, num_std_deviations):
         a, b, phi = self.extractErrorElipseParamsFromBivariateGaussian(num_std_deviations)
-        return self.calculateRadiusAtAngle(a, b, phi, angle)
+        return shared_math.calculateRadiusAtAngle(a, b, phi, angle)
 
     def eigsorted(self):
         '''
@@ -56,16 +48,6 @@ class BivariateGaussian:
 
         vals, vecs = self.eigsorted()
         phi = np.arctan2(*vecs[:, 0][::-1])
-
-        # A and B are radii
-        # if vals[0] > 0.00001 or vals[0] < -0.00001:
-        #     a = num_std_deviations * math.sqrt(abs(vals[0]))
-        # else:
-        #     a = 0.0
-        # if vals[1] > 0.00001 or vals[1] < -0.00001:
-        #     b = num_std_deviations * math.sqrt(abs(vals[1]))
-        # else:
-        #     b = 0.0
 
         a = num_std_deviations * vals[0]
         b = num_std_deviations * vals[1]
@@ -183,10 +165,6 @@ class Sensor:
                 actual_error_gaussian = BivariateGaussian(actualDistanceError,
                                       actualRadialError,
                                       elipse_angle_expected)
-                x_actual = ((object_distance) * math.cos(
-                    target_line_angle))
-                y_actual = ((object_distance) * math.sin(
-                    target_line_angle))
                 actual_sim_error = actual_error_gaussian.calcXYComponents()
                 return True, expected_error_gaussian, actual_sim_error
             else:

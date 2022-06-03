@@ -35,10 +35,6 @@ def get_relative_detection_params(detector_x, detector_y, detector_theta, observ
 
 ''' Kalman filter prediction equasion '''
 def kalman_prediction(X_hat_t_1, P_t_1, F_t, B_t, U_t, Q_t):
-    # X_hat_t = F_t.dot(X_hat_t_1) + (B_t.dot(U_t).reshape(B_t.shape[0], -1))
-    # P_t = np.diag(np.diag(F_t.dot(P_t_1).dot(F_t.transpose()))) + Q_t
-    # return X_hat_t, P_t
-
     X_hat_t = F_t.dot(X_hat_t_1) + (B_t.dot(U_t).reshape(B_t.shape[0], -1))
     P_t = F_t.dot(P_t_1).dot(F_t.transpose()) + Q_t
     return X_hat_t, P_t
@@ -46,7 +42,6 @@ def kalman_prediction(X_hat_t_1, P_t_1, F_t, B_t, U_t, Q_t):
 ''' Kalman filter update equasion '''
 def kalman_update(X_hat_t, P_t, Z_t, R_t, H_t):
     K_prime = P_t.dot(H_t.transpose()).dot(kalman_inverse(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
-    # print("X_hat:\n",X_hat_t)
     X_t = X_hat_t + K_prime.dot(Z_t - H_t.dot(X_hat_t))
     P_t = P_t - K_prime.dot(H_t).dot(P_t)
     return X_t, P_t
@@ -86,6 +81,14 @@ def ellipsify(covariance, num_std_deviations = 3.0):
         b = 0.0
 
     return a, b, phi
+
+def calculateRadiusAtAngle(a, b, phi, measurementAngle):
+    denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
+    if denominator == 0.0:
+        #print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
+        return 0.0
+    else:
+        return ( a * b ) / denominator
 
 # This function turns elipses into rectanges so that an IO calculation can be done for 
 # ball tree matching

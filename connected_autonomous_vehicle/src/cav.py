@@ -358,10 +358,10 @@ def cav(config, vid, test_idx):
                 vehicle_object_positions2 = sim_values['veh_locations']
                 if vehicle_id == 0 and global_time > 100.0:
                     for each in vehicle_object_positions:
-                        if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionX:
+                        if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
                             #print(" rotating: ", each)
                             ox = planner.localizationPositionX
-                            oy = planner.localizationPositionX
+                            oy = planner.localizationPositionY
                             angle = math.radians(test_idx)
                             px = each[0]
                             py = each[1]

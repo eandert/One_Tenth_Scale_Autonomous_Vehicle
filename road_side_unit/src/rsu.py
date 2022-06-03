@@ -570,7 +570,7 @@ class RSU():
 
                         # Now calculate the score
                         for dist in distances:
-                            if dist > 1.0:
+                            if dist > 0.5:
                                 # Too far away to be considered a match, add as a miss instead
                                 self.global_under_detection_miss += len(groundTruth) - len(testSetGlobal)
                             else:
@@ -649,6 +649,7 @@ class RSU():
         lidar_detection_raw = []
         camera_detection_centroid = []
         sensor_fusion_centroid = []
+        localization_centroid = []
         localization_error = []
 
         sensor_export = []
@@ -700,6 +701,7 @@ class RSU():
             camera_detection_centroid.append(vehicle.cameraDetections)
             sensor_fusion_centroid.append(vehicle.fusionDetections)
             localization_error.append(vehicle.localizationCovariance)
+            localization_centroid.append([vehicle.localizationPositionX_actual,vehicle.localizationPositionY_actual])
 
         for idx, sensor in self.sensors.items():
             # Add to the global sensor fusion
@@ -726,6 +728,7 @@ class RSU():
             lidar_detection_centroid=lidar_detection_centroid,
             camera_detection_centroid=camera_detection_centroid,
             sensor_fusion_centroid=sensor_fusion_centroid,
+            localization_centroid=localization_centroid,
             localization_error=localization_error,
             sensor=sensor_export,
             sensor_camera_fov=sensor_camera_fov,
