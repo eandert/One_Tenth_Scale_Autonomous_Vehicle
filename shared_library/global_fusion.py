@@ -371,7 +371,7 @@ class ResizableKalman:
                     expected_location_error = math.hypot(expected_x, expected_y)
                     #cov
                     location_error_std = location_error / expected_location_error
-                    print(location_error, expected_location_error, location_error_std)
+                    #print(location_error, expected_location_error, location_error_std)
                     self.error_tracker_temp.append([id, location_error, location_error_std])
                     #print(" error: ", id, location_error, location_error_std)
 

@@ -406,7 +406,7 @@ class LIDAR:
                     vehicle_x, vehicle_y, vehicle_theta, track.x, track.y)
                 success_lidar, expected_error_gaussian_lidar, actual_sim_error_lidar = lidar_sensor.calculateErrorGaussian(
                     relative_angle_to_detector, target_line_angle, relative_distance, True)
-                result.append([track.x, track.y, expected_error_gaussian_lidar.covariance.tolist()])
+                result.append([track.id, track.x, track.y, expected_error_gaussian_lidar.covariance.tolist(), 0.0, 0.0, []])
 
         return result, timestamp
 

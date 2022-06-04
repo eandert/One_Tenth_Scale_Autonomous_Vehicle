@@ -595,61 +595,23 @@ class FUSION:
             if estimateCovariance and len(det) >= 3:
                 # Calculate our 3 sigma std deviation to create a bounding box for matching
                 try:
-                    a, b, phi = shared_math.ellipsify(det[2], 3)
+                    a, b, phi = shared_math.ellipsify(det[3], 3)
                     # Enforce a minimum size so matching doesn't fail
                     a += self.min_size
                     b += self.min_size
-                    detections_position_list.append([det[0], det[1], a, b, phi])
+                    detections_position_list.append([det[1], det[2], a, b, phi])
                 except Exception as e:
                     print ( " Failed! ", str(e))
                     # Use an arbitrary size if we have no covariance estimate
-                    detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+                    detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
             else:
                 print(" Warning: no covaraince data for ", sensor_id)
                 # Use an arbitrary size if we have no covariance estimate
-                detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([0, det[0], det[1], sensor_id])
+                detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
+            detections_list.append([0, det[1], det[2], sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
-
-    # def matchDetectionJPDAF(self, detections_list_positions, detection_list, timestamp, cleanupTime):
-    #     measurements = []
-    #     for each in detections_list_positions:
-    #         measurement = measurement_model.function([detections_list_positions[0],detections_list_positions[1]], noise=False)
-    #         tracks.append(Track())
-
-    #     hypotheses = data_associator.associate(tracks,
-    #                                        measurements,
-    #                                        timestamp)
-        
-    #     # Loop through each track, performing the association step with weights adjusted according to
-    #     # JPDA.
-    #     for track in detections_list_positions:
-    #         track_hypotheses = hypotheses[track]
-
-    #         posterior_states = []
-    #         posterior_state_weights = []
-    #         for hypothesis in track_hypotheses:
-    #             if not hypothesis:
-    #                 posterior_states.append(hypothesis.prediction)
-    #             else:
-    #                 posterior_state = updater.update(hypothesis)
-    #                 posterior_states.append(posterior_state)
-    #             posterior_state_weights.append(hypothesis.probability)
-
-    #         means = StateVectors([state.state_vector for state in posterior_states])
-    #         covars = np.stack([state.covar for state in posterior_states], axis=2)
-    #         weights = np.asarray(posterior_state_weights)
-
-    #         # Reduce mixture of states to one posterior estimate Gaussian.
-    #         post_mean, post_covar = gm_reduce_single(means, covars, weights)
-
-    #         # Add a Gaussian state approximation to the track.
-    #         track.append(GaussianStateUpdate(
-    #             post_mean, post_covar,
-    #             track_hypotheses,
-    #             track_hypotheses[0].measurement.timestamp))
 
     def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime):
         try:

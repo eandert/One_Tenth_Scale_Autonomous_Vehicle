@@ -5,6 +5,7 @@ from shapely.geometry.polygon import Polygon
 from shapely.geometry.linestring import LineString
 
 from shared_library import shared_math
+from shared_library.local_fusion import MAX_ID
 
 
 class BivariateGaussian:
@@ -238,6 +239,8 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
         camera_error_array = []
         lidar_array_searcher = []
         lidar_detected_error = []
+        cam_offset = 5000
+        MAX_ID = 10000
 
         # Get the points the Slamware M1M1 should generate
         lidar_freq = 7000 / 8
@@ -290,12 +293,15 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                 intersections_count = len(intersections)
 
             # Get the closest intersection with a polygon as that will be where our lidar beam stops
+            idx_counter = 0
             for point, polygon in zip(intersections, intersections_origin_point):
                 dist = math.hypot(point[0] - detector.localizationPositionX, point[1] - detector.localizationPositionY)
                 if dist < intersect_dist:
                     final_point = point
                     intersect_dist = dist
                     final_polygon = polygon
+                    final_polygon_id = idx_counter
+                idx_counter += 1
 
             # Make sure this worked and is not None
             if final_point != None:
@@ -318,8 +324,9 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                         success, expected_error_gaussian, actual_sim_error = detector.cameraSensor.calculateErrorGaussian(
                             relative_angle_to_detector, target_line_angle, relative_distance, True)
                         if success:
-                            camera_error_array.append((point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian.covariance.tolist()))
-                            camera_array.append((point[0], point[1], expected_error_gaussian.covariance.tolist()))
+                            universal_id = detector.id * MAX_ID + final_polygon_id
+                            camera_error_array.append((universal_id, point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian.covariance.tolist(), 0.0, 0.0, []))
+                            camera_array.append((universal_id, point[0], point[1], expected_error_gaussian.covariance.tolist(), 0.0, 0.0, []))
                             camera_array_searcher.append((point[0], point[1]))
                 
                 # Fast lidar math to skip the points
@@ -342,7 +349,8 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                             actual_sim_error_lidar = 0.0
 
                         if success_lidar:
-                            lidar_detected_error.append((point[0] + actual_sim_error_lidar[0], point[1] + actual_sim_error_lidar[1], expected_error_gaussian_lidar.covariance.tolist()))
+                            universal_id = detector.id * MAX_ID + final_polygon_id + cam_offset
+                            lidar_detected_error.append((universal_id, point[0] + actual_sim_error_lidar[0], point[1] + actual_sim_error_lidar[1], expected_error_gaussian_lidar.covariance.tolist(), 0.0, 0.0, []))
                             lidar_array_searcher.append((point[0], point[1]))
 
         return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array, lidar_detected_error
