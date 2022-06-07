@@ -133,7 +133,8 @@ class Tracked:
             #self.Q_t = np.identity(5)
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
-            two = process_variation * (.125*.125)
+            angle_variation = .75
+            two = angle_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0, 0],
                                 [0, four, 0, three, 0],
                                 [three, three, two, 0, 0],
@@ -619,7 +620,7 @@ class FUSION:
             if len(detections_list_positions) > 0:
                 if len(self.trackedList) > 0:
                     numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
-                    thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEuclidean)
+                    thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
 
                     # Need to check the tree size here in order to figure out if we can even do this
                     length = len(numpy_formatted)

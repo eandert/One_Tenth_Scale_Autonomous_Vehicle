@@ -40,6 +40,8 @@ class RSU():
         self.intersection_serving = [-99,-99]
         self.unit_test = config.unit_test
         self.cooperative_monitoring = config.cooperative_monitoring
+        self.cooperative_monitoring_update = config.cooperative_monitoring_update
+        self.cooperative_monioting_step = 0
         self.rsu_ip = config.rsu_ip
         self.test_one_step_kalman = config.test_one_step_kalman
         self.end_test = False
@@ -488,18 +490,27 @@ class RSU():
                         self.localization_differences.append(math.hypot(vehicle.localizationPositionX-vehicle.localizationPositionX_actual,
                                                                         vehicle.localizationPositionY-vehicle.localizationPositionY_actual))
                         self.localization_velocity.append(vehicle.velocity)
-                self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance)
+
+                if self.cooperative_monitoring and self.cooperative_monioting_step >= self.cooperative_monitoring_update:
+                    self.cooperative_monioting_step = 0
+                    monitor = True
+                else:
+                    self.cooperative_monioting_step += 1
+                    monitor = False
+
+
+                self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance,)
 
                 # Add CAV fusion results to the global sensor fusion
                 for idx, vehicle in self.vehicles.items():
-                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.parameterized_covariance)
+                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.parameterized_covariance,)
 
                 # Add CIS fusion results to the global sensor fusion
                 for idx, sensor in self.sensors.items():
                     self.globalFusion.processDetectionFrame(self.getTime(), sensor.fusionDetections, .25, self.parameterized_covariance)
 
                 # Perform the global fusion
-                self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance)
+                self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance, monitor)
 
                 # Testing to make sure the cascading global fusion method results in the same output as a single step
                 if self.test_one_step_kalman:
@@ -512,7 +523,7 @@ class RSU():
                         # Add to the global sensor fusion
                         self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), sensor.cameraDetections, .25, self.parameterized_covariance)
 
-                    self.globalFusionListOneStepKalman, error_data = self.globalFusionOneStepKalman.fuseDetectionFrame(self.parameterized_covariance)
+                    self.globalFusionListOneStepKalman, error_data_one_step = self.globalFusionOneStepKalman.fuseDetectionFrame(self.parameterized_covariance, False)
 
                 # Use the cooperative monitoring method to check the sensors against the global fusion result
                 if self.cooperative_monitoring:
@@ -556,7 +567,7 @@ class RSU():
 
                     # Ground truth the global fusion result
                     over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(self.globalFusionList, ground_truth)
-                    self.global_differences = self.local_differences + differences
+                    self.global_differences = self.global_differences + differences
                     self.global_over_detection_miss += over_detection_miss
                     self.global_under_detection_miss += under_detection_miss
 

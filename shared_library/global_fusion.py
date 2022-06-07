@@ -133,7 +133,8 @@ class ResizableKalman:
             # Process cov
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
-            two = process_variation * (.125*.125)
+            angle_variation = .75
+            two = angle_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0, 0],
                                 [0, four, 0, three, 0],
                                 [three, three, two, 0, 0],
@@ -226,7 +227,7 @@ class ResizableKalman:
 
         return temprorary_mu, temporary_c
 
-    def fusion(self, measurement_list, estimate_covariance):
+    def fusion(self, measurement_list, estimate_covariance, monitor):
         # Set the kalman variables and resize the arrays dynalically (if needed
         self.addFrames(measurement_list)
         # Do the kalman thing!
@@ -359,21 +360,22 @@ class ResizableKalman:
 
                 # Lets check the accuracy of each sensing platform
                 self.error_tracker_temp = []
-                for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
-                    Z_t = (mu).transpose()
-                    Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                    y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
-                    #print(y_t_temp)
-                    location_error = math.hypot(y_t_temp[0], y_t_temp[1])
-                    expected_a, expected_b, expected_angle = shared_math.ellipsify(cov, 1.0)
-                    expected_x = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(0))
-                    expected_y = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(90))
-                    expected_location_error = math.hypot(expected_x, expected_y)
-                    #cov
-                    location_error_std = location_error / expected_location_error
-                    #print(location_error, expected_location_error, location_error_std)
-                    self.error_tracker_temp.append([id, location_error, location_error_std])
-                    #print(" error: ", id, location_error, location_error_std)
+                if monitor:
+                    for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
+                        Z_t = (mu).transpose()
+                        Z_t = Z_t.reshape(Z_t.shape[0], -1)
+                        y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
+                        #print(y_t_temp)
+                        location_error = math.hypot(y_t_temp[0], y_t_temp[1])
+                        expected_a, expected_b, expected_angle = shared_math.ellipsify(cov, 1.0)
+                        expected_x = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(0))
+                        expected_y = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(90))
+                        expected_location_error = math.hypot(expected_x, expected_y)
+                        #cov
+                        location_error_std = location_error / expected_location_error
+                        #print(location_error, expected_location_error, location_error_std)
+                        self.error_tracker_temp.append([id, location_error, location_error_std])
+                        #print(" error: ", id, location_error, location_error_std)
 
                 self.prev_time = self.lastTracked
                 self.x = X_t[0][0]
@@ -404,12 +406,8 @@ class ResizableKalman:
     def getKalmanPred(self, time):
         # Prediction based mathcing methods seems to be making this fail so we are using no prediction :/
         # Enforce a min size of a vehicle so that a detection has some area overlap to check
-        a, b, phi = shared_math.ellipsify(self.error_covariance, 3.0)
-        if a < self.min_size:
-            a = self.min_size 
-        if b < self.min_size:
-            b = self.min_size 
-        return self.x, self.y, a, b, phi
+        a, b, phi = shared_math.ellipsify(self.error_covariance, 1.0)
+        return self.x, self.y, self.min_size + a, self.min_size + b, phi
 
 
 class GlobalTracked:
@@ -471,8 +469,8 @@ class GlobalTracked:
                 [x, y, a, b, phi]
             ]
 
-    def fusion(self, estimate_covariance):
-        self.kalman.fusion(self.match_list, estimate_covariance)
+    def fusion(self, estimate_covariance, monitor):
+        self.kalman.fusion(self.match_list, estimate_covariance, monitor)
         self.x = self.kalman.x
         self.y = self.kalman.y
         self.error_covariance = self.kalman.error_covariance
@@ -505,12 +503,12 @@ class GlobalFUSION:
         # Indicate our success
         print('Started FUSION successfully...')
 
-    def fuseDetectionFrame(self, estimate_covariance):
+    def fuseDetectionFrame(self, estimate_covariance, monitor):
         # Time to go through each track list and fuse!
         result = []
         cooperative_monitoring = []
         for track in self.trackedList:
-            track.fusion(estimate_covariance)
+            track.fusion(estimate_covariance, monitor)
             if track.fusion_steps >= self.trackShowThreshold:
                 result.append([track.id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
                 if track.error_monitor:
@@ -527,24 +525,24 @@ class GlobalFUSION:
         detections_position_list = []
         detections_list = []
         for det in observations:
-            # TODO: Figure out why performance is worse with this method
+            # #TODO: Figure out why performance is worse with this method
             # # Create a rotated rectangle for IOU of 2 ellipses
             # # [cx, cy, w, h, angle]
-            if estimateCovariance and len(det) >= 3:
-                # Calculate our 3 sigma std deviation to create a bounding box for matching
-                try:
-                    a, b, phi = shared_math.ellipsify(np.array(det[3]), 3.0)
-                    # Enforce a minimum size so matching doesn't fail
-                    a += self.min_size
-                    b += self.min_size
-                    detections_position_list.append([det[1], det[2], a, b, phi])
-                except Exception as e:
-                    print ( " Failed! ", str(e))
-                    # Use an arbitrary size if we have no covariance estimate
-                    detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
-            else:
-                # Use an arbitrary size if we have no covariance estimate
-                detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
+            # if estimateCovariance and len(det) >= 3:
+            #     # Calculate our 3 sigma std deviation to create a bounding box for matching
+            #     try:
+            #         a, b, phi = shared_math.ellipsify(np.array(det[3]), 3.0)
+            #         # Enforce a minimum size so matching doesn't fail
+            #         a += self.min_size
+            #         b += self.min_size
+            #         detections_position_list.append([det[1], det[2], a, b, phi])
+            #     except Exception as e:
+            #         print ( " Failed! ", str(e))
+            #         # Use an arbitrary size if we have no covariance estimate
+            #         detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
+            # else:
+            #     # Use an arbitrary size if we have no covariance estimate
+            detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
             #detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
             detections_list.append([det[0], det[1], det[2], np.array(det[3]), det[4], det[5], np.array(det[6])])
 
@@ -556,7 +554,7 @@ class GlobalFUSION:
         if len(detections_list_positions) > 0:
             if len(self.trackedList) > 0:
                 numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
-                thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEuclidean)
+                thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
 
                 # Need to check the tree size here in order to figure out if we can even do this
                 length = len(numpy_formatted)
