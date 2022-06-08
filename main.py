@@ -99,7 +99,7 @@ class UnitTest():
     def print_unit_test_stats(self):
         idx = 0
         fails = 0
-        for l_rmse, l_var, l_vel, o_rmse, o_var, o_u_miss, o_o_miss, g_rmse, g_var, g_u_miss, g_o_miss in zip(self.unit_test_localization_rmse_results,
+        for l_rmse, l_var, l_vel, o_rmse, o_var, o_o_miss, o_u_miss, g_rmse, g_var, g_o_miss, g_u_miss in zip(self.unit_test_localization_rmse_results,
             self.unit_test_localization_velocity_results, self.unit_test_localization_variance_results, 
             self.unit_test_local_rmse_results, self.unit_test_local_variance_results,
             self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
@@ -149,7 +149,7 @@ def run_single_test(conf):
 
 if __name__ == "__main__":
     # Configure the settings
-    conf = config.Setting("four_cav_simulation_unit_test")
+    conf = config.Setting("two_cav_simulation")
 
     if conf.unit_test:
         unit_test = UnitTest()
@@ -157,4 +157,4 @@ if __name__ == "__main__":
     else:
         run_single_test(conf)
 
-sys.exit() 
+#sys.exit() 

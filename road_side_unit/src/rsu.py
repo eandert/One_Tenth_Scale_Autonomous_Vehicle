@@ -45,6 +45,7 @@ class RSU():
         self.rsu_ip = config.rsu_ip
         self.test_one_step_kalman = config.test_one_step_kalman
         self.end_test = False
+        self.error_monitoring = []
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -95,6 +96,7 @@ class RSU():
 
         # Offset the IDs for the cis sensors
         self.cis_offset = len(config.cav)
+        self.localization_offset = len(config.cav) + len(config.cis)
 
         # Lets create the sensors
         for idx, cis in enumerate(config.cis):
@@ -178,21 +180,27 @@ class RSU():
     def initSimulation(self, config):
          # If this is a simulation, we need to start up the CAVs and CISs as threads
         if config.simulation:
+
+            # print("Spinning up the fake process.")
+            # fake_thread = mp.Process(target=cav.fake_thread_that_just_prints, args=())
+            # fake_thread.daemon = True
+            # fake_thread.start()
+
             self.sim_time = 0.0
             self.thread = dict()
             self.step_sim_vehicle = False
             #mp.set_start_method('spawn')
             for idx, vehicle in self.vehicles.items():
                 # Old way that is slow because of the Global Interpreter Lock
-                self.thread["cav"+str(idx)] = Thread(target=cav.cav, args=(config, idx, self.unit_test_idx, ))
-                self.thread["cav"+str(idx)].daemon = True
-                self.thread["cav"+str(idx)].start()
+                # self.thread["cav"+str(idx)] = Thread(target=cav.cav, args=(config, idx, self.unit_test_idx, ))
+                # self.thread["cav"+str(idx)].daemon = True
+                # self.thread["cav"+str(idx)].start()
 
                 # New actual threading
                 # TODO: Figure out why this does not work!
-                # self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, idx))
-                # self.thread["cav"+str(idx)].daemon = True
-                # self.thread["cav"+str(idx)].start()
+                self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, idx, self.unit_test_idx,))
+                self.thread["cav"+str(idx)].daemon = True
+                self.thread["cav"+str(idx)].start()
 
                 # time.sleep(1)
 
@@ -200,15 +208,15 @@ class RSU():
 
             for idx, sensor in self.sensors.items():
                 # Old way that is slow because of the Global Interpreter Lock
-                self.thread["cis"+str(idx)] = Thread(target=cis.cis, args=(config, self.cis_offset + idx, self.unit_test_idx, ))
-                self.thread["cis"+str(idx)].daemon = True
-                self.thread["cis"+str(idx)].start()
+                # self.thread["cis"+str(idx)] = Thread(target=cis.cis, args=(config, self.cis_offset + idx, self.unit_test_idx, ))
+                # self.thread["cis"+str(idx)].daemon = True
+                # self.thread["cis"+str(idx)].start()
 
                 # New actual threading
                 # TODO: Figure out why this does not work!
-                # self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, idx))
-                # self.thread["cav"+str(idx)].daemon = True
-                # self.thread["cav"+str(idx)].start()
+                self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, self.cis_offset + idx, self.unit_test_idx, ))
+                self.thread["cav"+str(idx)].daemon = True
+                self.thread["cav"+str(idx)].start()
 
                 # time.sleep(1)
 
@@ -319,7 +327,7 @@ class RSU():
             self.vehicles[id].targetIndexY = targetIndexY
             self.vehicles[id].lidarDetectionsRaw = detections["lidar_detection_raw"]
 
-            self.step_sim_vehicle_tracker[id] = False
+            #self.step_sim_vehicle_tracker[id] = False
 
             # Get the last known location of all other vehicles
             vehicleList = []
@@ -377,7 +385,7 @@ class RSU():
                 self.sensors[id].theta = detections["localization"][2]
             self.sensors[id].localizationCovariance = detections["localization"][4]
 
-            self.step_sim_sensor_tracker[id] = False
+            #self.step_sim_sensor_tracker[id] = False
 
             # Finally we can create the return messages
             response = dict(
@@ -464,13 +472,15 @@ class RSU():
         for each in self.step_sim_vehicle_tracker:
             if each:
                 continue_blocker_check = True
+                break
         for each in self.step_sim_sensor_tracker:
             if each:
                 continue_blocker_check = True
+                break
 
         # If this is simulation, enter the next state based ont he result from the block
         # checker. But if we are not in simulation, move forward if we have hit the timeout.
-        if continue_blocker_check == False or (not self.simulation and self.getTime() > self.timeout):
+        if continue_blocker_check == False or ((not self.simulation) and (self.getTime() > self.timeout)):
             self.step_sim_vehicle = False
 
             # GLobal fusion time! (if enabled)
@@ -492,18 +502,17 @@ class RSU():
                         self.localization_velocity.append(vehicle.velocity)
 
                 if self.cooperative_monitoring and self.cooperative_monioting_step >= self.cooperative_monitoring_update:
-                    self.cooperative_monioting_step = 0
+                    self.cooperative_monioting_step = 1
                     monitor = True
                 else:
                     self.cooperative_monioting_step += 1
                     monitor = False
 
-
-                self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance,)
+                self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance)
 
                 # Add CAV fusion results to the global sensor fusion
                 for idx, vehicle in self.vehicles.items():
-                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.parameterized_covariance,)
+                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.parameterized_covariance)
 
                 # Add CIS fusion results to the global sensor fusion
                 for idx, sensor in self.sensors.items():
@@ -526,33 +535,8 @@ class RSU():
                     self.globalFusionListOneStepKalman, error_data_one_step = self.globalFusionOneStepKalman.fuseDetectionFrame(self.parameterized_covariance, False)
 
                 # Use the cooperative monitoring method to check the sensors against the global fusion result
-                if self.cooperative_monitoring:
-                    # Add our covariance data to the global sensor list
-                    revolving_buffer_size = 1000
-                    for error_frame in error_data:
-                        # Check if this is a localizer or a sensor
-                        if error_frame[0]/self.localizationid >= 1:
-                            sensor_platform_id = error_frame[0]
-                        else:
-                            sensor_platform_id = math.floor(error_frame[0]/10000)
-                        if sensor_platform_id in self.error_dict:
-                            # Moving revolving_buffer_size place average
-                            if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
-                                self.error_dict[sensor_platform_id][0] += 1
-                                self.error_dict[sensor_platform_id][2].append(error_frame[2])
-                                self.error_dict[sensor_platform_id][1] += 1
-                            # We have filled revolving_buffer_size places, time to revolve the buffer now
-                            else:
-                                if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
-                                    # Replace the element with the next one
-                                    self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
-                                    self.error_dict[sensor_platform_id][1] += 1
-                                else:
-                                    self.error_dict[sensor_platform_id][1] = 0
-                                    self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
-                                    self.error_dict[sensor_platform_id][1] += 1
-                        else:
-                            self.error_dict[sensor_platform_id] = [1,1,[error_frame[2]]]
+                if monitor:
+                    self.cooperative_monitoring_process(error_data)
 
                 if self.unit_test:
                     # Uses true positions of the CAVs to ground truth the sensing.
@@ -560,10 +544,17 @@ class RSU():
                     ground_truth = self.create_ground_truth()
 
                     # Ground truth the local fusion result
-                    over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(vehicle.fusionDetections, ground_truth)
-                    self.local_differences = self.local_differences + differences
-                    self.local_over_detection_miss += over_detection_miss
-                    self.local_under_detection_miss += under_detection_miss
+                    for idx, vehicle in self.vehicles.items():
+                        over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(vehicle.fusionDetections, ground_truth, vehicle.id)
+                        self.local_differences = self.local_differences + differences
+                        self.local_over_detection_miss += over_detection_miss
+                        self.local_under_detection_miss += under_detection_miss
+
+                    for idx, sensor in self.sensors.items():
+                        over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(sensor.fusionDetections, ground_truth)
+                        self.local_differences = self.local_differences + differences
+                        self.local_over_detection_miss += over_detection_miss
+                        self.local_under_detection_miss += under_detection_miss
 
                     # Ground truth the global fusion result
                     over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(self.globalFusionList, ground_truth)
@@ -668,18 +659,6 @@ class RSU():
             map_specs = [self.mapSpecs.map, self.mapSpecs.intersectionStraightLength]
         else:
             map_specs = None
-
-        self.error_monitoring = []
-        if self.cooperative_monitoring:
-            for key in self.error_dict.keys():
-                if self.error_dict[key][0] > 5:
-                    average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
-                    self.error_monitoring.append([key, average_error, self.error_dict[key][0]])
-                    #print(" ID ", key, " error ", average_error, " len ", self.error_dict[key][0])
-
-                # if self.time > 95 and key == 0:
-                #     with open('output.txt', 'w+') as f:
-                #         f.write(str(average_error) + "\n")
 
         for idx, vehicle in self.vehicles.items():
             # Add to the global sensor fusion
@@ -815,8 +794,7 @@ class RSU():
         results = []
 
         # Localization
-        differences_mse_l = np.square(np.array(self.localization_differences)).mean()
-        rmse_val_l = np.sqrt(differences_mse_l)
+        rmse_val_l = shared_math.RMSE(self.localization_differences)
         variance_l = np.var(self.localization_differences,ddof=1)
         results.append(rmse_val_l)
         results.append(variance_l)
@@ -825,26 +803,20 @@ class RSU():
         results.append(average_velocity)
 
         # Onboard
-        mean_of_differences_squared = np.square(np.array(self.local_differences)).mean()
-        rmse_val = np.sqrt(mean_of_differences_squared)
+        rmse_val = shared_math.RMSE(self.local_differences)
         variance = np.var(self.local_differences,ddof=1)
         results.append(rmse_val)
         results.append(variance)
-        results.append(self.local_under_detection_miss)
         results.append(self.local_over_detection_miss)
-        # results.append(0)
-        # results.append(0)
-        # results.append(0)
-        # results.append(0)
+        results.append(self.local_under_detection_miss)
 
         # Global
-        differences_mse_g = np.square(np.array(self.global_differences)).mean()
-        rmse_val_g = np.sqrt(differences_mse_g)
+        rmse_val_g = shared_math.RMSE(self.global_differences)
         variance_g = np.var(self.global_differences,ddof=1)
         results.append(rmse_val_g)
         results.append(variance_g)
-        results.append(self.global_under_detection_miss)
         results.append(self.global_over_detection_miss)
+        results.append(self.global_under_detection_miss)
 
         print( "Test: ", self.unit_test_idx, " l_mode:", self.unit_test_config[self.unit_test_idx][0], " g_mode:", self.unit_test_config[self.unit_test_idx][1], " est_cov:", self.unit_test_config[self.unit_test_idx][2] )
         print( "  localization_rmse_val: ", results[0], " variance: ", results[1], " velocity ", results[2])
@@ -852,15 +824,14 @@ class RSU():
         print( "  global_rmse_val: ", results[7], " variance: ", results[8], " over misses: ", results[9], " under misses: ", results[10])
         
         if self.test_one_step_kalman:
-            differences_mse_g = np.square(np.array(self.global_one_step_differences)).mean()
-            rmse_val_g = np.sqrt(differences_mse_g)
-            variance_g = np.var(self.global_one_step_differences,ddof=1)
-            results.append(rmse_val_g)
-            results.append(variance_g)
-            results.append(self.global_under_detection_miss)
+            rmse_val_g_o = shared_math.RMSE(self.global_one_step_differences)
+            variance_g_o = np.var(self.global_one_step_differences,ddof=1)
+            results.append(rmse_val_g_o)
+            results.append(variance_g_o)
             results.append(self.global_over_detection_miss)
-            print( "  one_setp_rmse_val: ", rmse_val_g,
-            " variance: ", variance_g,
+            results.append(self.global_under_detection_miss)
+            print( "  one_setp_rmse_val: ", rmse_val_g_o,
+            " variance: ", variance_g_o,
             " over misses: ", self.global_one_step_over_detection_miss,
             " under misses: ", self.global_one_step_under_detection_miss)
 
@@ -903,36 +874,103 @@ class RSU():
 
         return groundTruth
 
-    def ground_truth_dataset(self, test_list, ground_truth_list):
+    def ground_truth_dataset(self, test_list, ground_truth_list, self_id = -1):
         # Ground truth a set of sensor outputs (local or global fusion)
         test_list_converted = []
         over_detection_miss = 0
         under_detection_miss = 0
         differences = []
+        
+        # Take out our own id from the ground truth (if necessary)
+        ground_truth_list_temp = ground_truth_list.copy()
+        if self_id >= 0:
+            del ground_truth_list_temp[self_id]
+        
         for each in test_list:
             sensed_x = each[1]
             sensed_y = each[2]
             test_list_converted.append([sensed_x, sensed_y])
-        if len(test_list_converted) >= 1 and len(ground_truth_list) >= 1:
+        
+        if len(test_list_converted) >= 1 and len(ground_truth_list_temp) >= 1:
             nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(test_list_converted))
-            distances, indices = nbrs.kneighbors(np.array(ground_truth_list))
+            distances, indices = nbrs.kneighbors(np.array(ground_truth_list_temp))
 
             # Now calculate the score
             for dist in distances:
-                if dist > 0.25:
+                if dist > 0.5:
                     # Too far away to be considered a match, add as a miss instead
                     under_detection_miss += 1
                 else:
                     differences.append(dist)
         # Check how much large the test set is from the ground truth and add that as well
-        if len(test_list_converted) > len(ground_truth_list):
+        if len(test_list_converted) > len(ground_truth_list_temp):
             # Overdetection case
-            over_detection_miss += len(test_list_converted) - len(ground_truth_list)
-        elif len(test_list_converted) < len(ground_truth_list):
+            over_detection_miss += len(test_list_converted) - len(ground_truth_list_temp)
+        elif len(test_list_converted) < len(ground_truth_list_temp):
             # Underdetection case, we count this differently because it may be from obstacle blocking
-            under_detection_miss += len(ground_truth_list) - len(test_list_converted)
+            under_detection_miss += len(ground_truth_list_temp) - len(test_list_converted)
 
         return over_detection_miss, under_detection_miss, differences
+
+    def cooperative_monitoring_process(self, error_data):
+        # We have who saw what, but now we need to see who should have seen what
+        # for global_track in self.globalFusionList:
+        #     shared_math.check_in_range_and_fov(target_angle, distance, center_angle, math.radians(fov), max_range)
+
+        # Add our covariance data to the global sensor list
+        revolving_buffer_size = 125
+        for error_frame in error_data:
+            # Check if this is a localizer or a sensor
+            if error_frame[0]/self.localizationid >= 1:
+                sensor_platform_id = error_frame[0]
+            else:
+                sensor_platform_id = math.floor(error_frame[0]/10000)
+            if sensor_platform_id in self.error_dict:
+                # Moving revolving_buffer_size place average
+                if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
+                    self.error_dict[sensor_platform_id][0] += 1
+                    self.error_dict[sensor_platform_id][2].append(error_frame[2])
+                    self.error_dict[sensor_platform_id][1] += 1
+                # We have filled revolving_buffer_size places, time to revolve the buffer now
+                else:
+                    if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
+                        # Replace the element with the next one
+                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                        self.error_dict[sensor_platform_id][1] += 1
+                    else:
+                        self.error_dict[sensor_platform_id][1] = 0
+                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                        self.error_dict[sensor_platform_id][1] += 1
+            else:
+                self.error_dict[sensor_platform_id] = [1,1,[error_frame[2]]]
+
+        # Normalize all the data to 0 (hopefully)
+        normalization_numerator = 0.0
+        normalization_denominator = 0.0
+        for key in self.error_dict.keys():
+            if self.error_dict[key][0] > 5 and int(key) < self.localization_offset:
+                normalization_numerator += sum(self.error_dict[key][2])
+                normalization_denominator += self.error_dict[key][0]
+        
+        # Make sure the fenominator is greater than 0
+        if normalization_denominator != 0.0:
+            error_monitoring_normalizer = normalization_numerator / normalization_denominator
+        else:
+            error_monitoring_normalizer = 1.0
+
+        self.error_monitoring = []
+        for key in self.error_dict.keys():
+            if self.error_dict[key][0] > 5:
+                average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
+                if int(key) < self.localization_offset:
+                    average_error = average_error/error_monitoring_normalizer
+                self.error_monitoring.append([key, average_error, self.error_dict[key][0]])
+
+                if self.time > 95 and int(key) == 0:
+                    with open('output.txt', 'a') as f:
+                        f.write(str(self.time) + "," + str(average_error) + "\n")
+                        print("writing to file!" + str(self.time-.125) + "," + str(average_error) + "\n")
+
 
 # def BackendProcessor(q, vehicles, sensors, trafficLightArray):
 #     while True:

@@ -547,7 +547,7 @@ class Tracked:
         
         # Prediction based mathcing methods seems to be making this fail so we are using no prediction :/
         # Enforce a min size of a vehicle so that a detection has some area overlap to check
-        a, b, phi = shared_math.ellipsify(self.error_covariance, 3.0)
+        a, b, phi = shared_math.ellipsify(self.error_covariance, 1.0)
         return self.x, self.y, self.min_size + a, self.min_size + b, phi
 
 
@@ -566,7 +566,7 @@ class FUSION:
         self.min_size = 0.5
         self.fusion_mode = fusion_mode
         self.current_tracked_id = 0
-        self.trackShowThreshold = 10
+        self.trackShowThreshold = 4
         self.predictive =True
 
         # Indicate our success
@@ -600,7 +600,7 @@ class FUSION:
                     # Enforce a minimum size so matching doesn't fail
                     a += self.min_size
                     b += self.min_size
-                    detections_position_list.append([det[1], det[2], a, b, phi])
+                    detections_position_list.append([det[1], det[2], self.min_size + a, self.min_size + b, phi])
                 except Exception as e:
                     print ( " Failed! ", str(e))
                     # Use an arbitrary size if we have no covariance estimate

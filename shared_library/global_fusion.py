@@ -497,7 +497,7 @@ class GlobalFUSION:
         self.id = 0
         self.prev_time = -99.0
         self.min_size = 0.5
-        self.trackShowThreshold = 10
+        self.trackShowThreshold = 4
         self.fusion_mode = fusion_mode
 
         # Indicate our success
@@ -681,8 +681,8 @@ class GlobalFUSION:
         detections_position_list = []
         detections_position_list_id = []
         for track in self.trackedList:
-            a, b, phi = shared_math.ellipsify(track.error_covariance, 3.0)
-            detections_position_list.append([track.x, track.y, a, b, phi])
+            a, b, phi = shared_math.ellipsify(track.error_covariance, 1.0)
+            detections_position_list.append([track.x, track.y, self.min_size + a, self.min_size + b, phi])
             detections_position_list_id.append(track.id)
         matches = []
         remove = []

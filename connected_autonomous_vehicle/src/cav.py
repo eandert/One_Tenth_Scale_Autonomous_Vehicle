@@ -149,7 +149,7 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
     vehicle_id = v_id
     # Start the connection with the RSU (Road Side Unit) server through sockets
     rsu = communication.connectServer(rsu_ip)
-    init_returned = rsu.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    init_returned = rsu.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, time.time())
 
     init["t_x"] = init_returned["t_x"]
     init["t_y"] = init_returned["t_y"]
@@ -167,7 +167,7 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
             got = comm_q.get()
             x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage = got
 
-            response_message = rsu.checkin(vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage)
+            response_message = rsu.checkin(vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage, time.time())
 
             # Check if our result is valid
             if response_message == None:
@@ -178,7 +178,7 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
                 else:
                     print("Attempting to re-register with RSU")
                     # We have failed a lot lets try to re-register but use our known location
-                    response_message = rsu.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                    response_message = rsu.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, time.time())
             else:
                 response["v_t"] = response_message["v_t"]
                 response["tfl_state"] = response_message["tfl_state"]
@@ -270,7 +270,7 @@ def cav(config, vid, test_idx):
         # Start the connection with the RSU (Road Side Unit) server through sockets
         rsu_sim_check = communication.connectServer(config.rsu_ip)
         if debug: print( " Vehicle ", vehicle_id, " connected ", config.rsu_ip)
-        init_returned = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        init_returned = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, fetch_time(simulation_time, global_time))
         if debug: print( " Vehicle ", vehicle_id, " registered with RSU ", config.rsu_ip)
 
         # Store the init values for continuous use
@@ -356,23 +356,23 @@ def cav(config, vid, test_idx):
                 
                 vehicle_object_positions = sim_values['veh_locations']
                 vehicle_object_positions2 = sim_values['veh_locations']
-                if vehicle_id == 0 and global_time > 100.0:
+                if vehicle_id == 0 and fetch_time(simulation_time, global_time) >= 100.0:
                     for each in vehicle_object_positions:
                         if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
                             #print(" rotating: ", each)
                             ox = planner.localizationPositionX
                             oy = planner.localizationPositionY
-                            angle = math.radians(test_idx)
+                            angle = math.radians(test_idx*1.25 + 1.25)
                             px = each[0]
                             py = each[1]
                             qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
                             qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
                             each[0] = qx
                             each[1] = qy
-                            #print(each)
+                            print("Messing up data by ", test_idx*1.25 + 1.25)
 
                 cam_returned2, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-                cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions2)
+                cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, sim_values['veh_locations'])
 
                 lidar_recieved = True
                 camera_recieved = True
@@ -461,7 +461,8 @@ def cav(config, vid, test_idx):
 
                 if config.simulation:
                     response_message = rsu_sim_check.checkin(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
-                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind], objectPackage)
+                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind],
+                            objectPackage, fetch_time(simulation_time, global_time))
 
                     # Check if our result is valid
                     if response_message == None:
@@ -472,7 +473,7 @@ def cav(config, vid, test_idx):
                         else:
                             print("Attempting to re-register with RSU")
                             # We have failed a lot lets try to re-register but use our known location
-                            response_message = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                            response_message = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, fetch_time(simulation_time, global_time))
                     else:
                         response["v_t"] = response_message["v_t"]
                         response["tfl_state"] = response_message["tfl_state"]
@@ -543,3 +544,6 @@ def cav(config, vid, test_idx):
 
     if not config.simulation:
         egoVehicle.emergencyStop()
+
+def fake_thread_that_just_prints():
+    print("I is a thread! With much success!")

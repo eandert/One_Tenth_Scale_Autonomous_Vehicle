@@ -148,3 +148,8 @@ def computeDistanceEuclidean(a, b):
         return distance / 100.0
     else:
         return 1
+
+def RMSE(differences_list):
+    mean_of_differences_squared = np.square(np.array(differences_list)).mean()
+    rmse_val = np.sqrt(mean_of_differences_squared)
+    return rmse_val

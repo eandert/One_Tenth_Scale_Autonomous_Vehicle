@@ -70,7 +70,7 @@ def cis(config, sid, test_idx):
 
     # Start the connection with the RSU (Road Side Unit) server through sockets
     rsu = communication.connectServer(config.rsu_ip)
-    response = rsu.register(sensor_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    response = rsu.register(sensor_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, fetch_time(simulation_time, global_time))
 
     if debug: print( " CIS ", sensor_id, " init pos ", response["t_x"], response["t_y"], response["t_yaw"])
 
@@ -150,7 +150,7 @@ def cis(config, sid, test_idx):
                 "fused_obj": fusion_result
             }
 
-            response_checkin = rsu.checkin(sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage)
+            response_checkin = rsu.checkin(sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, fetch_time(simulation_time, global_time))
 
             # Check if our result is valid
             if response_checkin == None:
@@ -161,7 +161,7 @@ def cis(config, sid, test_idx):
                 else:
                     print ( " CIS ", sensor_id, "Attempting to re-register with RSU" )
                     # We have failed a lot lets try to re-register but use our known location
-                    response = rsu.register(sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2])
+                    response = rsu.register(sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], fetch_time(simulation_time, global_time))
             else:
                 # Nothing to update since we dont move!
                 fails = 0

@@ -32,7 +32,7 @@ class Setting:
                                 [-1.5, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True],
                                 [0.0, 1.75, 4.71238898038469, True]]
-                        self.cis = [[-0.75, 0.75, -0.785398163, True]]
+                        self.cis = [[-1.5, 1.5, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0
@@ -48,7 +48,8 @@ class Setting:
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring = False
+                        self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
                 elif "one_cav_simulation" == setting:
                         print("         Config: one_cav_simulation selected")
@@ -70,14 +71,15 @@ class Setting:
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring = False
+                        self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
                 elif "two_cav_simulation_unit_test" == setting:
                         print("         Config: two_cav_simulation_unit_test selected")
                         # Working 4 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True]]
-                        self.cis = [[-0.75, 0.75, -0.785398163, True]]#,
+                        self.cis = [[-1.5, 1.5, -0.785398163, True]]#,
                                 #[0.75, -0.75, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
@@ -91,8 +93,8 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .4
-                        self.unit_test_time = 100.0
-                        self.unit_test_config = [[0,0,False], [0,0,True],[2,2,False], [2,2,True]]# [[0,0,False],[0,0,True],[2,2,False],[2,2,True]]#,[[0,0,True],[0,0,True],[0,0,True],[0,0,True],[0,0,True],[0,0,True]]#,
+                        self.unit_test_time = 125.0
+                        self.unit_test_config = [[0,0,True],[0,0,True],[0,0,True],[0,0,True],[0,0,True],[0,0,True]]#, [[0,0,False], [0,0,True],[2,2,False], [2,2,True]]# 
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
@@ -148,6 +150,7 @@ class Setting:
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring = False
+                        self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
                 print(" Config complete, using map: ", self.map)
