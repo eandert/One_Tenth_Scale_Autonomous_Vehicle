@@ -16,14 +16,14 @@ MAX_ID = 10000
 
 
 class MatchClass:
-    def __init__(self, x, y, covariance, dx, dy, d_confidence, object_type, time, sensor_id):
+    def __init__(self, x, y, covariance, dx, dy, d_confidence, sensor_type, time, sensor_id):
         self.x = x
         self.y = y
         self.covariance = covariance
         self.dx = dx
         self.dy = dy
         self.velocity_confidence = d_confidence
-        self.type = object_type
+        self.sensor_type = sensor_type
         self.last_tracked = time
         self.sensor_id = sensor_id
 
@@ -33,15 +33,12 @@ class Tracked:
     # We use this primarily to match objects seen between frames and included in here
     # is a function for kalman filter to smooth the x and y values as well as a
     # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, sensorId, x, y, object_type, time, id, fusion_mode):
+    def __init__(self, sensor_id, x, y, sensor_type, time, id, fusion_mode):
         self.x = x
         self.y = y
         self.dx = 0
         self.dy = 0
         self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
-        self.typeArray = [0, 0, 0, 0]
-        self.typeArray[object_type] += 1
-        self.type = self.typeArray.index(max(self.typeArray))
         self.lastTracked = time
         self.id = id
         self.idx = 0
@@ -54,7 +51,7 @@ class Tracked:
 
         # Build the match list and add our match to it
         self.match_list = []
-        new_match = MatchClass(x, y, None, None, None, None, object_type, time, sensorId)
+        new_match = MatchClass(x, y, None, None, None, None, sensor_type, time, sensor_id)
         self.match_list.append(new_match)
 
         # Kalman stuff
@@ -133,7 +130,7 @@ class Tracked:
             #self.Q_t = np.identity(5)
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
-            angle_variation = .75
+            angle_variation = process_variation
             two = angle_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0, 0],
                                 [0, four, 0, three, 0],
@@ -157,7 +154,7 @@ class Tracked:
     # Update adds another detection to this track
     def update(self, other, time):
         
-        new_match = MatchClass(other[1], other[2], None, None, None, None, other[0], time, other[3])
+        new_match = MatchClass(other[1], other[2], None, None, None, None, other[3], time, other[0])
         self.match_list.append(new_match)
 
         self.lastTracked = time
@@ -222,38 +219,29 @@ class Tracked:
 
         # Time to go through the track list and fuse!
         for match in self.match_list:
-            if match.sensor_id == LIDAR:
-                if parameterized_covariance:
-                    relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
-                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
-                    success, lidar_expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(
-                        relative_angle_to_detector, target_line_angle, relative_distance, False)
-                    if success:
-                        lidarCov = lidar_expected_error_gaussian.covariance
-                    else:
-                        print ( " Error: cov est failed!")
-                        lidarCov = np.array([[.10, 0], [0, .10]])
-                    self.lidarCovLast = lidarCov
-                    self.lidarMeasurePrevCovTrue = True
-                else:
-                    lidarCov = np.array([[.10, 0.0], [0.0, .10]])
+            if match.sensor_type == LIDAR:
+                relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
+                    vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
+                success, lidar_expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(
+                    relative_angle_to_detector, target_line_angle, relative_distance, False)
+                try:
+                    lidarCov = lidar_expected_error_gaussian.covariance
+                except:
+                    lidarCov = np.array([[0.1, 0.0], [0.0, 0.1]])
+                self.lidarMeasurePrevCovTrue = True
                 # Set the new measurements
                 lidarMeasure = [match.x, match.y]
                 lidarMeasureH = [1, 1]
                 lidar_added = True
-            elif match.sensor_id == CAMERA:
-                if parameterized_covariance:
-                    relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
-                        vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
-                    success, camera_expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(
-                        relative_angle_to_detector, target_line_angle, relative_distance, False)
-                    if success:
-                        camCov = camera_expected_error_gaussian.covariance
-                    else:
-                        print ( " Error: cov est failed!")
-                        camCov = np.array([[.25, 0], [0, .25]])
-                else:
-                    camCov = np.array([[.25, 0.0], [0.0, .25]])
+            elif match.sensor_type == CAMERA:
+                relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
+                    vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
+                success, camera_expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(
+                    relative_angle_to_detector, target_line_angle, relative_distance, False)
+                try:
+                    camCov = camera_expected_error_gaussian.covariance
+                except:
+                    camCov = np.array([[0.1, 0.0], [0.0, 0.1]])
                 # Set the new measurements
                 camMeasure = [match.x, match.y]
                 camMeasureH = [1, 1]
@@ -558,10 +546,10 @@ class FUSION:
     # output or it will not be matched. Detections too close to each other may be combined.
     # This is a modified version of the frame-by-frame tracker seen in:
     # https://github.com/eandert/Jetson_Nano_Camera_Vehicle_Tracker
-    def __init__(self, fusion_mode, sensor_id):
+    def __init__(self, fusion_mode, cav_cis_id):
         # Set other parameters for the class
         self.trackedList = []
-        self.id = sensor_id
+        self.id = cav_cis_id
         self.prev_time = -99.0
         self.min_size = 0.5
         self.fusion_mode = fusion_mode
@@ -578,7 +566,7 @@ class FUSION:
         for track in self.trackedList:
             track.fusion(parameterized_covariance, vehicle, self.predictive)
             if track.fusion_steps >= self.trackShowThreshold:
-                # Calculate a custom ID that encodes the sensorid and local fusion track number
+                # Calculate a custom ID that encodes the sensor id and local fusion track number
                 universal_id = self.id * MAX_ID + track.id
                 result.append([universal_id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
             # Clear the previous detection list
@@ -609,7 +597,7 @@ class FUSION:
                 print(" Warning: no covaraince data for ", sensor_id)
                 # Use an arbitrary size if we have no covariance estimate
                 detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([0, det[1], det[2], sensor_id])
+            detections_list.append([det[0], det[1], det[2], sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)

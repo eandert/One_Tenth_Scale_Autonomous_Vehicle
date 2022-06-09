@@ -72,6 +72,10 @@ def cis(config, sid, test_idx):
     rsu = communication.connectServer(config.rsu_ip)
     response = rsu.register(sensor_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, fetch_time(simulation_time, global_time))
 
+    # Now wait for the response
+    while 'route_x' not in response:
+        time.sleep(.01)
+
     if debug: print( " CIS ", sensor_id, " init pos ", response["t_x"], response["t_y"], response["t_yaw"])
 
     # Save the specs we got back from the RSU in case we need them someday

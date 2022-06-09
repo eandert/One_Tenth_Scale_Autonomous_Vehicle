@@ -32,7 +32,8 @@ class Setting:
                                 [-1.5, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True],
                                 [0.0, 1.75, 4.71238898038469, True]]
-                        self.cis = [[-1.5, 1.5, -0.785398163, True]]
+                        self.cis = [[-1.5, 1.5, -0.785398163, True],
+                                [1.5, -1.5, 2.35619, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0
@@ -79,7 +80,7 @@ class Setting:
                         # Working 4 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True]]
-                        self.cis = [[-1.5, 1.5, -0.785398163, True]]#,
+                        self.cis = []#[[-1.5, 1.5, -0.785398163, True]]#,
                                 #[0.75, -0.75, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
@@ -87,18 +88,18 @@ class Setting:
                         self.fallthrough_delay = 0.100
                         self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
-                        self.map_length = 1.0
+                        self.map_length = 2.0
                         self.simulation = True
                         self.debug = False
-                        self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .4
-                        self.unit_test_time = 125.0
-                        self.unit_test_config = [[0,0,True],[0,0,True],[0,0,True],[0,0,True],[0,0,True],[0,0,True]]#, [[0,0,False], [0,0,True],[2,2,False], [2,2,True]]# 
+                        self.unit_test_time = 120.0
+                        self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
+                                                [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring = False
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
                 elif "four_cav_simulation_unit_test" == setting:
@@ -108,7 +109,7 @@ class Setting:
                                 [-1.5, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True],
                                 [0.0, 1.75, 4.71238898038469, True]]
-                        self.cis = [[-0.75, 0.75, -0.785398163, True]]#,
+                        self.cis = [] #[[-0.75, 0.75, -0.785398163, True]]#,
                                 #[0.75, -0.75, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
@@ -123,7 +124,7 @@ class Setting:
                         self.unit_test = True
                         self.unit_test_speed_target = .4
                         self.unit_test_time = 50.0
-                        self.unit_test_config = [[0,0,False], [0,0,True],[2,2,False], [2,2,True]]
+                        self.unit_test_config = [[0,0,False], [0,0,True]]#,[2,2,False], [2,2,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
@@ -135,7 +136,7 @@ class Setting:
                         # Working 2 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True]]
-                        self.cis = []#[[-0.75, 0.75, -0.785398163, True]]
+                        self.cis = []#[[-1.5, 1.5, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0

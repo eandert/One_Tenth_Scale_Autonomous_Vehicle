@@ -133,7 +133,7 @@ class ResizableKalman:
             # Process cov
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
-            angle_variation = .75
+            angle_variation = process_variation
             two = angle_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0, 0],
                                 [0, four, 0, three, 0],

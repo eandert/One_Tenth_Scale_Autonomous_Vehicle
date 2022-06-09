@@ -5,6 +5,7 @@ from threading import Thread
 
 from road_side_unit.src import rsu, communication
 from gui.src import gui
+import multiprocessing as mp
 
 # Import our config file
 import config
@@ -121,9 +122,14 @@ def GuiProcess(config):
 
 def initGui(config):
     # Start up the Flask front end processor as it's own thread
-    gui_handler = Thread(target=GuiProcess, args=(config, ))
+    # gui_handler = Thread(target=GuiProcess, args=(config, ))
+    # gui_handler.daemon = True
+    # gui_handler.start()
+
+    gui_handler = mp.Process(target=GuiProcess, args=(config, ))
     gui_handler.daemon = True
     gui_handler.start()
+
     return gui_handler
 
 def run_single_test(conf):
@@ -149,7 +155,7 @@ def run_single_test(conf):
 
 if __name__ == "__main__":
     # Configure the settings
-    conf = config.Setting("two_cav_simulation")
+    conf = config.Setting("two_cav_simulation_unit_test")
 
     if conf.unit_test:
         unit_test = UnitTest()

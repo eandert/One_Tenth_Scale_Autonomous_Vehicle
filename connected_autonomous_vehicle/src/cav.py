@@ -353,10 +353,11 @@ def cav(config, vid, test_idx):
                     time.sleep(.01)
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
                     if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
+
+                cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, sim_values['veh_locations'])
                 
                 vehicle_object_positions = sim_values['veh_locations']
-                vehicle_object_positions2 = sim_values['veh_locations']
-                if vehicle_id == 0 and fetch_time(simulation_time, global_time) >= 100.0:
+                if vehicle_id == 0 and fetch_time(simulation_time, global_time) >= 10000.0:
                     for each in vehicle_object_positions:
                         if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
                             #print(" rotating: ", each)
@@ -370,9 +371,7 @@ def cav(config, vid, test_idx):
                             each[0] = qx
                             each[1] = qy
                             print("Messing up data by ", test_idx*1.25 + 1.25)
-
-                cam_returned2, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-                cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, sim_values['veh_locations'])
+                    cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
 
                 lidar_recieved = True
                 camera_recieved = True
