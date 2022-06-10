@@ -6,6 +6,7 @@ from sklearn.neighbors import NearestNeighbors
 from threading import Lock, Thread
 from queue import Queue
 import multiprocessing as mp
+from shapely.geometry.polygon import Polygon
 
 # CAV and CIS stuff
 sys.path.append("../../../")
@@ -918,35 +919,78 @@ class RSU():
 
     def cooperative_monitoring_process(self, error_data):
         # We have who saw what, but now we need to see who should have seen what
-        # for global_track in self.globalFusionList:
-        #     shared_math.check_in_range_and_fov(target_angle, distance, center_angle, math.radians(fov), max_range)
+        object_polygons = []
+        length = .6
+        width = .3
+        for idx, vehicle in enumerate(self.globalFusionList):
+            # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
+            x = vehicle[1] 
+            y = vehicle[2]
+            theta = math.atan2(vehicle[5], vehicle[4])
+            x1 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
+            y1 = y + ((length/2.0)*math.sin(theta+math.radians(90)) + ((width/2.0)*math.sin(theta-math.radians(180))))
+            x2 = x + ((length/2.0)*math.cos(theta-math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
+            y2 = y + ((length/2.0)*math.sin(theta-math.radians(90)) + ((width/2.0)*math.sin(theta-math.radians(180))))
+            x3 = x + ((length/2.0)*math.cos(theta-math.radians(90)) + ((width/2.0)*math.cos(theta)))
+            y3 = y + ((length/2.0)*math.sin(theta-math.radians(90)) + ((width/2.0)*math.sin(theta)))
+            x4 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta)))
+            y4 = y + ((length/2.0)*math.sin(theta+math.radians(90)) + ((width/2.0)*math.sin(theta)))
+            polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
+            object_polygons.append(polygon)
+
+        detectors = []
+        for idx, cav in self.vehicles.items():
+            sublist = []
+            sublist.append( sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta],
+                cav.cameraSensor.center_angle, cav.cameraSensor.max_distance, cav.cameraSensor.field_of_view, object_polygons) )
+            sublist.append( sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta],
+                cav.lidarSensor.center_angle, cav.lidarSensor.max_distance, cav.lidarSensor.field_of_view, object_polygons) )
+            detectors.append(sublist)
+        for idx, cis in self.sensors.items():
+            detectors.append([sensor.check_visble_objects([cis.localizationPositionX, cis.localizationPositionY, cis.theta],
+                cis.cameraSensor.center_angle, cis.cameraSensor.max_distance, cis.cameraSensor.field_of_view, object_polygons)])
+
+        print(detectors)
+        print(error_data)
 
         # Add our covariance data to the global sensor list
         revolving_buffer_size = 125
-        for error_frame in error_data:
-            # Check if this is a localizer or a sensor
-            if error_frame[0]/self.localizationid >= 1:
-                sensor_platform_id = error_frame[0]
-            else:
-                sensor_platform_id = math.floor(error_frame[0]/10000)
-            if sensor_platform_id in self.error_dict:
-                # Moving revolving_buffer_size place average
-                if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
-                    self.error_dict[sensor_platform_id][0] += 1
-                    self.error_dict[sensor_platform_id][2].append(error_frame[2])
-                    self.error_dict[sensor_platform_id][1] += 1
-                # We have filled revolving_buffer_size places, time to revolve the buffer now
+        for object_id, object_trackers in enumerate(error_data):
+            for error_frame in object_trackers:
+                # Check if this is a localizer or a sensor
+                if error_frame[0]/self.localizationid >= 1:
+                    sensor_platform_id = error_frame[0]
                 else:
-                    if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
-                        # Replace the element with the next one
-                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                    sensor_platform_id = math.floor(error_frame[0]/10000)
+                if sensor_platform_id in self.error_dict:
+                    # Check off what we have seen
+                    # for seen_obj_id in range(len(detectors[sensor_platform_id][0])):
+                    #     if detectors[sensor_platform_id][0][seen_obj_id] == object_id:
+                    #         detectors[sensor_platform_id][0].pop(seen_obj_id)
+                    #         break
+                    # for seen_obj_id in range(len(detectors[sensor_platform_id][1])):
+                    #     if detectors[sensor_platform_id][1][seen_obj_id] == object_id:
+                    #         detectors[sensor_platform_id][1].pop(seen_obj_id)
+                    #         break
+                    # Moving revolving_buffer_size place average
+                    if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
+                        self.error_dict[sensor_platform_id][0] += 1
+                        self.error_dict[sensor_platform_id][2].append(error_frame[2])
                         self.error_dict[sensor_platform_id][1] += 1
+                    # We have filled revolving_buffer_size places, time to revolve the buffer now
                     else:
-                        self.error_dict[sensor_platform_id][1] = 0
-                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
-                        self.error_dict[sensor_platform_id][1] += 1
-            else:
-                self.error_dict[sensor_platform_id] = [1,1,[error_frame[2]]]
+                        if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
+                            # Replace the element with the next one
+                            self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                            self.error_dict[sensor_platform_id][1] += 1
+                        else:
+                            self.error_dict[sensor_platform_id][1] = 0
+                            self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
+                            self.error_dict[sensor_platform_id][1] += 1
+                else:
+                    self.error_dict[sensor_platform_id] = [1,1,[error_frame[2]]]
+
+        print(detectors)
 
         # Normalize all the data to 0 (hopefully)
         normalization_numerator = 0.0

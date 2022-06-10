@@ -193,7 +193,10 @@ def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object
         localization_error_gaussian, localization_error = planner.localization.getErrorParamsAtVelocity(abs(planner.velocity), planner.theta)
     else:
         localization_error_gaussian, localization_error = planner.localization.getStaticErrorParams(abs(planner.velocity), planner.theta)
-    point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = fake_lidar_and_camera(planner, vehicle_object_positions, [], 15.0, 15.0, 0.0, 160.0)
+
+    point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = fake_lidar_and_camera(planner,
+        vehicle_object_positions, [], planner.lidarSensor.max_distance, planner.lidarSensor.center_angle, planner.lidarSensor.field_of_view, planner.cameraSensor.max_distance, planner.cameraSensor.center_angle, planner.cameraSensor.field_of_view)
+
     if sim_values["simulate_error"]:
         # Error injection
         cam_returned[0] = camera_error_array
@@ -228,8 +231,9 @@ def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object
 
 # This function is for full simulation where we fake both LIDAR and camera
 # TODO: modularize this more so we can consider other sensor locations and facing angles
-def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
-                              cam_center_angle, cam_fov):
+def fake_lidar_and_camera(detector, positions, objects, lidar_range,
+                            lidar_center_angle, lidar_fov, cam_range,
+                            cam_center_angle, cam_fov):
 
         # print ( "FAKING LIDAR" )
         lidar_point_cloud = []
@@ -261,7 +265,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
             polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
             polygons.append(polygon)
 
-        # Generate fake lidar data from the points
+        # Generate fake lidar data from the points using ray tracing
         for angle_idx in range(int(lidar_freq)):
             intersections = []
             intersections_origin_point = []
@@ -313,7 +317,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
 
                 # See if we can add a camera point as well
                 if shared_math.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, detector.theta + cam_center_angle,
-                                               math.radians(cam_fov), cam_range):
+                                               cam_fov, cam_range):
                     # Object checks out and is in range and not blocked
                     # TODO: Do a little better approxamation of percent seen and account for this
                     point = list(final_polygon.centroid.coords)[0]
@@ -330,8 +334,8 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                             camera_array_searcher.append((point[0], point[1]))
                 
                 # Fast lidar math to skip the points
-                if shared_math.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, detector.theta + cam_center_angle,
-                                               math.radians(360), lidar_range):
+                if shared_math.check_in_range_and_fov(angle_idx * angle_change, intersect_dist, detector.theta + lidar_center_angle,
+                                               lidar_fov, lidar_range):
                     # Object checks out and is in range and not blocked
                     # TODO: Do a little better approxamation of percent seen and account for this
                     point = list(final_polygon.centroid.coords)[0]
@@ -354,3 +358,66 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range, cam_range,
                             lidar_array_searcher.append((point[0], point[1]))
 
         return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array, lidar_detected_error
+
+# Use to check if a sensor should have detected an object or not
+def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sensor_fov, object_polygons):
+    # Get the points the Slamware M1M1 should generate
+    lidar_freq = 7000 / 8
+    angle_change = (2 * math.pi) / lidar_freq
+    seen_point_set = {}
+    available_point_set = {}
+    sensor_angle = sensor_position[2] + sensor_center_angle
+    final_set = []
+
+    # Generate fake lidar data from the points using ray tracing
+    for angle_idx in range(int(lidar_freq)):
+        intersections = []
+        intersection_id = []
+        intersect_dist = 9999999999
+        final_point = None
+
+        if shared_math.check_in_fov(angle_idx * angle_change,
+                                    sensor_angle, sensor_fov):
+
+            # Go through all the polygons that the line intersects with and add them
+            for obj_idx, poly in enumerate(object_polygons):
+                line = [(sensor_position[0], sensor_position[1]), (
+                sensor_position[0] + (sensor_range * math.cos(angle_idx * angle_change)),
+                sensor_position[1] + (sensor_range * math.sin(angle_idx * angle_change)))]
+                shapely_line = LineString(line)
+                temp_intersection_list = list(poly.intersection(shapely_line).coords)
+                intersections += temp_intersection_list
+                for count in range(len(temp_intersection_list)):
+                    intersection_id.append(obj_idx)
+
+
+            # Get the closest intersection with a polygon as that will be where our lidar beam stops
+            for point, polygon_id in zip(intersections, intersection_id):
+                dist = math.hypot(point[0] - sensor_position[0], point[1] - sensor_position[1])
+                if sensor_range >= dist >= .5:
+                    if dist < intersect_dist:
+                        final_point = point
+                        intersect_dist = dist
+                        final_polygon_id = polygon_id
+                    
+                    # Add a point to all polygons IDs in the path
+                    if polygon_id in available_point_set:
+                        available_point_set[polygon_id] += 1
+                    else:
+                        available_point_set[polygon_id] = 1
+
+            # If we have a final point, add to the list
+            if final_point != None:
+                # Add this point to the set so we can figure out if we see enough of the object
+                if final_polygon_id in seen_point_set:
+                    seen_point_set[final_polygon_id] += 1
+                else:
+                    seen_point_set[final_polygon_id] = 1
+
+    # Here we do the final check to see what percentage of each we can see
+    for key in seen_point_set.keys():
+        if seen_point_set[key] >= .25 * available_point_set[key]:
+            # 25% or more is visible, add it to the should see it list
+            final_set.append(key)
+
+    return final_set

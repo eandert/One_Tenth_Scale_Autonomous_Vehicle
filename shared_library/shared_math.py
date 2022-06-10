@@ -20,6 +20,13 @@ def check_in_range_and_fov(target_angle, distance, center_angle, horizontal_fov,
         return True
     return False
 
+''' Helper function to calculate if a target is in fov of a sensor '''
+def check_in_fov(target_angle, center_angle, horizontal_fov):
+    angle_diff = ((center_angle - target_angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
+    if abs(angle_diff) <= (horizontal_fov/2.0):
+        return True
+    return False
+
 ''' Calculate the distance and angle parameters of an observation '''
 def get_relative_detection_params(detector_x, detector_y, detector_theta, observation_x, observation_y):
     # Get the relative coordinates

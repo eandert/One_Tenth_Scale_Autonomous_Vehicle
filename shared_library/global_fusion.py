@@ -512,7 +512,9 @@ class GlobalFUSION:
             if track.fusion_steps >= self.trackShowThreshold:
                 result.append([track.id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
                 if track.error_monitor:
-                    cooperative_monitoring = cooperative_monitoring + track.error_monitor
+                    cooperative_monitoring.append(track.error_monitor)
+                else:
+                    cooperative_monitoring.append([])
             # Clear the previous detection list
             track.clearLastFrame()
             # Clean up the tracks for next time
