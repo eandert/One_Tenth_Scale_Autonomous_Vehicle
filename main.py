@@ -182,9 +182,9 @@ def run_single_test(conf):
 
 if __name__ == "__main__":
     # Configure the settings
-    multiple_mode = False
+    multiple_mode = True
     if multiple_mode:
-        conf_list = ["two_cav_simulation_unit_test"]
+        conf_list = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3","two_cav_simulation_unit_test_4"]
         unit_test = UnitTest()
         unit_test.run(conf_list)
     else:

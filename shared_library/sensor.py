@@ -189,13 +189,22 @@ def addBivariateGaussians(gaussianA, gaussianB):
 def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object_positions):
     lidar_returned = [[], [], None]
     cam_returned = [[], None]
+    if lidarRecognition != None:
+        lidar_dist = planner.lidarSensor.max_distance
+        lidar_center = planner.lidarSensor.center_angle
+        lidar_fov = planner.lidarSensor.field_of_view
+    else:
+        lidar_dist = planner.cameraSensor.max_distance
+        lidar_center = planner.cameraSensor.center_angle
+        lidar_fov = planner.cameraSensor.field_of_view
+
     if sim_values["parameterized_covariance"]:
         localization_error_gaussian, localization_error = planner.localization.getErrorParamsAtVelocity(abs(planner.velocity), planner.theta)
     else:
         localization_error_gaussian, localization_error = planner.localization.getStaticErrorParams(abs(planner.velocity), planner.theta)
 
     point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = fake_lidar_and_camera(planner,
-        vehicle_object_positions, [], planner.lidarSensor.max_distance, planner.lidarSensor.center_angle, planner.lidarSensor.field_of_view, planner.cameraSensor.max_distance, planner.cameraSensor.center_angle, planner.cameraSensor.field_of_view)
+        vehicle_object_positions, [], lidar_dist, lidar_center, lidar_fov, planner.cameraSensor.max_distance, planner.cameraSensor.center_angle, planner.cameraSensor.field_of_view)
 
     if sim_values["simulate_error"]:
         # Error injection
@@ -221,8 +230,8 @@ def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object
         lidar_returned[0] = [planner.localizationPositionX, planner.localizationPositionY,
                     planner.theta, planner.velocity, np.array([[0.001,0.0],[0.0,0.001]]).tolist()]
         if lidarRecognition != None:
-            lidar_returned[1], lidar_returned[2] = lidarRecognition.processLidarFrame(point_cloud, time, 
-                lidar_returned[0][0], lidar_returned[0][1], lidar_returned[0][2], planner.lidarSensor)
+            lidar_returned[1] = lidar_detected_error
+            lidar_returned[2] = time
             planner.rawLidarDetections = point_cloud
     planner.groundTruth = camera_array
     planner.lidarPoints = point_cloud
