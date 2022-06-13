@@ -504,7 +504,8 @@ class YOLO:
         result = []
         for track in self.trackedList:
             if track.lastHistory >= 5:
-                result.append([track.id, track.x, track.y, track.crossSection, track.velocity, "C"])
+                # TODO add covariance here instead of cross section
+                result.append([track.id, track.x, track.y, track.crossSection , 0.0, 0.0, []])
         return result, timestamp
 
     def writeFrame(self, frame_read):

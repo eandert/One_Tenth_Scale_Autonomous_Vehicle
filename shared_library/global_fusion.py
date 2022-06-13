@@ -133,7 +133,8 @@ class ResizableKalman:
             # Process cov
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
-            two = process_variation * (.125*.125)
+            angle_variation = process_variation
+            two = angle_variation * (.125*.125)
             self.Q_t = np.array([[four, 0, three, 0, 0],
                                 [0, four, 0, three, 0],
                                 [three, three, two, 0, 0],
@@ -149,28 +150,22 @@ class ResizableKalman:
         # Rebuild the lists every time because measurements come and go
         self.localTrackersCovarainceList = []
         self.localTrackersMeasurementList = []
-        self.localTrackersHList= []
+        self.localTrackersHList = []
+        self.localTrackersIDList = []
         # Check if there are more sensors in the area that have not been added
         for match in measurement_list:
-            measurment_index = binarySearch(self.localTrackersIDList, match.id)
-            if measurment_index < 0:
-                # This is not in the tracked list, needs to be added
-                self.addTracker(match.id)
+            # measurment_index = binarySearch(self.localTrackersIDList, match.id)
+            # if measurment_index < 0:
+            #     # This is not in the tracked list, needs to be added
+            #     self.addTracker(match.id)
+            self.localTrackersIDList.append(match.id)
             
             # All should be in the tracked list now, continue building the lists
             # Add the current covariance to the R matrix
-            cov = match.covariance
-            # cov = np.array([[match.covariance[0][0], match.covariance[0][1], 0., 0.],
-            #             [match.covariance[1][0], match.covariance[1][1], 0., 0.],
-            #             [0., 0, match.velocity_confidence[0][0], match.velocity_confidence[0][1]],
-            #             [0., 0, match.velocity_confidence[1][0], match.velocity_confidence[1][1]]], dtype = 'float')
-            self.localTrackersCovarainceList.append(cov)
+            self.localTrackersCovarainceList.append(match.covariance)
 
             # Add the current measurments to the measurement matrix
-            if self.fusion_mode == 2:
-                self.localTrackersMeasurementList.append(np.array([match.x, match.y]))#, math.hypot(match.dx, match.dy), math.atan2(match.dy, match.dx)]))
-            else:
-                self.localTrackersMeasurementList.append(np.array([match.x, match.y]))#, match.dx, match.dy]))
+            self.localTrackersMeasurementList.append(np.array([match.x, match.y]))#, match.dx, match.dy]))
 
             # The H matrix is different for radar (type 1), the rest are type 0
             self.localTrackersHList.append(0)
@@ -181,45 +176,17 @@ class ResizableKalman:
         # except Exception as e:
         #     print ( " Exception: " + str(e) )
 
-    def addTracker(self, id):
-        # Make sure we have something, if not create the array here
-        # Start off with measuring only 1 sensor x and y, this will be dynamically built
-        self.localTrackersIDList.append(id)
-        self.localTrackersTimeAliveList.append(self.lastTracked)
-
-    def removeOldTrackers(self):
-        # REmove any trackers that have not been used for a while
-        # Do this in reverse so we can delete the entire time
-        for position, trackerAlive in enumerate(reversed(self.localTrackersTimeAliveList)):
-            if (self.lastTracked - trackerAlive) > self.time_until_removal:
-                # Time to remove this track
-                if len(self.localTrackersIDList) <= 1:
-                    # Removing the last track from a filter, this should not
-                    # occur normally as we delete the entire tracker sooner
-                    self.localTrackersIDList = []
-                    self.localTrackersTimeAliveList = []
-                    self.localTrackersCovarainceList = []
-                    self.localTrackersMeasurementList = []
-                    self.localTrackersHList = []
-                else:
-                    # Remove from the list and list searcher
-                    self.localTrackersIDList.pop(position)
-                    self.localTrackersTimeAliveList.pop(position)
-                    self.localTrackersCovarainceList.pop(position)
-                    self.localTrackersMeasurementList.pop(position)
-                    self.localTrackersHList.pop(position)
-
     def h_t(self, h_t_type):
         if h_t_type == 0:
             if self.fusion_mode == 0:
-                return np.array([[1, 0., 0., 0.],
-                                [0., 1, 0., 0.]], dtype = 'float')
+                return np.array([[1., 0., 0., 0.],
+                                [0., 1., 0., 0.]], dtype = 'float')
             elif self.fusion_mode == 1:
-                return np.array([[1, 0., 0., 0., 0., 0.],
-                                [0., 1, 0., 0., 0., 0.]], dtype = 'float')
+                return np.array([[1., 0., 0., 0., 0., 0.],
+                                [0., 1., 0., 0., 0., 0.]], dtype = 'float')
             elif self.fusion_mode == 2:
-                return np.array([[1, 0., 0., 0., 0.],
-                                [0., 1, 0., 0., 0.]], dtype = 'float')
+                return np.array([[1., 0., 0., 0., 0.],
+                                [0., 1., 0., 0., 0.]], dtype = 'float')
             # if self.fusion_mode == 0:
             #     return np.array([[1, 0., 0., 0.],
             #                     [0., 1, 0., 0.],
@@ -260,7 +227,7 @@ class ResizableKalman:
 
         return temprorary_mu, temporary_c
 
-    def fusion(self, measurement_list, estimate_covariance):
+    def fusion(self, measurement_list, estimate_covariance, monitor):
         # Set the kalman variables and resize the arrays dynalically (if needed
         self.addFrames(measurement_list)
         # Do the kalman thing!
@@ -393,18 +360,22 @@ class ResizableKalman:
 
                 # Lets check the accuracy of each sensing platform
                 self.error_tracker_temp = []
-                for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
-                    Z_t = (mu).transpose()
-                    Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                    #print(Z_t, self.h_t(h_t_type).dot(self.X_hat_t))
-                    y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
-                    #print(y_t_temp)
-                    location_error = math.hypot(y_t_temp[0], y_t_temp[1])
-                    expected_location_error = math.hypot(cov[0][0], cov[1][1])
-                    #cov
-                    location_error_std = location_error / expected_location_error
-                    self.error_tracker_temp.append([id, location_error, location_error_std])
-                    #print(" error: ", id, location_error, location_error_std)
+                if monitor:
+                    for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
+                        Z_t = (mu).transpose()
+                        Z_t = Z_t.reshape(Z_t.shape[0], -1)
+                        y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
+                        #print(y_t_temp)
+                        location_error = math.hypot(y_t_temp[0], y_t_temp[1])
+                        expected_a, expected_b, expected_angle = shared_math.ellipsify(cov, 1.0)
+                        expected_x = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(0))
+                        expected_y = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(90))
+                        expected_location_error = math.hypot(expected_x, expected_y)
+                        #cov
+                        location_error_std = location_error / expected_location_error
+                        #print(location_error, expected_location_error, location_error_std)
+                        self.error_tracker_temp.append([id, location_error, location_error_std])
+                        #print(" error: ", id, location_error, location_error_std)
 
                 self.prev_time = self.lastTracked
                 self.x = X_t[0][0]
@@ -427,7 +398,7 @@ class ResizableKalman:
 
                 #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
                 # Post fusion, lets clear old trackers now
-                self.removeOldTrackers()
+                #self.removeOldTrackers()
 
             except Exception as e:
                 print ( " Exception: " + str(e) )
@@ -435,7 +406,7 @@ class ResizableKalman:
     def getKalmanPred(self, time):
         # Prediction based mathcing methods seems to be making this fail so we are using no prediction :/
         # Enforce a min size of a vehicle so that a detection has some area overlap to check
-        a, b, phi = shared_math.ellipsify(self.error_covariance, 3.0)
+        a, b, phi = shared_math.ellipsify(self.error_covariance, 1.0)
         return self.x, self.y, self.min_size + a, self.min_size + b, phi
 
 
@@ -487,19 +458,19 @@ class GlobalTracked:
         ]
 
     def getPositionPredicted(self, timestamp):
-        # if self.fusion_steps < 2:
+        if self.fusion_steps < 2:
         # If this kalman fitler has never been run, we can't use it for prediction!
-        return [
-            [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
-        ]
-        # else:
-        #     x, y, a, b, phi = self.kalman.getKalmanPred(timestamp)
-        #     return [
-        #         [x, y, a, b, phi]
-        #     ]
+            return [
+                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+            ]
+        else:
+            x, y, a, b, phi = self.kalman.getKalmanPred(timestamp)
+            return [
+                [x, y, a, b, phi]
+            ]
 
-    def fusion(self, estimate_covariance):
-        self.kalman.fusion(self.match_list, estimate_covariance)
+    def fusion(self, estimate_covariance, monitor):
+        self.kalman.fusion(self.match_list, estimate_covariance, monitor)
         self.x = self.kalman.x
         self.y = self.kalman.y
         self.error_covariance = self.kalman.error_covariance
@@ -526,64 +497,24 @@ class GlobalFUSION:
         self.id = 0
         self.prev_time = -99.0
         self.min_size = 0.5
-        self.trackShowThreshold = 10
+        self.trackShowThreshold = 4
         self.fusion_mode = fusion_mode
 
         # Indicate our success
         print('Started FUSION successfully...')
 
-    def fuseDetectionFrame(self, estimate_covariance):
+    def fuseDetectionFrame(self, estimate_covariance, monitor):
         # Time to go through each track list and fuse!
         result = []
         cooperative_monitoring = []
         for track in self.trackedList:
-            track.fusion(estimate_covariance)
+            track.fusion(estimate_covariance, monitor)
             if track.fusion_steps >= self.trackShowThreshold:
                 result.append([track.id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
                 if track.error_monitor:
-                    cooperative_monitoring = cooperative_monitoring + track.error_monitor
-            
-                # Lets do the trust math here
-                # Add to the trust system
-                # for frame in vehicle.fusionDetections:
-                #     #result.append([universal_id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
-                #     #addTrustFrame(self, cavID, trackId, confidenceScore, evlauationScore, visibilityScore, trustFrameScore, visibilityScore2, trustFrameScore2, time)
-
-                #     cav_id = 
-
-                #     # Get the expected error distance
-                #     a, b, phi = shared_math.ellipsify(frame[3], 3.0)
-                #     error_expected = math.hypot(a, b)
-                #     # TODO: change this, for now all visibility is 1
-                #     # Method 1 from peper
-                #     angle = math.atan(observation.horizontalCrossSection/observation.detectionDistance)
-                #     visibilitySum += angle
-                #     visibilityScore = 1
-                #     # Method 2, new method from
-                #     visibilitySum2 += error_expected
-                #     visibilityScore2.append(visibilitySum)
-                #     # TODO: change this, for now all IOU is 1
-                #     iou = 1
-                #     if iou > self.iouThreshold:
-                #         error_actual = math.hypot(observation.errorX_actual, observation.errorY_actual)
-                #         # Calculate the standard deviations away, 0 is on the mean
-                #         std_deviations_away = error_actual/error_expected
-                #         # Divide this by 2 to give
-                #         confidence = (1 - st.norm.cdf(std_deviations_away))/2.0
-                #         evaluation = confidence
-                #         iouMatchSum += confidence
-                #         iouMatchSum2 += error_actual
-                #     else:
-                #         confidence = 0.0
-                #         evaluation = confidence
-                #         iouMatchSum += 0.0
-                #         iouMatchSum2 += 0.0
-                #     confidenceScore.append(confidence)
-                #     evaluationScore.append(evaluation)
-                #     vehicleTrustValue = iouMatchSum / visibilitySum
-                #     vehicleTrustValue2 = iouMatchSum2 / visibilitySum2
-
-                #     self.trust.addTrustFrame(cav_id, track.id, track.error_covariance.tolist(), )
+                    cooperative_monitoring.append(track.error_monitor)
+                else:
+                    cooperative_monitoring.append([])
             # Clear the previous detection list
             track.clearLastFrame()
             # Clean up the tracks for next time
@@ -596,21 +527,21 @@ class GlobalFUSION:
         detections_position_list = []
         detections_list = []
         for det in observations:
-            # TODO: Figure out why performance is worse with this method
+            # #TODO: Figure out why performance is worse with this method
             # # Create a rotated rectangle for IOU of 2 ellipses
             # # [cx, cy, w, h, angle]
             # if estimateCovariance and len(det) >= 3:
             #     # Calculate our 3 sigma std deviation to create a bounding box for matching
             #     try:
-            #         a, b, phi = shared_math.ellipsify(det[2], 3.0)
+            #         a, b, phi = shared_math.ellipsify(np.array(det[3]), 3.0)
             #         # Enforce a minimum size so matching doesn't fail
             #         a += self.min_size
             #         b += self.min_size
-            #         detections_position_list.append([det[0], det[1], a, b, phi])
+            #         detections_position_list.append([det[1], det[2], a, b, phi])
             #     except Exception as e:
             #         print ( " Failed! ", str(e))
             #         # Use an arbitrary size if we have no covariance estimate
-            #         detections_position_list.append([det[0], det[1], self.min_size, self.min_size, math.radians(0)])
+            #         detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
             # else:
             #     # Use an arbitrary size if we have no covariance estimate
             detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
@@ -752,7 +683,8 @@ class GlobalFUSION:
         detections_position_list = []
         detections_position_list_id = []
         for track in self.trackedList:
-            detections_position_list.append([track.x, track.y, self.min_size, self.min_size, math.radians(0)])
+            a, b, phi = shared_math.ellipsify(track.error_covariance, 1.0)
+            detections_position_list.append([track.x, track.y, self.min_size + a, self.min_size + b, phi])
             detections_position_list_id.append(track.id)
         matches = []
         remove = []
@@ -772,7 +704,7 @@ class GlobalFUSION:
                                                          return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
-                            # 100% match is ourself! Look for IOU > .75 for now to delete
+                            # 100% match is ourself! Look for IOU > .50 for now to delete
                             if .50 >= IOUVsDetection > 0.001:
                                 # Only grab the first match
                                 # Before determining if this is a match check if this detection has been matched already

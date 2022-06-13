@@ -38,12 +38,12 @@ class connectServer:
         #self.rsu_ip_address = 'http://192.168.100.198:5000'
         self.rsu_ip_address = 'http://' + str(rsu_ip) + ':5000'
 
-    def register(self, vehicle_id, x, y, z, roll, pitch, yaw):
+    def register(self, vehicle_id, x, y, z, roll, pitch, yaw, timestamp):
         # data to be sent to api 
         packet = {'key':self.key, 
                 'id':vehicle_id,
                 'type':0,
-                'timestamp':time.time(),
+                'timestamp':timestamp,
                 'x':x,
                 'y':y,
                 'z':z,
@@ -66,13 +66,13 @@ class connectServer:
                 print ( "Error: Failed to message RSU, trying again" )
                 time.sleep(.01)
 
-    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, detections):
+    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, detections, timestamp):
   
         # data to be sent to api 
         packet = {'key':self.key, 
                 'id':vehicle_id, 
                 'type':0,
-                'timestamp':time.time(),
+                'timestamp':timestamp,
                 'x':x,
                 'y':y,
                 'z':z,

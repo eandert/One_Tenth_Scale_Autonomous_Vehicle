@@ -127,7 +127,7 @@ class MainClass(Resource):
                 pitch = float(request_data['pitch'])
                 yaw = float(request_data['yaw'])
 
-                #print("recieved")
+                # print("recieved", key, id, type)
 
                 returnObject = flask_app.config['RSUClass'].register(key, id, type, timestamp, x, y, z, roll, pitch, yaw)
 

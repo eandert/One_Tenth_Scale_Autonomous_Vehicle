@@ -78,12 +78,14 @@ class Planner:
         # Raw LIDAR for gui debug
         self.lidarPoints = []
         self.localizationError = None
-
+ 
         # Start sensors with standard error model
         self.localization = sensor.Localization(0.01, 0.0, 0.01, 0.0)
         self.lidarSensor = None
-        self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
-                                        0.0117, 0.023, 0.0517, 0.0126)
+        self.cameraSensor = sensor.Sensor("IMX160", math.radians(0.0), math.radians(160), 10.0,
+                                               0.0117, 0.023, 0.0165, 0.0607)
+        # self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
+        #                                 0.0117, 0.023, 0.0517, 0.0126)
         
     def initialSensorAtPosition(self, x_init, y_init, theta_init, xCoordinates, yCoordinates, vCoordinates, id_in, simVehicle):
         self.targetVelocityGeneral = 0

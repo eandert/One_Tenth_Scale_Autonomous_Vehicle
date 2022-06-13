@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
         self.lidar_detection_centroid = init_response['lidar_detection_centroid']
         self.camera_detection_centroid = init_response['camera_detection_centroid']
         self.sensor_fusion_centroid = init_response['sensor_fusion_centroid']
+        self.localization_centroid = init_response['localization_centroid']
         self.localization_error = init_response['localization_error']
 
         self.sensors = init_response['sensor']
@@ -393,6 +394,7 @@ class MainWindow(QMainWindow):
             self.sensor_camera_center = response['sensor_camera_center']
             self.sensor_camera_detection_centroid = response['sensor_camera_detection_centroid']
             self.sensor_sensor_fusion_centroid = response['sensor_sensor_fusion_centroid']
+            self.localization_centroid = response['localization_centroid']
             self.sensor_localization_error = response['sensor_localization_error']
 
             self.global_sensor_fusion_centroid = response['global_sensor_fusion_centroid']
@@ -493,6 +495,9 @@ class MainWindow(QMainWindow):
             ### GLOBAL FUSION ###
             if self.display_global_fusion:
                 self.paint_global_fusion(pen, painter)
+
+            # if self.display_cooperative_monitoring:
+            #     self.paint_cooperative_monitor(pen, painter)
 
         except Exception as e:
             print(" GUI render error: ", str(e))
@@ -833,35 +838,34 @@ class MainWindow(QMainWindow):
                 pen.setBrush(brush_color['camera_fov'])
                 painter.setPen(pen)
 
-                camera_center = math.degrees(self.camera_center[idx])
-                camera_fov = math.degrees(self.camera_fov[idx])
+                camera_center = self.camera_center[idx]
+                camera_fov = self.camera_fov[idx]
 
                 painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
                                 self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                         1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                    theta + math.radians(camera_center + (camera_fov/2)))),
+                                    theta + camera_center - (camera_fov/2))),
                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                         1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                    theta + math.radians(camera_center + (camera_fov/2)))))
+                                    theta + camera_center - (camera_fov/2))))
 
                 painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
                                 self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                         1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                    theta + math.radians(camera_center + -(camera_fov/2)))),
+                                    theta + camera_center + (camera_fov/2))),
                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                         1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                    theta + math.radians(camera_center + -(camera_fov/2)))))
+                                    theta + camera_center + (camera_fov/2))))
 
                 # Now draw the vehicle camera detections
                 pen.setBrush(brush_color['camera_detection_centroid'])
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in self.camera_detection_centroid[idx]:
-                    # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
-                    painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+                    painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
 
                 # Time for displaying the covaraince
                 if self.display_covariance:
@@ -871,9 +875,9 @@ class MainWindow(QMainWindow):
                     for each in self.camera_detection_centroid[idx]:
                         # Make sure covariance parameters have been added
                         if len(each) >= 3:
-                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                            a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                            pos = ( self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[3], 3.0)
                             a = a * self.mapSpecs.meters_to_print_scale
                             b = b * self.mapSpecs.meters_to_print_scale
                             # Save the previous painter envinronment so we don't mess up the other things
@@ -896,8 +900,8 @@ class MainWindow(QMainWindow):
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in self.lidar_detection_centroid[idx]:
-                    painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+                    painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
 
                 # Draw raw lidar
                 pen.setBrush(brush_color['lidar_detection_raw'])
@@ -915,9 +919,9 @@ class MainWindow(QMainWindow):
                     for each in self.lidar_detection_centroid[idx]:
                         # Make sure covariance parameters have been added
                         if len(each) >= 3:
-                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                            a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                            pos = ( self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[3], 3.0)
                             a = a * self.mapSpecs.meters_to_print_scale
                             b = b * self.mapSpecs.meters_to_print_scale
                             # Save the previous painter envinronment so we don't mess up the other things
@@ -936,11 +940,16 @@ class MainWindow(QMainWindow):
 
             if self.display_localization:
                 pen.setBrush(brush_color['localization_error'])
-                pen.setWidth(.5)
-                painter.setPen(pen)
-                if self.localization_error != []:
-                    pos = ( self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
-                            self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale) )
+                if self.localization_centroid != []:
+                    pen.setWidth(6)
+                    painter.setPen(pen)
+                    painter.drawPoint(self.translateX(self.localization_centroid[idx][0] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(self.localization_centroid[idx][1] * self.mapSpecs.meters_to_print_scale))
+                if self.localization_error != [] and self.localization_centroid != []:
+                    pen.setWidth(.5)
+                    painter.setPen(pen)
+                    pos = ( self.translateX(self.localization_centroid[idx][0] * self.mapSpecs.meters_to_print_scale),
+                            self.translateY(self.localization_centroid[idx][1] * self.mapSpecs.meters_to_print_scale) )
                     a, b, phi = shared_math.ellipsify(self.localization_error[idx], 3.0)
                     a = a * self.mapSpecs.meters_to_print_scale
                     b = b * self.mapSpecs.meters_to_print_scale
@@ -1086,35 +1095,34 @@ class MainWindow(QMainWindow):
                 pen.setBrush(brush_color['camera_fov'])
                 painter.setPen(pen)
 
-                camera_center = math.degrees(self.sensor_camera_center[idx])
-                camera_fov = math.degrees(self.sensor_camera_fov[idx])
+                camera_center = self.sensor_camera_center[idx]
+                camera_fov = self.sensor_camera_fov[idx]
 
                 painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
                                 self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                         1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                    theta + math.radians(camera_center + (camera_fov/2)))),
+                                    theta + camera_center + (camera_fov/2))),
                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                         1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                    theta + math.radians(camera_center + (camera_fov/2)))))
+                                    theta + camera_center + (camera_fov/2))))
 
                 painter.drawLine(self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale),
                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale),
                                 self.translateX(localizationPositionX * self.mapSpecs.meters_to_print_scale - (
                                         1.0 * self.mapSpecs.meters_to_print_scale) * math.cos(
-                                    theta + math.radians(camera_center + -(camera_fov/2)))),
+                                    theta + camera_center + -(camera_fov/2))),
                                 self.translateY(localizationPositionY * self.mapSpecs.meters_to_print_scale - (
                                         1.0 * self.mapSpecs.meters_to_print_scale) * math.sin(
-                                    theta + math.radians(camera_center + -(camera_fov/2)))))
+                                    theta + camera_center + -(camera_fov/2))))
 
                 # Now draw the vehicle camera detections
                 pen.setBrush(brush_color['camera_detection_centroid'])
                 pen.setWidth(4)
                 painter.setPen(pen)
                 for each in self.sensor_camera_detection_centroid[idx]:
-                    # transX, transY = self.translateDetections(each[1],  abs(each[2]), math.atan2(abs(each[2]), each[1]), localizationPositionX, localizationPositionY, theta)
-                    painter.drawPoint(self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale))
+                    painter.drawPoint(self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale))
 
                 # Time for displaying the covaraince
                 if self.display_covariance:
@@ -1124,9 +1132,9 @@ class MainWindow(QMainWindow):
                     for each in self.sensor_camera_detection_centroid[idx]:
                         # Make sure covariance parameters have been added
                         if len(each) >= 3:
-                            pos = ( self.translateX(each[0] * self.mapSpecs.meters_to_print_scale),
-                                    self.translateY(each[1] * self.mapSpecs.meters_to_print_scale) )
-                            a, b, phi = shared_math.ellipsify(each[2], 3.0)
+                            pos = ( self.translateX(each[1] * self.mapSpecs.meters_to_print_scale),
+                                    self.translateY(each[2] * self.mapSpecs.meters_to_print_scale) )
+                            a, b, phi = shared_math.ellipsify(each[3], 3.0)
                             a = a * self.mapSpecs.meters_to_print_scale
                             b = b * self.mapSpecs.meters_to_print_scale
                             # Save the previous painter envinronment so we don't mess up the other things
@@ -1209,3 +1217,25 @@ class MainWindow(QMainWindow):
                                 painter.drawEllipse(0, 0, a, b)
                                 # Restore the environment to what it was before
                                 painter.restore()
+
+    # def paint_cooperative_monitoring(self, pen, painter):
+    #     # Print out the legend for all the colors used
+    #     self.results_list = []
+    #     if self.results_list == []:
+    #         self.results_list.append(QLabel(self))
+    #         self.results_list[0].setText("Ground Truth:")
+    #         self.results_list[0].move(500, 800)
+    #         for idx, brush in enumerate(brush_color):
+    #             self.labelList.append(QLabel(self))
+    #             self.labelList[idx].setAutoFillBackground(True) # This is important!!
+    #             color = QColor(brush_color[brush])
+    #             alpha  = 140
+    #             values = "{r}, {g}, {b}, {a}".format(r = color.red(),
+    #                                                 g = color.green(),
+    #                                                 b = color.blue(),
+    #                                                 a = alpha
+    #                                                 )
+    #             self.labelList[idx].setStyleSheet("QLabel { background-color: rgba("+values+"); }")
+    #             self.labelList[idx].setText(brush)
+    #             self.labelList[idx].resize(200, 20)
+    #             self.labelList[idx].move(5, 25 + (idx * 20))
