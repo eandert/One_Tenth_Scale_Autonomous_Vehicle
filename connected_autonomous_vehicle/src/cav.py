@@ -356,22 +356,75 @@ def cav(config, vid, test_idx):
 
                 cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, sim_values['veh_locations'])
                 
-                vehicle_object_positions = sim_values['veh_locations']
-                if vehicle_id == 0 and fetch_time(simulation_time, global_time) >= 10000.0:
-                    for each in vehicle_object_positions:
-                        if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
-                            #print(" rotating: ", each)
-                            ox = planner.localizationPositionX
-                            oy = planner.localizationPositionY
-                            angle = math.radians(test_idx*1.25 + 1.25)
-                            px = each[0]
-                            py = each[1]
-                            qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
-                            qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
-                            each[0] = qx
-                            each[1] = qy
-                            print("Messing up data by ", test_idx*1.25 + 1.25)
-                    cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                # vehicle_object_positions = sim_values['veh_locations']
+                # if vehicle_id == 0 and fetch_time(simulation_time, global_time) >= 10000.0:
+                #     error_type = 0 # 0:lidar, 1:camera, 2:fusion, 3:random, 4:malicous
+                #     if error_type == 0: # camera error, shift by certain degree i
+                #         for each in vehicle_object_positions:
+                #             if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
+                #                 #print(" rotating: ", each)
+                #                 ox = planner.localizationPositionX
+                #                 oy = planner.localizationPositionY
+                #                 angle = math.radians(test_idx*1.25 + 1.25)
+                #                 px = each[0]
+                #                 py = each[1]
+                #                 qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
+                #                 qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+                #                 each[0] = qx
+                #                 each[1] = qy
+                #                 print("Messing up data by ", test_idx*1.25 + 1.25)
+                #         cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                #     elif error_type == 1: # Lidar error, shift by certain degree i
+                #         for each in vehicle_object_positions:
+                #             if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
+                #                 #print(" rotating: ", each)
+                #                 ox = planner.localizationPositionX
+                #                 oy = planner.localizationPositionY
+                #                 angle = math.radians(test_idx*1.25 + 1.25)
+                #                 px = each[0]
+                #                 py = each[1]
+                #                 qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
+                #                 qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+                #                 each[0] = qx
+                #                 each[1] = qy
+                #                 print("Messing up data by ", test_idx*1.25 + 1.25)
+                #         cam_returned2, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                #     elif error_type == 2: # Fusion error, shift both by certain degree i
+                #         for each in vehicle_object_positions:
+                #             if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
+                #                 #print(" rotating: ", each)
+                #                 ox = planner.localizationPositionX
+                #                 oy = planner.localizationPositionY
+                #                 angle = math.radians(test_idx*1.25 + 1.25)
+                #                 px = each[0]
+                #                 py = each[1]
+                #                 qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
+                #                 qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+                #                 each[0] = qx
+                #                 each[1] = qy
+                #                 print("Messing up data by ", test_idx*1.25 + 1.25)
+                #         cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                #     elif error_type == 3: # Random unexplainable error, move detection randomly with probability i
+                #         for each in vehicle_object_positions:
+                #             if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
+                #                 #print(" rotating: ", each)
+                #                 ox = planner.localizationPositionX
+                #                 oy = planner.localizationPositionY
+                #                 angle = math.radians(test_idx*1.25 + 1.25)
+                #                 px = each[0]
+                #                 py = each[1]
+                #                 qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
+                #                 qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+                #                 each[0] = qx
+                #                 each[1] = qy
+                #                 print("Messing up data by ", test_idx*1.25 + 1.25)
+                #         cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                #     elif error_type == 4: # Maliciously insert vehicle into middle of traffic light with probability i
+                #         test_int = random.randint(0, 100)
+                #         if test_int >= test_idx:
+                #             # Insert into the middle of the traffic light (there might be another object there)
+                #             vehicle_object_positions.append()
+                #         cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
 
                 lidar_recieved = True
                 camera_recieved = True
