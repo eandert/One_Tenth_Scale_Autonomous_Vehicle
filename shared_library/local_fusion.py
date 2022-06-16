@@ -535,7 +535,7 @@ class Tracked:
         
         # Prediction based mathcing methods seems to be making this fail so we are using no prediction :/
         # Enforce a min size of a vehicle so that a detection has some area overlap to check
-        a, b, phi = shared_math.ellipsify(self.error_covariance, 1.0)
+        a, b, phi = shared_math.ellipsify(self.error_covariance, 3.0)
         return self.x, self.y, self.min_size + a, self.min_size + b, phi
 
 

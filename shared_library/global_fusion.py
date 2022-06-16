@@ -366,11 +366,11 @@ class ResizableKalman:
                         Z_t = Z_t.reshape(Z_t.shape[0], -1)
                         y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
                         #print(y_t_temp)
-                        location_error = math.hypot(math.sqrt(y_t_temp[0]), math.sqrt(y_t_temp[1]))
+                        location_error = math.hypot(y_t_temp[0], y_t_temp[1])
                         expected_a, expected_b, expected_angle = shared_math.ellipsify(cov, 1.0)
                         expected_x = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(0))
                         expected_y = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(90))
-                        expected_location_error = math.hypot(expected_x, expected_y)
+                        expected_location_error = math.hypot(expected_x**2, expected_y**2)
                         #cov
                         #location_error_std = location_error / expected_location_error
                         #print(location_error, expected_location_error, location_error_std)
@@ -406,7 +406,7 @@ class ResizableKalman:
     def getKalmanPred(self, time):
         # Prediction based mathcing methods seems to be making this fail so we are using no prediction :/
         # Enforce a min size of a vehicle so that a detection has some area overlap to check
-        a, b, phi = shared_math.ellipsify(self.error_covariance, 1.0)
+        a, b, phi = shared_math.ellipsify(self.error_covariance, 3.0)
         return self.x, self.y, self.min_size + a, self.min_size + b, phi
 
 
