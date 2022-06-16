@@ -167,22 +167,22 @@ class Tracked:
             [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
         ]
 
-    def getPositionPredicted(self, timestamp):
-        # if self.fusion_steps < 2:
+    def getPositionPredicted(self, timestamp, estimate_covariance):
+        if self.fusion_steps < 2 or not estimate_covariance:
         # If this kalman fitler has never been run, we can't use it for prediction!
-        return [
-            [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
-        ]
-        # else:
-        #     try:
-        #         x, y, a, b, phi = self.getKalmanPred(timestamp)
-        #         return [
-        #             [x, y, a, b, phi]
-        #         ]
-        #     except:
-        #         return [
-        #         [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
-        #         ]
+            return [
+                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+            ]
+        else:
+            try:
+                x, y, a, b, phi = self.getKalmanPred(timestamp)
+                return [
+                    [x, y, a, b, phi]
+                ]
+            except:
+                return [
+                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+                ]
 
     def clearLastFrame(self):
         self.match_list = []
@@ -223,7 +223,7 @@ class Tracked:
                 relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                     vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
                 success, lidar_expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(
-                    relative_angle_to_detector, target_line_angle, relative_distance, False)
+                    relative_angle_to_detector, target_line_angle, relative_distance, False, parameterized_covariance)
                 try:
                     lidarCov = lidar_expected_error_gaussian.covariance
                 except:
@@ -237,7 +237,7 @@ class Tracked:
                 relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                     vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
                 success, camera_expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(
-                    relative_angle_to_detector, target_line_angle, relative_distance, False)
+                    relative_angle_to_detector, target_line_angle, relative_distance, False, parameterized_covariance)
                 try:
                     camCov = camera_expected_error_gaussian.covariance
                 except:
@@ -555,7 +555,7 @@ class FUSION:
         self.fusion_mode = fusion_mode
         self.current_tracked_id = 0
         self.trackShowThreshold = 4
-        self.predictive =True
+        self.predictive = True
 
         # Indicate our success
         print('Started FUSION successfully...')
@@ -574,17 +574,17 @@ class FUSION:
 
         return result
 
-    def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimateCovariance):
+    def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimate_covariance):
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
         for det in observations:
             # Create a rotated rectangle for IOU of 2 ellipses
             # [cx, cy, w, h, angle]
-            if estimateCovariance and len(det) >= 3:
+            if estimate_covariance and len(det) >= 4:
                 # Calculate our 3 sigma std deviation to create a bounding box for matching
                 try:
-                    a, b, phi = shared_math.ellipsify(det[3], 3)
+                    a, b, phi = shared_math.ellipsify(det[3], 3.0)
                     # Enforce a minimum size so matching doesn't fail
                     a += self.min_size
                     b += self.min_size
@@ -594,21 +594,21 @@ class FUSION:
                     # Use an arbitrary size if we have no covariance estimate
                     detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
             else:
-                print(" Warning: no covaraince data for ", sensor_id)
+                #print(" Warning: no covaraince data for ", sensor_id)
                 # Use an arbitrary size if we have no covariance estimate
                 detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
             detections_list.append([det[0], det[1], det[2], sensor_id])
 
         # Call the matching function to modify our detections in trackedList
-        self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
+        self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime, estimate_covariance)
 
-    def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime):
+    def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime, estimate_covariance):
         try:
             matches = []
             if len(detections_list_positions) > 0:
                 if len(self.trackedList) > 0:
                     numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
-                    thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
+                    thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEuclidean)
 
                     # Need to check the tree size here in order to figure out if we can even do this
                     length = len(numpy_formatted)
@@ -617,7 +617,7 @@ class FUSION:
                             # The only difference between this and our other version is that
                             # the below line is commented out
                             # track.calcEstimatedPos(timestamp - self.prev_time)
-                            tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(timestamp)), k=length,
+                            tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(timestamp, estimate_covariance)), k=length,
                                                             return_distance=True)
                             first = True
                             for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):

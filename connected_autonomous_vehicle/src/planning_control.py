@@ -148,6 +148,24 @@ class Planner:
         self.xCoordinates = xCoordinates
         self.yCoordinates = yCoordinates
         self.vCoordinates = vCoordinates
+
+        # Special error modification for more diversity
+        if False and id_in % 2 == 0:
+            self.localization.lateral_error_b = self.localization.lateral_error_b / 2.0
+            self.localization.lateral_error_x = self.localization.lateral_error_x / 2.0
+            self.localization.longitudinal_error_b = self.localization.longitudinal_error_b / 2.0
+            self.localization.longitudinal_error_b = self.localization.longitudinal_error_b / 2.0
+            self.lidarSensor.distal_error_b = self.lidarSensor.distal_error_b * 2.0
+            self.lidarSensor.distal_error_x = self.lidarSensor.distal_error_x * 2.0
+            self.lidarSensor.radial_error_b = self.lidarSensor.radial_error_b * 2.0
+            self.lidarSensor.radial_error_x = self.lidarSensor.radial_error_x * 2.0
+            self.cameraSensor.distal_error_b = self.cameraSensor.distal_error_b * 2.0
+            self.cameraSensor.distal_error_x = self.cameraSensor.distal_error_x * 2.0
+            self.cameraSensor.radial_error_b = self.cameraSensor.radial_error_b * 2.0
+            self.cameraSensor.radial_error_x = self.cameraSensor.radial_error_x * 2.0
+            self.localization.recalc_static_error()
+            self.lidarSensor.recalc_static_error()
+            self.cameraSensor.recalc_static_error()
         
         # Initialize the controllers\
         if self.simVehicle:

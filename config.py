@@ -25,6 +25,9 @@ class Setting:
                         self.use_global_fusion = False
                         self.cooperative_monitoring = False
                         self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
                 elif "four_cav_simulation" == setting:
                         print("         Config: four_cav_simulation selected")
                         # Working 4 CAV simulation
@@ -49,9 +52,12 @@ class Setting:
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = False
+                        self.cooperative_monitoring = True
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
+                        self.error_injection_type = 1 # 0 is none
+                        self.error_injection_time = 100.0
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
                 elif "one_cav_simulation" == setting:
                         print("         Config: one_cav_simulation selected")
                         # Working 4 CAV simulation
@@ -75,6 +81,9 @@ class Setting:
                         self.cooperative_monitoring = False
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
                 elif "two_cav_simulation_unit_test" == setting:
                         print("         Config: two_cav_simulation_unit_test selected")
                         # Working 4 CAV simulation
@@ -88,20 +97,23 @@ class Setting:
                         self.fallthrough_delay = 0.100
                         self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
-                        self.map_length = 1.0
+                        self.map_length = 2.0
                         self.simulation = True
                         self.debug = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .4
+                        self.unit_test_speed_target = .45
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring = False
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
                 elif "two_cav_simulation_unit_test_2" == setting:
                         print("         Config: two_cav_simulation_unit_test selected")
                         # Working 4 CAV simulation
@@ -115,21 +127,54 @@ class Setting:
                         self.fallthrough_delay = 0.100
                         self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
-                        self.map_length = 2.0
+                        self.map_length = 1.0
                         self.simulation = True
                         self.debug = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .4
+                        self.unit_test_speed_target = .45
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring = False
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
                 elif "two_cav_simulation_unit_test_3" == setting:
+                        print("         Config: two_cav_simulation_unit_test selected")
+                        # Working 4 CAV simulation
+                        self.cav = [[-0.75, 0.0, 0, True],
+                                [0.0, 0.75, 4.71238898038469, True]]
+                        self.cis = [[-0.75, 0.75, -0.785398163, True]]#,
+                                #[0.75, -0.75, -0.785398163, True]]
+                        self.rsu_ip = '127.0.0.1'
+                        self.interval = 0.125
+                        self.offset_interval = 0.0
+                        self.fallthrough_delay = 0.100
+                        self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
+                        self.map = 0
+                        self.map_length = 2.0
+                        self.simulation = True
+                        self.debug = False
+                        self.unit_test = True
+                        self.unit_test_speed_target = .45
+                        self.unit_test_time = 120.0
+                        self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
+                                                [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
+                        self.gui_interval = 100 # 10 hz, hopefully this is fast enough
+                        self.data_collect_mode = False
+                        self.use_global_fusion = True
+                        self.cooperative_monitoring = False
+                        self.cooperative_monitoring_update = 8 # cycles
+                        self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
+                elif "two_cav_simulation_unit_test_4" == setting:
                         print("         Config: two_cav_simulation_unit_test selected")
                         # Working 4 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
@@ -146,22 +191,27 @@ class Setting:
                         self.simulation = True
                         self.debug = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .4
+                        self.unit_test_speed_target = .45
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring = False
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
-                elif "two_cav_simulation_unit_test_4" == setting:
-                        print("         Config: two_cav_simulation_unit_test selected")
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
+                elif "four_cav_simulation_unit_test" == setting:
+                        print("         Config: four_cav_simulation_unit_test selected")
                         # Working 4 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
-                                [0.0, 0.75, 4.71238898038469, True]]
-                        self.cis = [[-0.75, 0.75, -0.785398163, True]]#,
+                                [-1.5, 0.0, 0, True],
+                                [0.0, 0.75, 4.71238898038469, True],
+                                [0.0, 1.5, 4.71238898038469, True]]
+                        self.cis = []#[[-0.75, 0.75, -0.785398163, True],
                                 #[0.75, -0.75, -0.785398163, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
@@ -172,26 +222,63 @@ class Setting:
                         self.map_length = 2.0
                         self.simulation = True
                         self.debug = False
+                        self.data_collect_mode = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .4
+                        self.unit_test_speed_target = .45
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring = False
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
-                elif "four_cav_simulation_unit_test" == setting:
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000.0
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
+                elif "four_cav_simulation_unit_test_2" == setting:
                         print("         Config: four_cav_simulation_unit_test selected")
                         # Working 4 CAV simulation
                         self.cav = [[-0.75, 0.0, 0, True],
                                 [-1.5, 0.0, 0, True],
                                 [0.0, 0.75, 4.71238898038469, True],
-                                [0.0, 1.75, 4.71238898038469, True]]
+                                [0.0, 1.5, 4.71238898038469, True]]
+                        self.cis = []#[[-0.75, 0.75, -0.785398163, True],
+                                #[0.75, -0.75, -0.785398163, True]]
+                        self.rsu_ip = '127.0.0.1'
+                        self.interval = 0.125
+                        self.offset_interval = 0.0
+                        self.fallthrough_delay = 0.100
+                        self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
+                        self.map = 0
+                        self.map_length = 1.0
+                        self.simulation = True
+                        self.debug = False
+                        self.data_collect_mode = False
+                        self.unit_test = True
+                        self.unit_test_speed_target = .45
+                        self.unit_test_time = 120.0
+                        self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
+                                                [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
+                        self.gui_interval = 100 # 10 hz, hopefully this is fast enough
+                        self.data_collect_mode = False
+                        self.use_global_fusion = True
+                        self.cooperative_monitoring = False
+                        self.cooperative_monitoring_update = 8 # cycles
+                        self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000.0
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
+                elif "four_cav_simulation_unit_test_3" == setting:
+                        print("         Config: four_cav_simulation_unit_test selected")
+                        # Working 4 CAV simulation
+                        self.cav = [[-0.75, 0.0, 0, True],
+                                [-1.5, 0.0, 0, True],
+                                [0.0, 0.75, 4.71238898038469, True],
+                                [0.0, 1.5, 4.71238898038469, True]]
                         self.cis = [[-0.75, 0.75, -0.785398163, True],
-                                [0.75, -0.75, -0.785398163, True]]
+                                [0.75, -0.75, 2.35619, True]]
                         self.rsu_ip = '127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0
@@ -203,7 +290,7 @@ class Setting:
                         self.debug = False
                         self.data_collect_mode = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .4
+                        self.unit_test_speed_target = .45
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
@@ -213,6 +300,74 @@ class Setting:
                         self.cooperative_monitoring = False
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000.0
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
+                elif "four_cav_simulation_unit_test_4" == setting:
+                        print("         Config: four_cav_simulation_unit_test selected")
+                        # Working 4 CAV simulation
+                        self.cav = [[-0.75, 0.0, 0, True],
+                                [-1.5, 0.0, 0, True],
+                                [0.0, 0.75, 4.71238898038469, True],
+                                [0.0, 1.5, 4.71238898038469, True]]
+                        self.cis = [[-0.75, 0.75, -0.785398163, True],
+                                [0.75, -0.75, 2.35619, True]]
+                        self.rsu_ip = '127.0.0.1'
+                        self.interval = 0.125
+                        self.offset_interval = 0.0
+                        self.fallthrough_delay = 0.100
+                        self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
+                        self.map = 0
+                        self.map_length = 1.0
+                        self.simulation = True
+                        self.debug = False
+                        self.data_collect_mode = False
+                        self.unit_test = True
+                        self.unit_test_speed_target = .45
+                        self.unit_test_time = 120.0
+                        self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
+                                                [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
+                        self.gui_interval = 100 # 10 hz, hopefully this is fast enough
+                        self.data_collect_mode = False
+                        self.use_global_fusion = True
+                        self.cooperative_monitoring = False
+                        self.cooperative_monitoring_update = 8 # cycles
+                        self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000.0
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
+                elif "four_cav_simulation_error_injection" == setting:
+                        print("         Config: four_cav_simulation_unit_test selected")
+                        # Working 4 CAV simulation
+                        self.cav = [[-0.75, 0.0, 0, True],
+                                [-1.5, 0.0, 0, True],
+                                [0.0, 0.75, 4.71238898038469, True],
+                                [0.0, 1.5, 4.71238898038469, True]]
+                        self.cis = [[-1.5, 1.5, -0.785398163, True],
+                                [1.5, -1.5, 2.35619, True]]
+                        self.rsu_ip = '127.0.0.1'
+                        self.interval = 0.125
+                        self.offset_interval = 0.0
+                        self.fallthrough_delay = 0.100
+                        self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
+                        self.map = 0
+                        self.map_length = 2.0
+                        self.simulation = True
+                        self.debug = False
+                        self.data_collect_mode = False
+                        self.unit_test = True
+                        self.unit_test_speed_target = .45
+                        self.unit_test_time = 120.0
+                        self.unit_test_config = [[0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
+                        self.gui_interval = 100 # 10 hz, hopefully this is fast enough
+                        self.data_collect_mode = False
+                        self.use_global_fusion = True
+                        self.cooperative_monitoring = True
+                        self.cooperative_monitoring_update = 8 # cycles
+                        self.test_one_step_kalman = False
+                        self.error_injection_type = 1 # 0 is none
+                        self.error_injection_time = 100.0
+                        self.twenty_percent_error_end_and_print = True # When error exceeds 20% after queue is full, test ends and prints time
                 else:
                         print("         Config: two_cav_simulation selected")
                         # Working 2 CAV simulation
@@ -233,7 +388,10 @@ class Setting:
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
-                        self.cooperative_monitoring = False
+                        self.cooperative_monitoring = True
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
+                        self.error_injection_type = 0 # 0 is none
+                        self.error_injection_time = 10000
+                        self.twenty_percent_error_end_and_print = False # When error exceeds 20% after queue is full, test ends and prints time
                 print(" Config complete, using map: ", self.map)

@@ -47,6 +47,9 @@ class RSU():
         self.test_one_step_kalman = config.test_one_step_kalman
         self.end_test = False
         self.error_monitoring = []
+        self.twenty_percent_error_end_and_print = config.twenty_percent_error_end_and_print
+        self.revolving_buffer_size = 500
+        self.missed_detection_error = 3.0
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -64,6 +67,9 @@ class RSU():
             self.unit_test_time = config.unit_test_time
             self.unit_test_speed_target = config.unit_test_speed_target
             self.unit_test_idx = unit_test_idx
+            if self.twenty_percent_error_end_and_print:
+                with open('output.txt', 'a') as f:
+                    f.write("Test start " + str(self.unit_test_idx) + "\n")
         else:
             # Default to 1
             # TODO: add a button for this
@@ -129,7 +135,7 @@ class RSU():
                 self.vehicles[idx].targetVelocityGeneral = self.unit_test_speed_target
 
         # Create the special id for localization data from each cav
-        self.localizationid = (1 + len(config.cav) + len(config.cis)) * global_fusion.max_id
+        self.localizationid = (len(config.cav) + len(config.cis)) * global_fusion.max_id
 
 
     def initUnitTestParams(self):
@@ -317,14 +323,10 @@ class RSU():
             self.vehicles[id].fusionDetections = detections["fused_obj"]
 
             # Update the location of this vehicle
-            if not self.simulation:
-                self.vehicles[id].localizationPositionX = detections["localization"][0]
-                self.vehicles[id].localizationPositionY = detections["localization"][1]
-                self.vehicles[id].velocity = detections["localization"][3]
-                self.vehicles[id].theta = detections["localization"][2]
-            else:
-                self.vehicles[id].localizationPositionX_actual = detections["localization"][0]
-                self.vehicles[id].localizationPositionY_actual = detections["localization"][1]
+            self.vehicles[id].localizationPositionX = detections["localization"][0]
+            self.vehicles[id].localizationPositionY = detections["localization"][1]
+            self.vehicles[id].velocity = detections["localization"][3]
+            self.vehicles[id].theta = detections["localization"][2]
             self.vehicles[id].localizationCovariance = detections["localization"][4]
             self.vehicles[id].steeringAcceleration = steeringAcceleration
             self.vehicles[id].motorAcceleration = motorAcceleration
@@ -383,11 +385,10 @@ class RSU():
             self.sensors[id].fusionDetections = detections["fused_obj"]
 
             # Update the location of this camera
-            if not self.simulation:
-                self.sensors[id].localizationPositionX = detections["localization"][0]
-                self.sensors[id].localizationPositionY = detections["localization"][1]
-                self.sensors[id].velocity = detections["localization"][3]
-                self.sensors[id].theta = detections["localization"][2]
+            self.sensors[id].localizationPositionX = detections["localization"][0]
+            self.sensors[id].localizationPositionY = detections["localization"][1]
+            self.sensors[id].velocity = detections["localization"][3]
+            self.sensors[id].theta = detections["localization"][2]
             self.sensors[id].localizationCovariance = detections["localization"][4]
 
             #self.step_sim_sensor_tracker[id] = False
@@ -448,8 +449,8 @@ class RSU():
     def sendSimPositions(self, key, id, type, x, y, z, roll, pitch, yaw, velocity):
         if type == 0:
             # Udpate the location of this vehicle
-            self.vehicles[id].localizationPositionX = x
-            self.vehicles[id].localizationPositionY = y
+            self.vehicles[id].localizationPositionX_actual = x
+            self.vehicles[id].localizationPositionY_actual = y
             self.vehicles[id].velocity = velocity
             self.vehicles[id].theta = yaw
             #print("     cav ", id, " position ", x, y, yaw, velocity)
@@ -495,8 +496,8 @@ class RSU():
                 for idx, vehicle in self.vehicles.items():
                     # Add to the global sensor fusion w/ unique ID
                     localizationsList.append((idx+self.localizationid,
-                                              vehicle.localizationPositionX_actual,
-                                              vehicle.localizationPositionY_actual,
+                                              vehicle.localizationPositionX,
+                                              vehicle.localizationPositionY,
                                               vehicle.localizationCovariance,
                                               0,
                                               0,
@@ -515,13 +516,21 @@ class RSU():
 
                 self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance)
 
+                # If this is simulation, we need to add in the localization error for the CAVs
+                if self.simulation:
+                    for idx, vehicle in self.vehicles.items():
+                        for detection in vehicle.fusionDetections:
+                            detection[1] = detection[1] + vehicle.localizationPositionX-vehicle.localizationPositionX_actual
+                            detection[2] = detection[2] + vehicle.localizationPositionY-vehicle.localizationPositionY_actual
+                            detection[3] = sensor.addBivariateGaussians(np.array(vehicle.localizationCovariance), np.array(detection[3])).tolist()
+
                 # Add CAV fusion results to the global sensor fusion
                 for idx, vehicle in self.vehicles.items():
                     self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.parameterized_covariance)
 
                 # Add CIS fusion results to the global sensor fusion
-                for idx, sensor in self.sensors.items():
-                    self.globalFusion.processDetectionFrame(self.getTime(), sensor.fusionDetections, .25, self.parameterized_covariance)
+                for idx, sensor_ in self.sensors.items():
+                    self.globalFusion.processDetectionFrame(self.getTime(), sensor_.fusionDetections, .25, self.parameterized_covariance)
 
                 # Perform the global fusion
                 self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance, monitor)
@@ -533,15 +542,18 @@ class RSU():
                         self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), vehicle.cameraDetections, .25, self.parameterized_covariance)
                         self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), vehicle.lidarDetections, .25, self.parameterized_covariance)
 
-                    for idx, sensor in self.sensors.items():
+                    for idx, sensor_ in self.sensors.items():
                         # Add to the global sensor fusion
-                        self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), sensor.cameraDetections, .25, self.parameterized_covariance)
+                        self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), sensor_.cameraDetections, .25, self.parameterized_covariance)
 
                     self.globalFusionListOneStepKalman, error_data_one_step = self.globalFusionOneStepKalman.fuseDetectionFrame(self.parameterized_covariance, False)
 
                 # Use the cooperative monitoring method to check the sensors against the global fusion result
                 if monitor:
-                    self.cooperative_monitoring_process(error_data)
+                    monitor_break = self.cooperative_monitoring_process(error_data)
+
+                    if self.twenty_percent_error_end_and_print and monitor_break:
+                        return True, self.calculate_unit_test_results(), self.error_monitoring
 
                 if self.unit_test:
                     # Uses true positions of the CAVs to ground truth the sensing.
@@ -555,8 +567,8 @@ class RSU():
                         self.local_over_detection_miss += over_detection_miss
                         self.local_under_detection_miss += under_detection_miss
 
-                    for idx, sensor in self.sensors.items():
-                        over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(sensor.fusionDetections, ground_truth)
+                    for idx, sensor_ in self.sensors.items():
+                        over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(sensor_.fusionDetections, ground_truth)
                         self.local_differences = self.local_differences + differences
                         self.local_over_detection_miss += over_detection_miss
                         self.local_under_detection_miss += under_detection_miss
@@ -599,6 +611,8 @@ class RSU():
                     # If enough time has elapsed, print the intermediate results to the terminal
                     self.calculate_unit_test_results()
                     print(self.error_monitoring)
+            else:
+                print(self.error_monitoring)
         
         # Return false to indicate the test has not ended
         return False, [], []
@@ -667,8 +681,8 @@ class RSU():
 
         for idx, vehicle in self.vehicles.items():
             # Add to the global sensor fusion
-            vehicle_export.append([vehicle.localizationPositionX,
-                            vehicle.localizationPositionY,
+            vehicle_export.append([vehicle.localizationPositionX_actual,
+                            vehicle.localizationPositionY_actual,
                             vehicle.theta,
                             vehicle.velocity,
                             vehicle.wheelbaseWidth,
@@ -690,22 +704,22 @@ class RSU():
             camera_detection_centroid.append(vehicle.cameraDetections)
             sensor_fusion_centroid.append(vehicle.fusionDetections)
             localization_error.append(vehicle.localizationCovariance)
-            localization_centroid.append([vehicle.localizationPositionX_actual,vehicle.localizationPositionY_actual])
+            localization_centroid.append([vehicle.localizationPositionX,vehicle.localizationPositionY])
 
-        for idx, sensor in self.sensors.items():
+        for idx, sensor_ in self.sensors.items():
             # Add to the global sensor fusion
-            sensor_export.append([sensor.localizationPositionX,
-                            sensor.localizationPositionY,
-                            sensor.theta,
-                            sensor.velocity,
-                            sensor.width,
-                            sensor.length
+            sensor_export.append([sensor_.localizationPositionX,
+                            sensor_.localizationPositionY,
+                            sensor_.theta,
+                            sensor_.velocity,
+                            sensor_.width,
+                            sensor_.length
             ])
-            sensor_camera_fov.append(sensor.cameraSensor.field_of_view)
-            sensor_camera_center.append(sensor.cameraSensor.center_angle)
-            sensor_camera_detection_centroid.append(sensor.cameraDetections)
-            sensor_sensor_fusion_centroid.append(sensor.fusionDetections)
-            sensor_localization_error.append(sensor.localizationCovariance)
+            sensor_camera_fov.append(sensor_.cameraSensor.field_of_view)
+            sensor_camera_center.append(sensor_.cameraSensor.center_angle)
+            sensor_camera_detection_centroid.append(sensor_.cameraDetections)
+            sensor_sensor_fusion_centroid.append(sensor_.fusionDetections)
+            sensor_localization_error.append(sensor_.localizationCovariance)
 
         # Finally we can create the return messages
         response = dict(
@@ -902,7 +916,7 @@ class RSU():
 
             # Now calculate the score
             for dist in distances:
-                if dist > 0.5:
+                if dist > 1.0:
                     # Too far away to be considered a match, add as a miss instead
                     under_detection_miss += 1
                 else:
@@ -921,10 +935,10 @@ class RSU():
         # We have who saw what, but now we need to see who should have seen what
         object_polygons = []
         length = .6
-        width = .3
+        width = .6
         for idx, vehicle in enumerate(self.globalFusionList):
             # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
-            x = vehicle[1] 
+            x = vehicle[1]
             y = vehicle[2]
             theta = math.atan2(vehicle[5], vehicle[4])
             x1 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
@@ -940,21 +954,20 @@ class RSU():
 
         detectors = []
         for idx, cav in self.vehicles.items():
-            sublist = []
-            sublist.append( sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta],
-                cav.cameraSensor.center_angle, cav.cameraSensor.max_distance, cav.cameraSensor.field_of_view, object_polygons) )
-            sublist.append( sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta],
-                cav.lidarSensor.center_angle, cav.lidarSensor.max_distance, cav.lidarSensor.field_of_view, object_polygons) )
+            sublist = sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta],
+                cav.cameraSensor.center_angle, cav.cameraSensor.max_distance, cav.cameraSensor.field_of_view, object_polygons)
+            sublist += sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta],
+                cav.lidarSensor.center_angle, cav.lidarSensor.max_distance, cav.lidarSensor.field_of_view, object_polygons)
             detectors.append(sublist)
         for idx, cis in self.sensors.items():
-            detectors.append([sensor.check_visble_objects([cis.localizationPositionX, cis.localizationPositionY, cis.theta],
-                cis.cameraSensor.center_angle, cis.cameraSensor.max_distance, cis.cameraSensor.field_of_view, object_polygons)])
+            sublist = sensor.check_visble_objects([cis.localizationPositionX, cis.localizationPositionY, cis.theta],
+                cis.cameraSensor.center_angle, cis.cameraSensor.max_distance, cis.cameraSensor.field_of_view, object_polygons)
+            detectors.append(sublist)
 
-        print(detectors)
-        print(error_data)
+        # append an empty set for the localizers
+        detectors.append([])
 
         # Add our covariance data to the global sensor list
-        revolving_buffer_size = 125
         for object_id, object_trackers in enumerate(error_data):
             for error_frame in object_trackers:
                 # Check if this is a localizer or a sensor
@@ -962,35 +975,20 @@ class RSU():
                     sensor_platform_id = error_frame[0]
                 else:
                     sensor_platform_id = math.floor(error_frame[0]/10000)
-                if sensor_platform_id in self.error_dict:
-                    # Check off what we have seen
-                    # for seen_obj_id in range(len(detectors[sensor_platform_id][0])):
-                    #     if detectors[sensor_platform_id][0][seen_obj_id] == object_id:
-                    #         detectors[sensor_platform_id][0].pop(seen_obj_id)
-                    #         break
-                    # for seen_obj_id in range(len(detectors[sensor_platform_id][1])):
-                    #     if detectors[sensor_platform_id][1][seen_obj_id] == object_id:
-                    #         detectors[sensor_platform_id][1].pop(seen_obj_id)
-                    #         break
-                    # Moving revolving_buffer_size place average
-                    if self.error_dict[sensor_platform_id][0] < revolving_buffer_size:
-                        self.error_dict[sensor_platform_id][0] += 1
-                        self.error_dict[sensor_platform_id][2].append(error_frame[2])
-                        self.error_dict[sensor_platform_id][1] += 1
-                    # We have filled revolving_buffer_size places, time to revolve the buffer now
-                    else:
-                        if self.error_dict[sensor_platform_id][1] < revolving_buffer_size:
-                            # Replace the element with the next one
-                            self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
-                            self.error_dict[sensor_platform_id][1] += 1
-                        else:
-                            self.error_dict[sensor_platform_id][1] = 0
-                            self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame[2]
-                            self.error_dict[sensor_platform_id][1] += 1
-                else:
-                    self.error_dict[sensor_platform_id] = [1,1,[error_frame[2]]]
+                self.add_error_frame(sensor_platform_id, error_frame[1], error_frame[2])
+                
+                # Check off detected objects if they exist
+                if sensor_platform_id < self.localizationid:
+                    for objects_should_be_seen_id in reversed(range(len(detectors[sensor_platform_id]))):
+                        if object_id == detectors[sensor_platform_id][objects_should_be_seen_id]:
+                            detectors[sensor_platform_id].pop(objects_should_be_seen_id)
 
-        print(detectors)
+        # Add the error for missed detections
+        # for sensor_platform_id in self.error_dict.keys():
+        #     # Check off what we have seen
+        #     if sensor_platform_id < self.localizationid:
+        #         for seen_obj_id in range(len(detectors[sensor_platform_id])):
+        #             self.add_error_frame(sensor_platform_id, self.missed_detection_error, .057)
 
         # Normalize all the data to 0 (hopefully)
         normalization_numerator = 0.0
@@ -1007,14 +1005,50 @@ class RSU():
             error_monitoring_normalizer = 1.0
 
         self.error_monitoring = []
+        twenty_percent_break_check = False
         for key in self.error_dict.keys():
             if self.error_dict[key][0] > 5:
                 average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
+                average_Expected_error = sum(self.error_dict[key][3])/self.error_dict[key][0]
                 if int(key) < self.localization_offset:
-                    average_error = average_error/error_monitoring_normalizer
-                self.error_monitoring.append([key, average_error, self.error_dict[key][0]])
+                    average_error = average_error #/ error_monitoring_normalizer
+                self.error_monitoring.append([key, average_error, average_Expected_error, self.error_dict[key][0]])
+                
+                # Only break once the revolving buffer is full
+                if self.twenty_percent_error_end_and_print and self.error_dict[key][0] >= self.revolving_buffer_size and average_error > 1.2:
+                    #twenty_percent_break_check = True
+                    with open('output.txt', 'a') as f:
+                        f.write(str(self.time) + "," + str(average_error) + "\n")
+                        print("breaking test!" + str(self.time-.125) + "," + str(average_error) + "\n")
 
                 # if self.time > 95 and int(key) == 0:
                 #     with open('output.txt', 'a') as f:
                 #         f.write(str(self.time) + "," + str(average_error) + "\n")
                 #         print("writing to file!" + str(self.time-.125) + "," + str(average_error) + "\n")
+
+        return twenty_percent_break_check
+
+    def add_error_frame(self, sensor_platform_id, error_frame, expected_error):
+        # Allow time for test warmup
+        if self.time > 2.0:
+            if sensor_platform_id in self.error_dict:
+                # Moving revolving_buffer_size place average
+                if self.error_dict[sensor_platform_id][0] < self.revolving_buffer_size:
+                    self.error_dict[sensor_platform_id][0] += 1
+                    self.error_dict[sensor_platform_id][2].append(error_frame)
+                    self.error_dict[sensor_platform_id][3].append(expected_error)
+                    self.error_dict[sensor_platform_id][1] += 1
+                # We have filled revolving_buffer_size places, time to revolve the buffer now
+                else:
+                    if self.error_dict[sensor_platform_id][1] < self.revolving_buffer_size:
+                        # Replace the element with the next one
+                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame
+                        self.error_dict[sensor_platform_id][3][self.error_dict[sensor_platform_id][1]] = expected_error
+                        self.error_dict[sensor_platform_id][1] += 1
+                    else:
+                        self.error_dict[sensor_platform_id][1] = 0
+                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame
+                        self.error_dict[sensor_platform_id][3][self.error_dict[sensor_platform_id][1]] = expected_error
+                        self.error_dict[sensor_platform_id][1] += 1
+            else:
+                self.error_dict[sensor_platform_id] = [1,1,[error_frame],[expected_error]]

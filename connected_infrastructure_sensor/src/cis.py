@@ -137,8 +137,8 @@ def cis(config, sid, test_idx):
             fusion_result = []
             fusion_start = fetch_time(simulation_time, global_time)
             if not data_collect_mode:
-                fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, 1)
-                fusion_result = fusion.fuseDetectionFrame(1, sensor_planner)
+                fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, sim_values['parameterized_covariance'])
+                fusion_result = fusion.fuseDetectionFrame(sim_values['parameterized_covariance'], sensor_planner)
         
             # Message the RSU, for now we must do this before our control loop
             # as the RSU has the traffic light state information

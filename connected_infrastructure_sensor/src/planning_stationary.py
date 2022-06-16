@@ -72,15 +72,15 @@ class Planner:
         self.fusionDetections = []
         self.rawLidarDetections = []
         self.groundTruth = []
-        self.localizationCovariance = np.array([[1.0, 0.0],
-                                                [0.0, 1.0]]).tolist()
+        self.localizationCovariance = np.array([[0.001, 0.0],
+                                                [0.0, 0.001]]).tolist()
 
         # Raw LIDAR for gui debug
         self.lidarPoints = []
         self.localizationError = None
  
         # Start sensors with standard error model
-        self.localization = sensor.Localization(0.01, 0.0, 0.01, 0.0)
+        self.localization = sensor.Localization(0.0001, 0.0, 0.0001, 0.0)
         self.lidarSensor = None
         self.cameraSensor = sensor.Sensor("IMX160", math.radians(0.0), math.radians(160), 10.0,
                                                0.0117, 0.023, 0.0165, 0.0607)

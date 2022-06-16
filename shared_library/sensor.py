@@ -92,20 +92,24 @@ class Localization:
         self.lateral_error_x = lateral_error_x
         self.lateral_error_b = lateral_error_b
         self.static_error_range_average = .36282835297512617
-        self.static_error = math.hypot(longitudinal_error_b + longitudinal_error_x * self.static_error_range_average, \
-                                    lateral_error_b + lateral_error_x * self.static_error_range_average)
+        self.static_error = (longitudinal_error_b + longitudinal_error_x * self.static_error_range_average + \
+                                    lateral_error_b + lateral_error_x * self.static_error_range_average) / 2.0
 
+    def recalc_static_error(self):
+        self.static_error = (self.longitudinal_error_b + self.longitudinal_error_x * self.static_error_range_average + \
+                                    self.lateral_error_b + self.lateral_error_x * self.static_error_range_average) / 2.0
+    
     def getErrorParamsAtVelocity(self, velocity, theta):
         elipse_longitudinal_expected = self.longitudinal_error_x * velocity + self.longitudinal_error_b
         elipse_lateral_expected = self.lateral_error_x * velocity + self.lateral_error_b
         elipse_angle_expected = theta
-        expected_error_gaussian = BivariateGaussian(elipse_longitudinal_expected,
-                                    elipse_lateral_expected,
+        expected_error_gaussian = BivariateGaussian(elipse_longitudinal_expected**2,
+                                    elipse_lateral_expected**2,
                                     elipse_angle_expected)
         loc_error_longitudinal_actual = np.random.normal(0, elipse_longitudinal_expected, 1)[0]
         loc_error_lateral_actual = np.random.normal(0, elipse_lateral_expected, 1)[0]
-        actual_error_gaussian = BivariateGaussian(loc_error_longitudinal_actual,
-                                    loc_error_lateral_actual,
+        actual_error_gaussian = BivariateGaussian(loc_error_longitudinal_actual**2,
+                                    loc_error_lateral_actual**2,
                                     elipse_angle_expected)
         actual_sim_error = actual_error_gaussian.calcXYComponents()
         #print("loc: ", actual_sim_error)
@@ -115,8 +119,8 @@ class Localization:
         # We need the real error here so call the other function
         expected_error_gaussian, actual_sim_error = self.getErrorParamsAtVelocity(velocity, theta)
         # It's just a circle so both are the same
-        expected_error_gaussian_2 = BivariateGaussian(self.static_error,
-                                    self.static_error,
+        expected_error_gaussian_2 = BivariateGaussian(self.static_error**2,
+                                    self.static_error**2,
                                     0.0)
         return expected_error_gaussian_2, actual_sim_error
 
@@ -134,12 +138,19 @@ class Sensor:
         self.radial_error_b = radial_error_b
         self.distal_error_x = distal_error_x
         self.distal_error_b = distal_error_b
+        self.static_error_range_average = 1.5
+        self.static_error = (radial_error_b + radial_error_x * self.static_error_range_average + \
+                                    distal_error_b + distal_error_x * self.static_error_range_average) / 2.0
 
     def checkInRangeAndFOV(self, object_angle, object_distance):
         anglediff = ((self.center_angle - object_angle + math.pi + (2*math.pi)) % (2*math.pi)) - math.pi
         if abs(anglediff) <= (self.field_of_view) and (object_distance <= self.max_distance):
             return True
         return False
+
+    def recalc_static_error(self):
+        self.static_error = (self.radial_error_b + self.radial_error_x * self.static_error_range_average + \
+                                    self.distal_error_b + self.distal_error_x * self.static_error_range_average) / 2.0
         
     def getRadialErrorAtDistance(self, object_distance):
         # This version we are disregarding horizontal crosssection for now
@@ -148,23 +159,28 @@ class Sensor:
     def getDistanceErrorAtDistance(self, object_distance):
         return self.distal_error_b + (object_distance * self.distal_error_x)
 
-    def calculateErrorGaussian(self, object_relative_angle_to_detector, target_line_angle, object_distance, simulation):
+    def calculateErrorGaussian(self, object_relative_angle_to_detector, target_line_angle, object_distance, simulation, parameterized_covariance):
         # TODO: check ATLAS code and makse sure this is the same
         if self.checkInRangeAndFOV(object_relative_angle_to_detector, object_distance):
             radial_error = self.getRadialErrorAtDistance(object_distance)
             distal_error = self.getDistanceErrorAtDistance(object_distance)
             # Calculate our expected elipse error bounds
             elipse_angle_expected = target_line_angle
-            expected_error_gaussian = BivariateGaussian(distal_error,
-                                      radial_error,
-                                      elipse_angle_expected)
+            if parameterized_covariance:
+                expected_error_gaussian = BivariateGaussian(distal_error**2,
+                                        radial_error**2,
+                                        elipse_angle_expected)
+            else:
+                expected_error_gaussian = BivariateGaussian(self.static_error**2,
+                        self.static_error**2,
+                        0.0)
             # Calcuate the actual error if this is a simulation, otherwise just return
             if simulation:
                 # Calculate our expected errors in x,y coordinates
                 actualRadialError = np.random.normal(0, radial_error, 1)[0]
                 actualDistanceError = np.random.normal(0, distal_error, 1)[0]
-                actual_error_gaussian = BivariateGaussian(actualDistanceError,
-                                      actualRadialError,
+                actual_error_gaussian = BivariateGaussian(actualDistanceError**2,
+                                      actualRadialError**2,
                                       elipse_angle_expected)
                 actual_sim_error = actual_error_gaussian.calcXYComponents()
                 return True, expected_error_gaussian, actual_sim_error
@@ -204,7 +220,7 @@ def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object
         localization_error_gaussian, localization_error = planner.localization.getStaticErrorParams(abs(planner.velocity), planner.theta)
 
     point_cloud, point_cloud_error, camera_array, camera_error_array, lidar_detected_error = fake_lidar_and_camera(planner,
-        vehicle_object_positions, [], lidar_dist, lidar_center, lidar_fov, planner.cameraSensor.max_distance, planner.cameraSensor.center_angle, planner.cameraSensor.field_of_view)
+        vehicle_object_positions, [], lidar_dist, lidar_center, lidar_fov, planner.cameraSensor.max_distance, planner.cameraSensor.center_angle, planner.cameraSensor.field_of_view, sim_values['parameterized_covariance'])
 
     if sim_values["simulate_error"]:
         # Error injection
@@ -242,7 +258,7 @@ def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object
 # TODO: modularize this more so we can consider other sensor locations and facing angles
 def fake_lidar_and_camera(detector, positions, objects, lidar_range,
                             lidar_center_angle, lidar_fov, cam_range,
-                            cam_center_angle, cam_fov):
+                            cam_center_angle, cam_fov, parameterized_covariance):
 
         # print ( "FAKING LIDAR" )
         lidar_point_cloud = []
@@ -335,7 +351,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range,
                         relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
                             detector.localizationPositionX, detector.localizationPositionY, detector.theta, point[0], point[1])
                         success, expected_error_gaussian, actual_sim_error = detector.cameraSensor.calculateErrorGaussian(
-                            relative_angle_to_detector, target_line_angle, relative_distance, True)
+                            relative_angle_to_detector, target_line_angle, relative_distance, True, parameterized_covariance)
                         if success:
                             universal_id = detector.id * MAX_ID + final_polygon_id
                             camera_error_array.append((universal_id, point[0] + actual_sim_error[0], point[1] + actual_sim_error[1], expected_error_gaussian.covariance.tolist(), 0.0, 0.0, []))
@@ -355,7 +371,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range,
                         success_lidar = False
                         if detector.lidarSensor != None:
                             success_lidar, expected_error_gaussian_lidar, actual_sim_error_lidar = detector.lidarSensor.calculateErrorGaussian(
-                                relative_angle_to_detector, target_line_angle, relative_distance, True)
+                                relative_angle_to_detector, target_line_angle, relative_distance, True, parameterized_covariance)
                         else:
                             success_lidar = 0.0
                             expected_error_gaussian_lidar = 0.0
@@ -385,8 +401,10 @@ def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sen
         intersect_dist = 9999999999
         final_point = None
 
+        #print(angle_idx * angle_change, sensor_angle, sensor_fov)
         if shared_math.check_in_fov(angle_idx * angle_change,
                                     sensor_angle, sensor_fov):
+            #print("in")
 
             # Go through all the polygons that the line intersects with and add them
             for obj_idx, poly in enumerate(object_polygons):
@@ -398,7 +416,6 @@ def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sen
                 intersections += temp_intersection_list
                 for count in range(len(temp_intersection_list)):
                     intersection_id.append(obj_idx)
-
 
             # Get the closest intersection with a polygon as that will be where our lidar beam stops
             for point, polygon_id in zip(intersections, intersection_id):
@@ -425,7 +442,7 @@ def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sen
 
     # Here we do the final check to see what percentage of each we can see
     for key in seen_point_set.keys():
-        if seen_point_set[key] >= .25 * available_point_set[key]:
+        if seen_point_set[key] >= .5 * available_point_set[key]:
             # 25% or more is visible, add it to the should see it list
             final_set.append(key)
 

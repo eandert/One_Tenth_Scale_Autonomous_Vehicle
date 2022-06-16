@@ -366,15 +366,15 @@ class ResizableKalman:
                         Z_t = Z_t.reshape(Z_t.shape[0], -1)
                         y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
                         #print(y_t_temp)
-                        location_error = math.hypot(y_t_temp[0], y_t_temp[1])
+                        location_error = math.hypot(math.sqrt(y_t_temp[0]), math.sqrt(y_t_temp[1]))
                         expected_a, expected_b, expected_angle = shared_math.ellipsify(cov, 1.0)
                         expected_x = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(0))
                         expected_y = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(90))
                         expected_location_error = math.hypot(expected_x, expected_y)
                         #cov
-                        location_error_std = location_error / expected_location_error
+                        #location_error_std = location_error / expected_location_error
                         #print(location_error, expected_location_error, location_error_std)
-                        self.error_tracker_temp.append([id, location_error, location_error_std])
+                        self.error_tracker_temp.append([id, location_error, expected_location_error])
                         #print(" error: ", id, location_error, location_error_std)
 
                 self.prev_time = self.lastTracked
@@ -457,8 +457,8 @@ class GlobalTracked:
             [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
         ]
 
-    def getPositionPredicted(self, timestamp):
-        if self.fusion_steps < 2:
+    def getPositionPredicted(self, timestamp, estimate_covariance):
+        if self.fusion_steps < 2 or not estimate_covariance:
         # If this kalman fitler has never been run, we can't use it for prediction!
             return [
                 [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
@@ -518,11 +518,11 @@ class GlobalFUSION:
             # Clear the previous detection list
             track.clearLastFrame()
             # Clean up the tracks for next time
-            self.cleanDetections()
+            self.cleanDetections(estimate_covariance)
 
         return result, cooperative_monitoring
 
-    def processDetectionFrame(self, timestamp, observations, cleanupTime, estimateCovariance):
+    def processDetectionFrame(self, timestamp, observations, cleanupTime, estimate_covariance):
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
@@ -549,14 +549,14 @@ class GlobalFUSION:
             detections_list.append([det[0], det[1], det[2], np.array(det[3]), det[4], det[5], np.array(det[6])])
 
         # Call the matching function to modify our detections in trackedList
-        self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime)
+        self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime, estimate_covariance)
 
-    def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime):
+    def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime, estimate_covariance):
         matches = []
         if len(detections_list_positions) > 0:
             if len(self.trackedList) > 0:
                 numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
-                thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEllipseBox)
+                thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEuclidean)
 
                 # Need to check the tree size here in order to figure out if we can even do this
                 length = len(numpy_formatted)
@@ -565,7 +565,7 @@ class GlobalFUSION:
                         # The only difference between this and our other version is that
                         # the below line is commented out
                         # track.calcEstimatedPos(timestamp - self.prev_time)
-                        tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(timestamp)), k=length,
+                        tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(timestamp, estimate_covariance)), k=length,
                                                          return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
@@ -679,11 +679,11 @@ class GlobalFUSION:
         for delete in reversed(remove):
             self.trackedList.pop(delete)
 
-    def cleanDetections(self):
+    def cleanDetections(self, estimate_covariance):
         detections_position_list = []
         detections_position_list_id = []
         for track in self.trackedList:
-            a, b, phi = shared_math.ellipsify(track.error_covariance, 1.0)
+            a, b, phi = shared_math.ellipsify(track.error_covariance, 3.0)
             detections_position_list.append([track.x, track.y, self.min_size + a, self.min_size + b, phi])
             detections_position_list_id.append(track.id)
         matches = []
@@ -700,7 +700,7 @@ class GlobalFUSION:
                         # The only difference between this and our other version is that
                         # the below line is commented out
                         # track.calcEstimatedPos(timestamp - self.prev_time)
-                        tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(self.prev_time)), k=length,
+                        tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(self.prev_time, estimate_covariance)), k=length,
                                                          return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):

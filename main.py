@@ -12,6 +12,9 @@ import config
 
 global mainWin
 
+parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3", "two_cav_simulation_unit_test_4","four_cav_simulation_unit_test","four_cav_simulation_unit_test_2","four_cav_simulation_unit_test_3","four_cav_simulation_unit_test_4"]
+error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection"]
+
 class UnitTest():
     def __init__(self):
         self.full_simulation = True
@@ -48,6 +51,10 @@ class UnitTest():
                 # Setup the RSU
                 rsu_instance = rsu.RSU(conf, self.unit_test_idx)
 
+                time.sleep(5)
+
+                # Start the GUI
+                initGui(conf)
                 time.sleep(5)
 
                 rsu_instance.stepSim()
@@ -184,7 +191,7 @@ if __name__ == "__main__":
     # Configure the settings
     multiple_mode = True
     if multiple_mode:
-        conf_list = ["four_cav_simulation_unit_test"]
+        conf_list = error_malicious_injection_unit_test_set #parameterized_covariance_unit_test_set
         unit_test = UnitTest()
         unit_test.run(conf_list)
     else:
