@@ -552,7 +552,7 @@ class FUSION:
         self.id = cav_cis_id
         self.prev_time = -99.0
         self.min_size = 0.5
-        self.fusion_mode = fusion_mode
+        self.fusion_mode = 2 #fusion_mode
         self.current_tracked_id = 0
         self.trackShowThreshold = 4
         self.predictive = True

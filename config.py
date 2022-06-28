@@ -101,7 +101,7 @@ class Setting:
                         self.simulation = True
                         self.debug = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .45
+                        self.unit_test_speed_target = .5
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
@@ -131,7 +131,7 @@ class Setting:
                         self.simulation = True
                         self.debug = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .45
+                        self.unit_test_speed_target = .5
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
@@ -161,7 +161,7 @@ class Setting:
                         self.simulation = True
                         self.debug = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .45
+                        self.unit_test_speed_target = .5
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
@@ -191,7 +191,7 @@ class Setting:
                         self.simulation = True
                         self.debug = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .45
+                        self.unit_test_speed_target = .5
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
@@ -224,7 +224,7 @@ class Setting:
                         self.debug = False
                         self.data_collect_mode = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .45
+                        self.unit_test_speed_target = .5
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
@@ -257,7 +257,7 @@ class Setting:
                         self.debug = False
                         self.data_collect_mode = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .45
+                        self.unit_test_speed_target = .5
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
@@ -290,7 +290,7 @@ class Setting:
                         self.debug = False
                         self.data_collect_mode = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .45
+                        self.unit_test_speed_target = .5
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]
@@ -323,7 +323,7 @@ class Setting:
                         self.debug = False
                         self.data_collect_mode = False
                         self.unit_test = True
-                        self.unit_test_speed_target = .45
+                        self.unit_test_speed_target = .5
                         self.unit_test_time = 120.0
                         self.unit_test_config = [[0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], [0,0,False], 
                                                 [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True], [0,0,True]]

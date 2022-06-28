@@ -498,7 +498,7 @@ class GlobalFUSION:
         self.prev_time = -99.0
         self.min_size = 0.5
         self.trackShowThreshold = 4
-        self.fusion_mode = fusion_mode
+        self.fusion_mode = 2 #fusion_mode
 
         # Indicate our success
         print('Started FUSION successfully...')
