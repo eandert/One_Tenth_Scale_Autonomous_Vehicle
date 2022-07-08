@@ -8,14 +8,14 @@ class Setting:
                         # Working 2 CAV Real
                         self.cav = [[-0.75, 0.0, 0, False],
                         [-1.5, 0.0, 0, False]]
-                        self.cis = [[-0.75, 0.75, -0.785398163, False]]
+                        self.cis = []#[[-0.75, 0.75, -0.785398163, False]]
                         self.rsu_ip = '192.168.0.103' #'127.0.0.1'
                         self.interval = 0.125
                         self.offset_interval = 0.0
                         self.fallthrough_delay = 0.100
                         self.init_time = 10.0 # Seconds to wait for the system to initialize before starting
                         self.map = 0
-                        self.map_length = 0.5
+                        self.map_length = .75
                         self.simulation = False
                         self.debug = True
                         self.unit_test = False

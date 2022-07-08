@@ -176,7 +176,7 @@ class MainClass(Resource):
                 motorAcceleration = float(request_data['motorAcceleration'])
                 targetIndexX = float(request_data['targetIndexX'])
                 targetIndexY = float(request_data['targetIndexY'])
-                targetIntersection = int(request_data['targetIntersection'])
+                targetIntersection = 0
                 detections = request_data['detections']
 
                 returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, targetIntersection, detections)
