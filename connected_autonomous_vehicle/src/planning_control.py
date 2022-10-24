@@ -60,7 +60,7 @@ class Planner:
         self.distance_pid_control_overide = False
         self.followDistance = self.Lfc
         self.followDistanceGain = .5
-        self.targetFollowDistance = 1
+        self.targetFollowDistance = 1.0
         self.tfl_mode = 0
         self.av_intersection_permission = 0
         self.tind = 0

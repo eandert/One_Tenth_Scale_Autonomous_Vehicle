@@ -19,7 +19,7 @@ class MatchClass:
     def __init__(self, x, y, covariance, dx, dy, d_confidence, sensor_type, time, sensor_id):
         self.x = x
         self.y = y
-        self.covariance = covariance
+        self.covariance = np.array(covariance)
         self.dx = dx
         self.dy = dy
         self.velocity_confidence = d_confidence
@@ -33,7 +33,7 @@ class Tracked:
     # We use this primarily to match objects seen between frames and included in here
     # is a function for kalman filter to smooth the x and y values as well as a
     # function for prediction where the next bounding box will be based on prior movement.
-    def __init__(self, sensor_id, x, y, sensor_type, time, id, fusion_mode):
+    def __init__(self, sensor_id, x, y, cov, sensor_type, time, id, fusion_mode):
         self.x = x
         self.y = y
         self.dx = 0
@@ -49,16 +49,20 @@ class Tracked:
         self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
         self.first = True
 
+        self.localTrackersMeasurementList = []
+        self.localTrackersCovarianceList = []
+        self.localTrackersIDList = []
+
         # Build the match list and add our match to it
         self.match_list = []
-        new_match = MatchClass(x, y, None, None, None, None, sensor_type, time, sensor_id)
+        new_match = MatchClass(x, y, cov, None, None, None, sensor_type, time, sensor_id)
         self.match_list.append(new_match)
 
         # Kalman stuff
         self.fusion_mode = fusion_mode
         self.ukf_mode = False
 
-        process_variation = 0.0625
+        process_variation = 0.16
 
         # Set other parameters for the class
         self.prev_time = -99
@@ -66,10 +70,9 @@ class Tracked:
         if self.fusion_mode == 0:
             # Set up the Kalman filter
             # Initial State cov
-            self.P_t = np.identity(4)
-            self.P_t[2][2] = 0.0
-            self.P_t[3][3] = 0.0
-            self.P_hat_t = self.P_t
+            self.P_hat_t = np.identity(4)
+            self.P_hat_t[2][2] = 0.0
+            self.P_hat_t[3][3] = 0.0
             # Process cov
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/3.0
@@ -93,12 +96,11 @@ class Tracked:
             # Setup for x_hat = x + dx + dxdx,  y_hat = y + dy + dydy
             # Set up the Kalman filter
             # Initial State cov
-            self.P_t = np.identity(6)
-            self.P_t[2][2] = 0.0
-            self.P_t[3][3] = 0.0
-            self.P_t[4][4] = 0.0
-            self.P_t[5][5] = 0.0
-            self.P_hat_t = self.P_t
+            self.P_hat_t = np.identity(6)
+            self.P_hat_t[2][2] = 0.0
+            self.P_hat_t[3][3] = 0.0
+            self.P_hat_t[4][4] = 0.0
+            self.P_hat_t[5][5] = 0.0
             # Process cov
             #self.Q_t = np.identity(6)
             five = process_variation * (.125*.125*.125*.125*.125)/8.0
@@ -121,11 +123,10 @@ class Tracked:
             # model from https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
             # Set up the Kalman filter
             # Initial State cov
-            self.P_t = np.identity(5)
-            self.P_t[2][2] = 0.0
-            self.P_t[3][3] = 0.0
-            self.P_t[4][4] = 0.0
-            self.P_hat_t = self.P_t
+            self.P_hat_t = np.identity(5)
+            self.P_hat_t[2][2] = 0.0
+            self.P_hat_t[3][3] = 0.0
+            self.P_hat_t[4][4] = 0.0
             # Process cov
             #self.Q_t = np.identity(5)
             four = process_variation * (.125*.125*.125*.125)/4.0
@@ -144,17 +145,10 @@ class Tracked:
             # Measurment cov
             self.R_t = np.identity(5)
 
-
-        # Custom things
-        self.lidarMeasurePrevTrue = False
-        self.camMeasurePrevTrue = False
-        self.lidarMeasurePrevCovTrue = False
-        self.camMeasurePrevCovTrue = False
-
     # Update adds another detection to this track
     def update(self, other, time):
         
-        new_match = MatchClass(other[1], other[2], None, None, None, None, other[3], time, other[0])
+        new_match = MatchClass(other[1], other[2], other[3], None, None, None, other[4], time, other[0])
         self.match_list.append(new_match)
 
         self.lastTracked = time
@@ -206,92 +200,51 @@ class Tracked:
         ret_val[3][3] = ret_val[3][1] * x[3]
         return ret_val
 
-    def fusion(self, parameterized_covariance, vehicle, predictive):
-        lidarCov = np.array([[0.0, 0.0], [0.0, 0.0]])
-        camCov = np.array([[0.0, 0.0], [0.0, 0.0]])
-        lidarMeasure = [0, 0]
-        camMeasure = [0, 0]
-        lidarMeasureH = [0, 0]
-        camMeasureH = [0, 0]
+    def averageMeasurementsFirstFrame(self):
+        if len(self.localTrackersCovarianceList) == 1:
+            return self.localTrackersMeasurementList[0], self.localTrackersCovarianceList[0]
 
-        lidar_added = False
-        cam_added = False
+        for idx, cov in enumerate(self.localTrackersCovarianceList):
+            if idx == 0:
+                temporary_c = cov.transpose()
+            else:
+                temporary_c = np.add(temporary_c, cov.transpose())
+        temporary_c = temporary_c.transpose()
+
+        for idx, (pos, cov) in enumerate(zip(self.localTrackersMeasurementList, self.localTrackersCovarianceList)):
+            if idx == 0:
+                temporary_mu = np.matmul(cov.transpose(), pos)
+            else:
+                temporary_mu = np.add(temporary_mu, np.matmul(cov.transpose(), pos))
+        temporary_mu = np.matmul(temporary_c, temporary_mu)
+
+        return temporary_mu, temporary_c
+
+    def fusion(self, parameterized_covariance, vehicle, predictive):
+        self.localTrackersMeasurementList = []
+        self.localTrackersCovarianceList = []
+        self.localTrackersIDList = []
 
         # Time to go through the track list and fuse!
         for match in self.match_list:
-            if match.sensor_type == LIDAR:
-                relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
-                    vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
-                success, lidar_expected_error_gaussian, actual_sim_error = vehicle.lidarSensor.calculateErrorGaussian(
-                    relative_angle_to_detector, target_line_angle, relative_distance, False, parameterized_covariance)
-                try:
-                    lidarCov = lidar_expected_error_gaussian.covariance
-                except:
-                    lidarCov = np.array([[0.1, 0.0], [0.0, 0.1]])
-                self.lidarMeasurePrevCovTrue = True
-                # Set the new measurements
-                lidarMeasure = [match.x, match.y]
-                lidarMeasureH = [1, 1]
-                lidar_added = True
-            elif match.sensor_type == CAMERA:
-                relative_angle_to_detector, target_line_angle, relative_distance = shared_math.get_relative_detection_params(
-                    vehicle.localizationPositionX, vehicle.localizationPositionY, vehicle.theta, match.x, match.y)
-                success, camera_expected_error_gaussian, actual_sim_error = vehicle.cameraSensor.calculateErrorGaussian(
-                    relative_angle_to_detector, target_line_angle, relative_distance, False, parameterized_covariance)
-                try:
-                    camCov = camera_expected_error_gaussian.covariance
-                except:
-                    camCov = np.array([[0.1, 0.0], [0.0, 0.1]])
-                # Set the new measurements
-                camMeasure = [match.x, match.y]
-                camMeasureH = [1, 1]
-                cam_added = True
+            self.localTrackersCovarianceList.append(match.covariance)
+            self.localTrackersMeasurementList.append(np.array([match.x, match.y]))
+            self.localTrackersIDList = match.sensor_type
 
         # Now do the kalman thing!
         if self.idx == 0:
-            # Calculate the covariance to be sent out with the result
-            if lidar_added and cam_added:
-                try:
-                    #self.error_covariance = intersectionBivariateGaussiansCovariance(camCov, lidarCov)
-                    self.error_covariance = np.mean( np.array([ camCov, lidarCov ]), axis=0 )
-                    #print (  "combined! ", camCov, lidarCov, self.error_covariance )
-                except Exception as e:
-                    print ( " Exception: " + str(e) )
-            elif lidar_added:
-                self.error_covariance = lidarCov
-            elif cam_added:
-                self.error_covariance = camCov
-            else:
-                self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
-
+            if len(self.match_list) == 0:
+                pass
             # We have no prior detection so we need to just output what we have but store for later
             # Do a Naive average to get the starting position
-            if camMeasure[0] != 0 and lidarMeasure[0]!= 0:
-                x_out = (camMeasure[0] + lidarMeasure[0]) / 2.0
-                y_out = (camMeasure[1] + lidarMeasure[1]) / 2.0
-            elif camMeasure[0] != 0:
-                x_out = camMeasure[0]
-                y_out = camMeasure[1]
-            elif lidarMeasure[0] != 0:
-                x_out = lidarMeasure[0]
-                y_out = lidarMeasure[1]
+            print(self.localTrackersMeasurementList, self.localTrackersCovarianceList)
+            pos, self.error_covariance = self.averageMeasurementsFirstFrame()
+            x_out = pos[0]
+            y_out = pos[1]
 
             if self.fusion_mode == 0:
                 # Store so that next fusion is better
                 self.X_hat_t = np.array([[x_out], [y_out], [0], [0]], dtype = 'float')
-                # if self.ukf_mode:
-                #     self.F_t = np.array([[1, 0, self.dt, 0],
-                #                         [0, 1, 0, self.dt],
-                #                         [0, 0, 1, 0],
-                #                         [0, 0, 0, 1]], dtype = 'float')
-                #     self.tempH_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
-                #                     [0., lidarMeasureH[1], 0., 0.],
-                #                     [camMeasureH[0], 0., 0., 0.],
-                #                     [0., camMeasureH[1], 0., 0.]], dtype = 'float')
-                #     sigmas = MerweScaledSigmaPoints(4, alpha=.1, beta=2., kappa=0.)
-                #     self.ukf = UKF(dim_x=4, dim_z=4, fx=self.fx, hx=self.hx, dt=self.dt, points=sigmas)
-                #     self.ukf.Q = self.Q_t
-                #     self.ukf.x = self.X_hat_t
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
                 self.X_hat_t = np.array([[x_out], [y_out], [0], [0], [0], [0]], dtype = 'float')
@@ -301,25 +254,26 @@ class Tracked:
                     [[x_out], [y_out], [0], [0], [0]], dtype = 'float')
             
             # Seed the covariance values directly from the measurement
-            self.P_t[0][0] = self.error_covariance[0][0]
-            self.P_t[0][1] = self.error_covariance[0][1]
-            self.P_t[1][0] = self.error_covariance[1][0]
-            self.P_t[1][1] = self.error_covariance[1][1]
-            self.P_hat_t = self.P_t
+            try:
+                self.P_hat_t[0][0] = self.error_covariance[0][0]
+                self.P_hat_t[0][1] = self.error_covariance[0][1]
+                self.P_hat_t[1][0] = self.error_covariance[1][0]
+                self.P_hat_t[1][1] = self.error_covariance[1][1]
+            except:
+                self.P_hat_t[0][0] = 1.0
+                self.P_hat_t[0][1] = 0.0
+                self.P_hat_t[1][0] = 0.0
+                self.P_hat_t[1][1] = 1.0
             self.prev_time = self.lastTracked
             self.x = x_out
             self.y = y_out
             self.dx = 0.0
             self.dy = 0.0
-            self.idx += 1
+            self.idx = 1
         else:
-            #try:
-            # We have valid data
-            # Transition matrix
             # Prediction step!
             elapsed = self.lastTracked - self.prev_time
             if elapsed <= 0.0:
-                #print( "Error time elapsed is incorrect! " + str(elapsed) )
                 # Set to arbitrary time
                 elapsed = 0.125
 
@@ -365,100 +319,62 @@ class Tracked:
                                     [0, 0, 1, 0, 0],
                                     [0, 0, 0, 1, elapsed],
                                     [0, 0, 0, 0, 1]], dtype = 'float')
-            
-            # if self.ukf_mode:
-            #     self.ukf.R = self.R_t
-            #     #print ( self.ukf.z )
-            #     print ( 1 )
-            #     #self.ukf.fx = self.F_t
-            #     print ( 2 )
-            #     #self.ukf.hx = self.tempH_t
-            #     print ( 3 )
-            #     self.ukf.predict()
-            #     #print ( self.ukf.z )
-            #     print ( 4 )
-            #     self.ukf.update(self.measure)
-            #     print ( 5 )
-            #     X_t = self.ukf.x
-            #     self.P_t = self.ukf.P
-            #     print(X_t, self.P_t)
-            # else:
-
-            self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
-
-            # print ( "m ", measure )
-            #print ( self.tempH_t )
-            # print ( self.R_t )
-
-            #print ( "P_hat: ", self.P_hat_t, " P_t: ", self.P_t )
 
             # Time to run our predictions!
-            # Fist lets do the camera update
-            # Fist lets do the camera update
-            if lidar_added:
-                if self.fusion_mode == 0:
-                    H_t = np.array([[lidarMeasureH[0], 0., 0., 0.],
-                                   [0., lidarMeasureH[1], 0., 0.]], dtype = 'float')
-                elif self.fusion_mode == 1:
-                    H_t = np.array([[lidarMeasureH[0], 0., 0., 0., 0., 0.],
-                                   [0., lidarMeasureH[1], 0., 0., 0., 0.]], dtype = 'float')
-                elif self.fusion_mode == 2:
-                    H_t = np.array([[lidarMeasureH[0], 0., 0., 0., 0.],
-                                   [0., lidarMeasureH[1], 0., 0., 0.]], dtype = 'float')
-                measure = np.array([lidarMeasure[0], lidarMeasure[1]], dtype = 'float')
-                covariance = lidarCov
-            elif cam_added:
-                if self.fusion_mode == 0:
-                    H_t = np.array([[camMeasureH[0], 0., 0., 0.],
-                                   [0., camMeasureH[1], 0., 0.]], dtype = 'float')
-                elif self.fusion_mode == 1:
-                    H_t = np.array([[camMeasureH[0], 0., 0., 0., 0., 0.],
-                                   [0., camMeasureH[1], 0., 0., 0., 0.]], dtype = 'float')
-                elif self.fusion_mode == 2:
-                    H_t = np.array([[camMeasureH[0], 0., 0., 0., 0.],
-                                   [0., camMeasureH[1], 0., 0., 0.]], dtype = 'float')
-                measure = np.array([camMeasure[0], camMeasure[1]], dtype = 'float')
-                covariance = camCov
-            else:
-                if self.fusion_mode == 0:
-                    H_t = np.array([[0., 0., 0., 0.],
-                                   [0., 0., 0., 0.]], dtype = 'float')
-                elif self.fusion_mode == 1:
-                    H_t = np.array([[0., 0., 0., 0., 0., 0.],
-                                   [0., 0., 0., 0., 0., 0.]], dtype = 'float')
-                elif self.fusion_mode == 2:
-                    H_t = np.array([[0., 0., 0., 0., 0.],
-                                   [0., 0., 0., 0., 0.]], dtype = 'float')
-                measure = np.array([.0, .0], dtype = 'float')
-                covariance = np.array([[1.0, 0.0], [0.0, 1.0]])
+            self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_hat_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-            Z_t = (measure).transpose()
-            Z_t = Z_t.reshape(Z_t.shape[0], -1)
-            # print ( "z_t2", Z_t )
-            X_t, P_hat_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, covariance, H_t)
-            self.X_hat_t = X_t
-            self.P_t = P_hat_t
+            if len(self.localTrackersMeasurementList) == 0:
+                nothing_cov = np.array([[1.0, 0.],
+                                        [0., 1.0]], dtype='float')
+                measure = np.array([.0, .0], dtype='float')
+                if self.fusion_mode == 0:
+                    nothing_Ht = np.array([[0, 0., 0., 0.],
+                                           [0., 0, 0., 0.]], dtype='float')
+                elif self.fusion_mode == 1:
+                    nothing_Ht = np.array([[0, 0., 0., 0., 0., 0.],
+                                           [0., 0., 0., 0., 0., 0.]], dtype='float')
+                elif self.fusion_mode == 2:
+                    nothing_Ht = np.array([[0, 0., 0., 0., 0.],
+                                           [0., 0, 0., 0., 0.]], dtype='float')
+
+                Z_t = (measure).transpose()
+                Z_t = Z_t.reshape(Z_t.shape[0], -1)
+                self.X_hat_t, self.P_hat_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, nothing_cov, nothing_Ht)
+            else:
+                for mu, cov in zip(self.localTrackersMeasurementList, self.localTrackersCovarianceList):
+                    if self.fusion_mode == 0:
+                        h_t = np.array([[1., 0., 0., 0.],
+                                               [0., 1., 0., 0.]], dtype='float')
+                    elif self.fusion_mode == 1:
+                        h_t = np.array([[1., 0., 0., 0., 0., 0.],
+                                               [0., 1., 0., 0., 0., 0.]], dtype='float')
+                    elif self.fusion_mode == 2:
+                        h_t = np.array([[1., 0., 0., 0., 0.],
+                                               [0., 1., 0., 0., 0.]], dtype='float')
+                    Z_t = (mu).transpose()
+                    Z_t = Z_t.reshape(Z_t.shape[0], -1)
+                    self.X_hat_t, self.P_hat_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, cov, h_t)
 
             # Here we run an extra predictive step since it takes 125 ms to compute our data, but
             # we do not save any of this and will re-run next time
             if predictive:
-                X_t, P_hat_t = shared_math.kalman_prediction(X_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+                self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_hat_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             self.prev_time = self.lastTracked
 
-            self.x = X_t[0][0]
-            self.y = X_t[1][0]
+            self.x = self.X_hat_t[0][0]
+            self.y = self.X_hat_t[1][0]
             if self.fusion_mode == 2:
                 # Different setup for fusion mode 2 need to calculate vector from angle and velocity
-                self.dx = X_t[2][0] * math.cos(X_t[3][0])
-                self.dy = X_t[2][0] * math.sin(X_t[3][0])
+                self.dx = self.X_hat_t[2][0] * math.cos(self.X_hat_t[3][0])
+                self.dy = self.X_hat_t[2][0] * math.sin(self.X_hat_t[3][0])
             else:
-                self.dx = X_t[2][0]
-                self.dy = X_t[3][0]
+                self.dx = self.X_hat_t[2][0]
+                self.dy = self.X_hat_t[3][0]
             self.idx += 1
-            if P_hat_t[0][0] != 0.0 or P_hat_t[0][1] != 0.0:
-                self.error_covariance = np.array([[P_hat_t[0][0], P_hat_t[0][1]], [P_hat_t[1][0], P_hat_t[1][1]]], dtype = 'float')
-                self.d_covariance = np.array([[P_hat_t[2][2], P_hat_t[2][3]], [P_hat_t[3][2], P_hat_t[3][3]]], dtype = 'float')
+            if self.P_hat_t[0][0] != 0.0 or self.P_hat_t[0][1] != 0.0:
+                self.error_covariance = np.array([[self.P_hat_t[0][0], self.P_hat_t[0][1]], [self.P_hat_t[1][0], self.P_hat_t[1][1]]], dtype = 'float')
+                self.d_covariance = np.array([[self.P_hat_t[2][2], self.P_hat_t[2][3]], [self.P_hat_t[3][2], self.P_hat_t[3][3]]], dtype = 'float')
             else:
                 #print ( " what the heck: ", P_hat_t)
                 self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
@@ -466,82 +382,16 @@ class Tracked:
 
             self.fusion_steps += 1
 
-            #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
-            # except Exception as e:
-            #     print ( " Exception: " + str(e) )
-
     def getKalmanPred(self, time):
-        # Only let the kalman predict after it has settled for a minute
-        # if self.idx > 7:
-        #     elapsed = time - self.prev_time + .125
-        #     if elapsed <= 0.0:
-        #         print("Error time elapsed is incorrect, must be matched! " + str(elapsed))
-        #         # Set to last calcualtion
-        #         return self.x, self.y, self.dx, self.dy, math.radians(0)
-        #     else:
-        #         if self.fusion_mode == 0:
-        #             self.F_t = np.array([[1, 0, elapsed, 0],
-        #                                 [0, 1, 0, elapsed],
-        #                                 [0, 0, 1, 0],
-        #                                 [0, 0, 0, 1]])
-        #         elif self.fusion_mode == 1:
-        #             # setup for x, dx, dxdx
-        #             self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
-        #                                 [0, 1, 0, elapsed, 0, elapsed*elapsed],
-        #                                 [0, 0, 1, 0, elapsed, 0],
-        #                                 [0, 0, 0, 1, 0, elapsed],
-        #                                 [0, 0, 0, 0, 1, 0],
-        #                                 [0, 0, 0, 0, 0, 1]])
-        #         else:
-        #             # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
-        #             v_1 = self.X_hat_t[2]
-        #             phi_1 = self.X_hat_t[3]
-        #             phi_dot_1 = self.X_hat_t[4]
-        #             if v_1 == 0.0:
-        #                 # Not moving, infinite correlation
-        #                 v_x = 1000000.0
-        #                 v_y = 1000000.0
-        #             else:
-        #                 v_x = ( 1.0 / phi_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-        #                 v_y = ( 1.0 / phi_1 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
-        #             if phi_1 == 0.0:
-        #                 # Not moving, infinite correlation
-        #                 phi_x = 1000000.0
-        #                 phi_y = 1000000.0
-        #             else:
-        #                 phi_x = ( v_1 / phi_1 ) * ( -math.cos(phi_1) + math.cos(phi_1 + elapsed * phi_dot_1))
-        #                 phi_y = ( v_1 / phi_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-        #             if phi_dot_1 == 0.0:
-        #                 # Not accelerating, infinite correlation
-        #                 phi_dot_x = 1000000.0
-        #                 phi_dot_y = 1000000.0
-        #             else:
-        #                 phi_dot_x = ( v_1 * elapsed / phi_dot_1 ) * math.cos(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( - math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-        #                 phi_dot_y = ( v_1 * elapsed / phi_dot_1 ) * math.sin(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
-        #             self.F_t = np.array([[1, 0, v_x, phi_x, phi_dot_x],
-        #                                 [0, 1, v_y, phi_y, phi_dot_y],
-        #                                 [0, 0, 1, 0, 0],
-        #                                 [0, 0, 0, 1, elapsed],
-        #                                 [0, 0, 0, 0, 1]])
-
-
-        #         X_hat_t, P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
-
-        #         # Now convert the covariance to a rectangle
-        #         return X_hat_t[0][0], X_hat_t[1][0], P_hat_t[0][0], P_hat_t[1][1], math.radians(0)
-        #     #return self.x, self.y, self.min_size, self.min_size, math.radians(0)
-        # else:
-        #     return self.x, self.y, self.min_size, self.min_size, math.radians(0)
-        
-        # Prediction based mathcing methods seems to be making this fail so we are using no prediction :/
+        # Prediction based matching methods seems to be making this fail so we are using no prediction :/
         # Enforce a min size of a vehicle so that a detection has some area overlap to check
-        a, b, phi = shared_math.ellipsify(self.error_covariance, 3.0)
+        a, b, phi = shared_math.ellipsify(self.error_covariance, 1.0)
         return self.x, self.y, self.min_size + a, self.min_size + b, phi
 
 
 class FUSION:
     # Fusion is a special class for matching and fusing detections for a variety of sources.
-    # The inpus is scalable and therefore must be generated before being fed into this class.
+    # The input is scalable and therefore must be generated before being fed into this class.
     # A unique list of detections is required from each individual sensor or pre-fused device
     # output or it will not be matched. Detections too close to each other may be combined.
     # This is a modified version of the frame-by-frame tracker seen in:
@@ -552,10 +402,10 @@ class FUSION:
         self.id = cav_cis_id
         self.prev_time = -99.0
         self.min_size = 0.5
-        self.fusion_mode = 2 #fusion_mode
+        self.fusion_mode = fusion_mode
         self.current_tracked_id = 0
         self.trackShowThreshold = 4
-        self.predictive = True
+        self.predictive = False
 
         # Indicate our success
         print('Started FUSION successfully...')
@@ -581,23 +431,23 @@ class FUSION:
         for det in observations:
             # Create a rotated rectangle for IOU of 2 ellipses
             # [cx, cy, w, h, angle]
-            if estimate_covariance and len(det) >= 4:
-                # Calculate our 3 sigma std deviation to create a bounding box for matching
-                try:
-                    a, b, phi = shared_math.ellipsify(det[3], 3.0)
-                    # Enforce a minimum size so matching doesn't fail
-                    a += self.min_size
-                    b += self.min_size
-                    detections_position_list.append([det[1], det[2], self.min_size + a, self.min_size + b, phi])
-                except Exception as e:
-                    print ( " Failed! ", str(e))
-                    # Use an arbitrary size if we have no covariance estimate
-                    detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
-            else:
+            # if estimate_covariance and len(det) >= 4:
+            #     # Calculate our 3 sigma std deviation to create a bounding box for matching
+            #     try:
+            #         a, b, phi = shared_math.ellipsify(det[3], 3.0)
+            #         # Enforce a minimum size so matching doesn't fail
+            #         a += self.min_size
+            #         b += self.min_size
+            #         detections_position_list.append([det[1], det[2], self.min_size + a, self.min_size + b, phi])
+            #     except Exception as e:
+            #         print ( " Failed! ", str(e))
+            #         # Use an arbitrary size if we have no covariance estimate
+            #         detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
+            # else:
                 #print(" Warning: no covaraince data for ", sensor_id)
                 # Use an arbitrary size if we have no covariance estimate
-                detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
-            detections_list.append([det[0], det[1], det[2], sensor_id])
+            detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
+            detections_list.append([det[0], det[1], det[2], det[3], sensor_id])
 
         # Call the matching function to modify our detections in trackedList
         self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime, estimate_covariance)
@@ -705,8 +555,8 @@ class FUSION:
                         # We are the best according to arbitrarily broken tie and can be added
                         if add_this:
                             added.append(add)
-                            new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2],
-                                        detection_list[add][3], timestamp, self.current_tracked_id, self.fusion_mode)
+                            new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2], detection_list[add][4],
+                                        detection_list[add][4], timestamp, self.current_tracked_id, self.fusion_mode)
                             if self.current_tracked_id < MAX_ID:
                                 self.current_tracked_id += 1
                             else:
@@ -715,7 +565,7 @@ class FUSION:
 
                 else:
                     for dl in detection_list:
-                        new = Tracked(dl[0], dl[1], dl[2], dl[3], timestamp, self.current_tracked_id, self.fusion_mode)
+                        new = Tracked(dl[0], dl[1], dl[2], dl[3], dl[4], timestamp, self.current_tracked_id, self.fusion_mode)
                         if self.current_tracked_id < MAX_ID:
                             self.current_tracked_id += 1
                         else:

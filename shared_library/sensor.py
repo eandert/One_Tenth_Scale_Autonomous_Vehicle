@@ -56,8 +56,8 @@ class BivariateGaussian:
         return a, b, phi
 
     def calcXYComponents(self):
-        x_comp = self.calcSelfRadiusAtAnlge(math.radians(0), 1)
-        y_comp = self.calcSelfRadiusAtAnlge(math.radians(90), 1)
+        x_comp = self.calcSelfRadiusAtAnlge(math.radians(0), 1.0)
+        y_comp = self.calcSelfRadiusAtAnlge(math.radians(90), 1.0)
         return x_comp, y_comp
 
     def unionBivariateGaussians(self, gaussianB):
@@ -108,8 +108,8 @@ class Localization:
                                     elipse_angle_expected)
         loc_error_longitudinal_actual = np.random.normal(0, elipse_longitudinal_expected, 1)[0]
         loc_error_lateral_actual = np.random.normal(0, elipse_lateral_expected, 1)[0]
-        actual_error_gaussian = BivariateGaussian(loc_error_longitudinal_actual**2,
-                                    loc_error_lateral_actual**2,
+        actual_error_gaussian = BivariateGaussian(loc_error_longitudinal_actual,
+                                    loc_error_lateral_actual,
                                     elipse_angle_expected)
         actual_sim_error = actual_error_gaussian.calcXYComponents()
         #print("loc: ", actual_sim_error)
@@ -119,8 +119,8 @@ class Localization:
         # We need the real error here so call the other function
         expected_error_gaussian, actual_sim_error = self.getErrorParamsAtVelocity(velocity, theta)
         # It's just a circle so both are the same
-        expected_error_gaussian_2 = BivariateGaussian(self.static_error**2,
-                                    self.static_error**2,
+        expected_error_gaussian_2 = BivariateGaussian(self.static_error,
+                                    self.static_error,
                                     0.0)
         return expected_error_gaussian_2, actual_sim_error
 
@@ -171,16 +171,16 @@ class Sensor:
                                         radial_error**2,
                                         elipse_angle_expected)
             else:
-                expected_error_gaussian = BivariateGaussian(self.static_error**2,
-                        self.static_error**2,
+                expected_error_gaussian = BivariateGaussian(self.static_error,
+                        self.static_error,
                         0.0)
-            # Calcuate the actual error if this is a simulation, otherwise just return
+            # Calculate the actual error if this is a simulation, otherwise just return
             if simulation:
                 # Calculate our expected errors in x,y coordinates
                 actualRadialError = np.random.normal(0, radial_error, 1)[0]
                 actualDistanceError = np.random.normal(0, distal_error, 1)[0]
-                actual_error_gaussian = BivariateGaussian(actualDistanceError**2,
-                                      actualRadialError**2,
+                actual_error_gaussian = BivariateGaussian(actualDistanceError,
+                                      actualRadialError,
                                       elipse_angle_expected)
                 actual_sim_error = actual_error_gaussian.calcXYComponents()
                 return True, expected_error_gaussian, actual_sim_error

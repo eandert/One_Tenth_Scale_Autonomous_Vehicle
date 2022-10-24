@@ -109,7 +109,7 @@ def cis(config, sid, test_idx):
                 exit(0)
         if fetch_time(simulation_time, global_time) >= next_time:
             if config.simulation:
-                # Recieve positions of other vehicles from RSU so we can fake the sensor values
+                # Receive positions of other vehicles from RSU so we can fake the sensor values
                 sim_values = rsu.getSimPositions(sensor_id)
                 while(sim_values['step_sim_vehicle'] == False):
                     time.sleep(.01)

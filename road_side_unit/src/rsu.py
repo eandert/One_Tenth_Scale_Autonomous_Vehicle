@@ -48,7 +48,7 @@ class RSU():
         self.end_test = False
         self.error_monitoring = []
         self.twenty_percent_error_end_and_print = config.twenty_percent_error_end_and_print
-        self.revolving_buffer_size = 500
+        self.revolving_buffer_size = 200
         self.missed_detection_error = 3.0
 
         # Init parameters for unit testing
@@ -325,8 +325,8 @@ class RSU():
             # Update the location of this vehicle
             self.vehicles[id].localizationPositionX = detections["localization"][0]
             self.vehicles[id].localizationPositionY = detections["localization"][1]
-            self.vehicles[id].velocity = detections["localization"][3]
             self.vehicles[id].theta = detections["localization"][2]
+            self.vehicles[id].velocity = detections["localization"][3]
             self.vehicles[id].localizationCovariance = detections["localization"][4]
             self.vehicles[id].steeringAcceleration = steeringAcceleration
             self.vehicles[id].motorAcceleration = motorAcceleration
@@ -503,8 +503,8 @@ class RSU():
                                               0,
                                               -1))
                     if self.unit_test:
-                        self.localization_differences.append(math.hypot(vehicle.localizationPositionX-vehicle.localizationPositionX_actual,
-                                                                        vehicle.localizationPositionY-vehicle.localizationPositionY_actual))
+                        self.localization_differences.append(math.hypot(vehicle.localizationPositionX_actual - vehicle.localizationPositionX,
+                                                                        vehicle.localizationPositionY_actual - vehicle.localizationPositionY))
                         self.localization_velocity.append(vehicle.velocity)
 
                 if self.cooperative_monitoring and self.cooperative_monioting_step >= self.cooperative_monitoring_update:
@@ -514,14 +514,14 @@ class RSU():
                     self.cooperative_monioting_step += 1
                     monitor = False
 
-                self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance)
+                #self.globalFusion.processDetectionFrame(self.getTime(), localizationsList, .25, self.parameterized_covariance)
 
                 # If this is simulation, we need to add in the localization error for the CAVs
                 if self.simulation:
                     for idx, vehicle in self.vehicles.items():
                         for detection in vehicle.fusionDetections:
-                            detection[1] = detection[1] + vehicle.localizationPositionX-vehicle.localizationPositionX_actual
-                            detection[2] = detection[2] + vehicle.localizationPositionY-vehicle.localizationPositionY_actual
+                            detection[1] = detection[1] + vehicle.localizationPositionX_actual - vehicle.localizationPositionX
+                            detection[2] = detection[2] + vehicle.localizationPositionY_actual - vehicle.localizationPositionY
                             detection[3] = sensor.addBivariateGaussians(np.array(vehicle.localizationCovariance), np.array(detection[3])).tolist()
 
                 # Add CAV fusion results to the global sensor fusion
@@ -1011,7 +1011,7 @@ class RSU():
                 average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
                 average_Expected_error = sum(self.error_dict[key][3])/self.error_dict[key][0]
                 if int(key) < self.localization_offset:
-                    average_error = average_error #/ error_monitoring_normalizer
+                    average_error = average_error / error_monitoring_normalizer
                 self.error_monitoring.append([key, average_error, average_Expected_error, self.error_dict[key][0]])
                 
                 # Only break once the revolving buffer is full
@@ -1028,27 +1028,27 @@ class RSU():
 
         return twenty_percent_break_check
 
-    def add_error_frame(self, sensor_platform_id, error_frame, expected_error):
+    def add_error_frame(self, sensor_platform_id, error_std, num_error):
         # Allow time for test warmup
-        if self.time > 2.0:
+        if self.time > 5.0 and num_error >= 3:
             if sensor_platform_id in self.error_dict:
                 # Moving revolving_buffer_size place average
                 if self.error_dict[sensor_platform_id][0] < self.revolving_buffer_size:
                     self.error_dict[sensor_platform_id][0] += 1
-                    self.error_dict[sensor_platform_id][2].append(error_frame)
-                    self.error_dict[sensor_platform_id][3].append(expected_error)
+                    self.error_dict[sensor_platform_id][2].append(error_std)
+                    self.error_dict[sensor_platform_id][3].append(num_error)
                     self.error_dict[sensor_platform_id][1] += 1
                 # We have filled revolving_buffer_size places, time to revolve the buffer now
                 else:
                     if self.error_dict[sensor_platform_id][1] < self.revolving_buffer_size:
                         # Replace the element with the next one
-                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame
-                        self.error_dict[sensor_platform_id][3][self.error_dict[sensor_platform_id][1]] = expected_error
+                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_std
+                        self.error_dict[sensor_platform_id][3][self.error_dict[sensor_platform_id][1]] = num_error
                         self.error_dict[sensor_platform_id][1] += 1
                     else:
                         self.error_dict[sensor_platform_id][1] = 0
-                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_frame
-                        self.error_dict[sensor_platform_id][3][self.error_dict[sensor_platform_id][1]] = expected_error
+                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_std
+                        self.error_dict[sensor_platform_id][3][self.error_dict[sensor_platform_id][1]] = num_error
                         self.error_dict[sensor_platform_id][1] += 1
             else:
-                self.error_dict[sensor_platform_id] = [1,1,[error_frame],[expected_error]]
+                self.error_dict[sensor_platform_id] = [1, 1, [error_std], [num_error]]

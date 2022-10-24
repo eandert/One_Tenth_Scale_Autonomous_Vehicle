@@ -191,7 +191,7 @@ if __name__ == "__main__":
     # Configure the settings
     multiple_mode = True
     if multiple_mode:
-        conf_list = parameterized_covariance_unit_test_set
+        conf_list = error_malicious_injection_unit_test_set
         unit_test = UnitTest()
         unit_test.run(conf_list)
     else:

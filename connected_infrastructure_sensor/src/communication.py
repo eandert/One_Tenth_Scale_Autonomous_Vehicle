@@ -30,7 +30,7 @@ The hopse is that one day this will be more automated but for now the IP must be
 The communication backend is Flask and timouts are set here so that we do not drive
 infinitely into a wall if a connection times out or a response is not received.'''
 class connectServer:
-    # TODO: Protect everything within TLS
+    # TODO: Protect everything with TLS
     # RECEIVE: pk_RSU, symk_session
     # SEND: pk_CAV
     def __init__(self, rsu_ip):
@@ -119,7 +119,9 @@ class connectServer:
             return response
         except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
-            response = {}
+            response = {'step_sim_vehicle':False}
+
+            return response
 
     def getSimTime(self):
   

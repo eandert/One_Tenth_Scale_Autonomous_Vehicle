@@ -35,11 +35,10 @@ class MatchClass:
 
 class ResizableKalman:
     def __init__(self, time, x, y, fusion_mode):
-        # This list will take 
-        self.localTrackersTimeAliveList = []
+        # This list will take
         self.localTrackersHList = []
         self.localTrackersMeasurementList = []
-        self.localTrackersCovarainceList = []
+        self.localTrackersCovarianceList = []
         self.localTrackersIDList = []
 
         # Init the covariance to some value
@@ -60,7 +59,7 @@ class ResizableKalman:
         self.min_size = .5
 
         # Process varaition guess
-        process_variation = .0625
+        process_variation = .16
 
         # Track the time of the last track
         self.lastTracked = time
@@ -81,10 +80,9 @@ class ResizableKalman:
             self.F_t_len = 4
             # Setup for x_hat = x + dx,  y_hat = y + dy
             # Initial State cov
-            self.P_t = np.identity(4)
-            self.P_t[2][2] = 0.0
-            self.P_t[3][3] = 0.0
-            self.P_hat_t = self.P_t
+            self.P_hat_t = np.identity(4)
+            self.P_hat_t[2][2] = 0.0
+            self.P_hat_t[3][3] = 0.0
             # Process cov
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/3.0
@@ -101,12 +99,11 @@ class ResizableKalman:
         elif self.fusion_mode == 1:
             # Setup for x_hat = x + dx + dxdx,  y_hat = y + dy + dydy
             self.F_t_len = 6
-            self.P_t = np.identity(6)
-            self.P_t[2][2] = 0.0
-            self.P_t[3][3] = 0.0
-            self.P_t[4][4] = 0.0
-            self.P_t[5][5] = 0.0
-            self.P_hat_t = self.P_t
+            self.P_hat_t = np.identity(6)
+            self.P_hat_t[2][2] = 0.0
+            self.P_hat_t[3][3] = 0.0
+            self.P_hat_t[4][4] = 0.0
+            self.P_hat_t[5][5] = 0.0
             # Process cov
             five = process_variation * (.125*.125*.125*.125*.125)/8.0
             four = process_variation * (.125*.125*.125*.125)/4.0
@@ -125,11 +122,10 @@ class ResizableKalman:
         else:
             # model from https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
             self.F_t_len = 5
-            self.P_t = np.identity(5)
-            self.P_t[2][2] = 0.0
-            self.P_t[3][3] = 0.0
-            self.P_t[4][4] = 0.0
-            self.P_hat_t = self.P_t
+            self.P_hat_t = np.identity(5)
+            self.P_hat_t[2][2] = 0.0
+            self.P_hat_t[3][3] = 0.0
+            self.P_hat_t[4][4] = 0.0
             # Process cov
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
@@ -148,33 +144,16 @@ class ResizableKalman:
     def addFrames(self, measurement_list):
         # try:
         # Rebuild the lists every time because measurements come and go
-        self.localTrackersCovarainceList = []
+        self.localTrackersCovarianceList = []
         self.localTrackersMeasurementList = []
         self.localTrackersHList = []
         self.localTrackersIDList = []
         # Check if there are more sensors in the area that have not been added
         for match in measurement_list:
-            # measurment_index = binarySearch(self.localTrackersIDList, match.id)
-            # if measurment_index < 0:
-            #     # This is not in the tracked list, needs to be added
-            #     self.addTracker(match.id)
             self.localTrackersIDList.append(match.id)
-            
-            # All should be in the tracked list now, continue building the lists
-            # Add the current covariance to the R matrix
-            self.localTrackersCovarainceList.append(match.covariance)
-
-            # Add the current measurments to the measurement matrix
+            self.localTrackersCovarianceList.append(match.covariance)
             self.localTrackersMeasurementList.append(np.array([match.x, match.y]))#, match.dx, match.dy]))
-
-            # The H matrix is different for radar (type 1), the rest are type 0
             self.localTrackersHList.append(0)
-
-            # Mark this measurements as having been used recently
-            self.localTrackersTimeAliveList.append(self.lastTracked)
-
-        # except Exception as e:
-        #     print ( " Exception: " + str(e) )
 
     def h_t(self, h_t_type):
         if h_t_type == 0:
@@ -187,45 +166,30 @@ class ResizableKalman:
             elif self.fusion_mode == 2:
                 return np.array([[1., 0., 0., 0., 0.],
                                 [0., 1., 0., 0., 0.]], dtype = 'float')
-            # if self.fusion_mode == 0:
-            #     return np.array([[1, 0., 0., 0.],
-            #                     [0., 1, 0., 0.],
-            #                     [0., 0, 1., 0.],
-            #                     [0., 0, 0., 1.]], dtype = 'float')
-            # elif self.fusion_mode == 1:
-            #     return np.array([[1, 0., 0., 0., 0., 0.],
-            #                     [0., 1, 0., 0., 0., 0.],
-            #                     [0., 0, 1., 0., 0., 0.],
-            #                     [0., 0, 0., 1., 0., 0.]], dtype = 'float')
-            # elif self.fusion_mode == 2:
-            #     return np.array([[1, 0., 0., 0., 0.],
-            #                     [0., 1, 0., 0., 0.],
-            #                     [0, 0., 1., 0., 0.],
-            #                     [0, 0., 0., 1., 0.]], dtype = 'float')
         else:
             # TODO: implement radar type
             return np.array([[0, 0., 0., 0.],
                             [0., 0, 0., 0.]], dtype = 'float')
 
     def averageMeasurementsFirstFrame(self):
-        if len(self.localTrackersCovarainceList) == 1:
-            return self.localTrackersMeasurementList[0], self.localTrackersCovarainceList[0]
+        if len(self.localTrackersCovarianceList) == 1:
+            return self.localTrackersMeasurementList[0], self.localTrackersCovarianceList[0]
 
-        for idx, cov in enumerate(self.localTrackersCovarainceList):
+        for idx, cov in enumerate(self.localTrackersCovarianceList):
             if idx == 0:
                 temporary_c = cov.transpose()
             else:
                 temporary_c = np.add(temporary_c, cov.transpose())
         temporary_c = temporary_c.transpose()
 
-        for idx, (pos, cov) in enumerate(zip(self.localTrackersMeasurementList, self.localTrackersCovarainceList)):
+        for idx, (pos, cov) in enumerate(zip(self.localTrackersMeasurementList, self.localTrackersCovarianceList)):
             if idx == 0:
-                temprorary_mu = np.matmul(cov.transpose(), pos)
+                temporary_mu = np.matmul(cov.transpose(), pos)
             else:
-                temprorary_mu = np.add(temprorary_mu, np.matmul(cov.transpose(), pos))
-        temprorary_mu = np.matmul(temporary_c, temprorary_mu)
+                temporary_mu = np.add(temporary_mu, np.matmul(cov.transpose(), pos))
+        temporary_mu = np.matmul(temporary_c, temporary_mu)
 
-        return temprorary_mu, temporary_c
+        return temporary_mu, temporary_c
 
     def fusion(self, measurement_list, estimate_covariance, monitor):
         # Set the kalman variables and resize the arrays dynalically (if needed
@@ -257,11 +221,10 @@ class ResizableKalman:
                     [[self.x], [self.y], [0], [0], [0]], dtype = 'float')
             
             # Seed the covariance values directly from the measurement
-            self.P_t[0][0] = self.error_covariance[0][0]
-            self.P_t[0][1] = self.error_covariance[0][1]
-            self.P_t[1][0] = self.error_covariance[1][0]
-            self.P_t[1][1] = self.error_covariance[1][1]
-            self.P_hat_t = self.P_t
+            self.P_hat_t[0][0] = self.error_covariance[0][0]
+            self.P_hat_t[0][1] = self.error_covariance[0][1]
+            self.P_hat_t[1][0] = self.error_covariance[1][0]
+            self.P_hat_t[1][1] = self.error_covariance[1][1]
             self.prev_time = self.lastTracked
             self.x = self.x
             self.y = self.y
@@ -322,14 +285,8 @@ class ResizableKalman:
                                         [0, 0, 1, 0, 0],
                                         [0, 0, 0, 1, elapsed],
                                         [0, 0, 0, 0, 1]], dtype = 'float')
-                
-                # print( " e ")
-                # print ( self.X_hat_t )
-                # print ( self.R_t )
-                # print ( self.H_t )
-                # print ( self.measure)
 
-                self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+                self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_hat_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
                 if len(self.localTrackersMeasurementList) == 0:
                     nothing_cov = np.array([[1.0, 0.],
@@ -347,21 +304,18 @@ class ResizableKalman:
 
                     Z_t = (measure).transpose()
                     Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                    X_t, self.P_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, nothing_cov, nothing_Ht)
-                    self.X_hat_t = X_t
-                    self.P_hat_t = self.P_t
+                    self.X_hat_t, self.P_hat_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, nothing_cov, nothing_Ht)
                 else:
-                    for mu, cov, h_t_type in zip(self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
+                    for mu, cov, h_t_type in zip(self.localTrackersMeasurementList, self.localTrackersCovarianceList, self.localTrackersHList):
                         Z_t = (mu).transpose()
                         Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                        X_t, self.P_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, cov, self.h_t(h_t_type))
-                        self.X_hat_t = X_t
-                        self.P_hat_t = self.P_t
+                        self.X_hat_t, self.P_hat_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, cov, self.h_t(h_t_type))
 
                 # Lets check the accuracy of each sensing platform
                 self.error_tracker_temp = []
-                if monitor:
-                    for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarainceList, self.localTrackersHList):
+                length = len(self.localTrackersIDList)
+                if monitor and length >= 3:
+                    for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarianceList, self.localTrackersHList):
                         Z_t = (mu).transpose()
                         Z_t = Z_t.reshape(Z_t.shape[0], -1)
                         y_t_temp = Z_t - self.h_t(h_t_type).dot(self.X_hat_t)
@@ -370,35 +324,30 @@ class ResizableKalman:
                         expected_a, expected_b, expected_angle = shared_math.ellipsify(cov, 1.0)
                         expected_x = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(0))
                         expected_y = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(90))
-                        expected_location_error = math.hypot(expected_x**2, expected_y**2)
+                        expected_location_error = math.hypot(expected_x, expected_y)
                         #cov
-                        #location_error_std = location_error / expected_location_error
+                        location_error_std = location_error / expected_location_error
                         #print(location_error, expected_location_error, location_error_std)
-                        self.error_tracker_temp.append([id, location_error, expected_location_error])
-                        #print(" error: ", id, location_error, location_error_std)
+                        self.error_tracker_temp.append([id, location_error_std, length])
+                        print(" error: ", id, location_error, expected_location_error, location_error_std)
 
                 self.prev_time = self.lastTracked
-                self.x = X_t[0][0]
-                self.y = X_t[1][0]
+                self.x = self.X_hat_t[0][0]
+                self.y = self.X_hat_t[1][0]
                 if self.fusion_mode == 2:
                     # Different setup for fusion mode 2 need to calculate vector from angle and velocity
-                    self.dx = X_t[2][0] * math.cos(X_t[3][0])
-                    self.dy = X_t[2][0] * math.sin(X_t[3][0])
+                    self.dx = self.X_hat_t[2][0] * math.cos(self.X_hat_t[3][0])
+                    self.dy = self.X_hat_t[2][0] * math.sin(self.X_hat_t[3][0])
                 else:
-                    self.dx = X_t[2][0]
-                    self.dy = X_t[3][0]
+                    self.dx = self.X_hat_t[2][0]
+                    self.dy = self.X_hat_t[3][0]
                 self.idx += 1
-                if self.P_t[0][0] != 0.0 or self.P_t[0][1] != 0.0:
-                    self.error_covariance = np.array([[self.P_t[0][0], self.P_t[0][1]], [self.P_t[1][0], self.P_t[1][1]]], dtype = 'float')
-                    self.d_covariance = np.array([[self.P_t[2][2], self.P_t[2][3]], [self.P_t[3][2], self.P_t[3][3]]], dtype = 'float')
+                if self.P_hat_t[0][0] != 0.0 or self.P_hat_t[0][1] != 0.0:
+                    self.error_covariance = np.array([[self.P_hat_t[0][0], self.P_hat_t[0][1]], [self.P_hat_t[1][0], self.P_hat_t[1][1]]], dtype = 'float')
+                    self.d_covariance = np.array([[self.P_hat_t[2][2], self.P_hat_t[2][3]], [self.P_hat_t[3][2], self.P_hat_t[3][3]]], dtype = 'float')
                 else:
-                    #print ( " what the heck: ", self.P_t)
                     self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
                     self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
-
-                #print ( elapsed, self.x, self.y, self.dx, self.dy, math.degrees(math.hypot(self.dx, self.dy)))
-                # Post fusion, lets clear old trackers now
-                #self.removeOldTrackers()
 
             except Exception as e:
                 print ( " Exception: " + str(e) )
@@ -406,7 +355,7 @@ class ResizableKalman:
     def getKalmanPred(self, time):
         # Prediction based mathcing methods seems to be making this fail so we are using no prediction :/
         # Enforce a min size of a vehicle so that a detection has some area overlap to check
-        a, b, phi = shared_math.ellipsify(self.error_covariance, 3.0)
+        a, b, phi = shared_math.ellipsify(self.error_covariance, 1.0)
         return self.x, self.y, self.min_size + a, self.min_size + b, phi
 
 
@@ -486,7 +435,7 @@ class GlobalTracked:
 
 class GlobalFUSION:
     # Fusion is a special class for matching and fusing detections for a variety of sources.
-    # The inpus is scalable and therefore must be generated before being fed into this class.
+    # The input is scalable and therefore must be generated before being fed into this class.
     # A unique list of detections is required from each individual sensor or pre-fused device
     # output or it will not be matched. Detections too close to each other may be combined.
     # This is a modified version of the frame-by-frame tracker seen in:
@@ -498,7 +447,7 @@ class GlobalFUSION:
         self.prev_time = -99.0
         self.min_size = 0.5
         self.trackShowThreshold = 4
-        self.fusion_mode = 2 #fusion_mode
+        self.fusion_mode = fusion_mode
 
         # Indicate our success
         print('Started FUSION successfully...')
