@@ -201,24 +201,27 @@ class Tracked:
         return ret_val
 
     def averageMeasurementsFirstFrame(self):
-        if len(self.localTrackersCovarianceList) == 1:
+        # This try catch somehow prevents a startup errorn maybe the len function doesn't work sometimes?
+        try:
+            if len(self.localTrackersCovarianceList) == 1:
+                return self.localTrackersMeasurementList[0], self.localTrackersCovarianceList[0]
+
+            for idx, cov in enumerate(self.localTrackersCovarianceList):
+                if idx == 0:
+                    temporary_c = cov.transpose()
+                else:
+                    temporary_c = np.add(temporary_c, cov.transpose())
+            temporary_c = temporary_c.transpose()
+
+            for idx, (pos, cov) in enumerate(zip(self.localTrackersMeasurementList, self.localTrackersCovarianceList)):
+                if idx == 0:
+                    temporary_mu = np.matmul(cov.transpose(), pos)
+                else:
+                    temporary_mu = np.add(temporary_mu, np.matmul(cov.transpose(), pos))
+            temporary_mu = np.matmul(temporary_c, temporary_mu)
+            return temporary_mu, temporary_c
+        except:
             return self.localTrackersMeasurementList[0], self.localTrackersCovarianceList[0]
-
-        for idx, cov in enumerate(self.localTrackersCovarianceList):
-            if idx == 0:
-                temporary_c = cov.transpose()
-            else:
-                temporary_c = np.add(temporary_c, cov.transpose())
-        temporary_c = temporary_c.transpose()
-
-        for idx, (pos, cov) in enumerate(zip(self.localTrackersMeasurementList, self.localTrackersCovarianceList)):
-            if idx == 0:
-                temporary_mu = np.matmul(cov.transpose(), pos)
-            else:
-                temporary_mu = np.add(temporary_mu, np.matmul(cov.transpose(), pos))
-        temporary_mu = np.matmul(temporary_c, temporary_mu)
-
-        return temporary_mu, temporary_c
 
     def fusion(self, parameterized_covariance, vehicle, predictive):
         self.localTrackersMeasurementList = []
