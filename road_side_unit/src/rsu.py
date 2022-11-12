@@ -984,11 +984,11 @@ class RSU():
                             detectors[sensor_platform_id].pop(objects_should_be_seen_id)
 
         # Add the error for missed detections
-        # for sensor_platform_id in self.error_dict.keys():
-        #     # Check off what we have seen
-        #     if sensor_platform_id < self.localizationid:
-        #         for seen_obj_id in range(len(detectors[sensor_platform_id])):
-        #             self.add_error_frame(sensor_platform_id, self.missed_detection_error, .057)
+        for sensor_platform_id in self.error_dict.keys():
+            # Check off what we have seen
+            if sensor_platform_id < self.localizationid:
+                for seen_obj_id in range(len(detectors[sensor_platform_id])):
+                    self.add_error_frame(sensor_platform_id, self.missed_detection_error, .057)
 
         # Normalize all the data to 0 (hopefully)
         normalization_numerator = 0.0
@@ -1021,7 +1021,7 @@ class RSU():
                         f.write(str(self.time) + "," + str(average_error) + "\n")
                         print("breaking test!" + str(self.time-.125) + "," + str(average_error) + "\n")
 
-                # if self.time > 95 and int(key) == 0:
+                # if self.time >= 240.0 and int(key) == 0:
                 #     with open('output.txt', 'a') as f:
                 #         f.write(str(self.time) + "," + str(average_error) + "\n")
                 #         print("writing to file!" + str(self.time-.125) + "," + str(average_error) + "\n")

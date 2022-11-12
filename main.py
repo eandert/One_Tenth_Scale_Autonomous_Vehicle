@@ -13,7 +13,7 @@ import config
 global mainWin
 
 parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3", "two_cav_simulation_unit_test_4","four_cav_simulation_unit_test","four_cav_simulation_unit_test_2","four_cav_simulation_unit_test_3","four_cav_simulation_unit_test_4"]
-error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection"]
+error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1", "four_cav_simulation_error_injection_2", "four_cav_simulation_error_injection_3", "four_cav_simulation_error_injection_4", "four_cav_simulation_error_injection_5"]
 
 class UnitTest():
     def __init__(self):
