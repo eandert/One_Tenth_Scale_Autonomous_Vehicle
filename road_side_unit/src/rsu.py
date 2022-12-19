@@ -48,8 +48,13 @@ class RSU():
         self.end_test = False
         self.error_monitoring = []
         self.twenty_percent_error_end_and_print = config.twenty_percent_error_end_and_print
+        self.error_injection_time = config.error_injection_time
         self.revolving_buffer_size = 200
         self.missed_detection_error = 3.0
+        self.non_real_detection_error = 3.0
+        self.twenty_percent_error_hit = False
+        self.error_at_100 = -99.0
+        self.error_target_vehicle = 1
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -67,6 +72,7 @@ class RSU():
             self.unit_test_time = config.unit_test_time
             self.unit_test_speed_target = config.unit_test_speed_target
             self.unit_test_idx = unit_test_idx
+            self.error_type = config.error_injection_type
             if self.twenty_percent_error_end_and_print:
                 with open('output.txt', 'a') as f:
                     f.write("Test start " + str(self.unit_test_idx) + "\n")
@@ -76,6 +82,7 @@ class RSU():
             self.local_fusion_mode = 0
             self.global_fusion_mode = 0
             self.unit_test_idx = 0
+            self.error_type = 0
 
         # init global fusion
         self.globalFusion = global_fusion.GlobalFUSION(self.global_fusion_mode)
@@ -202,13 +209,7 @@ class RSU():
             self.step_sim_vehicle = False
             #mp.set_start_method('spawn')
             for idx, vehicle in self.vehicles.items():
-                # Old way that is slow because of the Global Interpreter Lock
-                # self.thread["cav"+str(idx)] = Thread(target=cav.cav, args=(config, idx, self.unit_test_idx, ))
-                # self.thread["cav"+str(idx)].daemon = True
-                # self.thread["cav"+str(idx)].start()
-
-                # New actual threading
-                # TODO: Figure out why this does not work!
+                # Actual threading not messed with my global interpreter lock
                 self.thread["cav"+str(idx)] = mp.Process(target=cav.cav, args=(config, idx, self.unit_test_idx,))
                 self.thread["cav"+str(idx)].daemon = True
                 self.thread["cav"+str(idx)].start()
@@ -218,13 +219,7 @@ class RSU():
                 print( "RSU Initialized CAV ", idx, " thread" )
 
             for idx, sensor in self.sensors.items():
-                # Old way that is slow because of the Global Interpreter Lock
-                # self.thread["cis"+str(idx)] = Thread(target=cis.cis, args=(config, self.cis_offset + idx, self.unit_test_idx, ))
-                # self.thread["cis"+str(idx)].daemon = True
-                # self.thread["cis"+str(idx)].start()
-
-                # New actual threading
-                # TODO: Figure out why this does not work!
+                # Actual threading not messed with my global interpreter lock
                 self.thread["cis"+str(idx)] = mp.Process(target=cis.cis, args=(config, self.cis_offset + idx, self.unit_test_idx, ))
                 self.thread["cis"+str(idx)].daemon = True
                 self.thread["cis"+str(idx)].start()
@@ -519,10 +514,20 @@ class RSU():
                 # If this is simulation, we need to add in the localization error for the CAVs
                 if self.simulation:
                     for idx, vehicle in self.vehicles.items():
-                        for detection in vehicle.fusionDetections:
-                            detection[1] = detection[1] + vehicle.localizationPositionX_actual - vehicle.localizationPositionX
-                            detection[2] = detection[2] + vehicle.localizationPositionY_actual - vehicle.localizationPositionY
-                            detection[3] = sensor.addBivariateGaussians(np.array(vehicle.localizationCovariance), np.array(detection[3])).tolist()
+                        if self.getTime() >= self.error_injection_time and self.error_type == 6 and idx == self.error_target_vehicle:
+                            # Error injection for localization error
+                            print("------------------------------------ increasing localization error ", self.unit_test_idx)
+                            x_error = np.random.normal(0, self.unit_test_idx/10.0, 1)[0]
+                            y_error = np.random.normal(0, self.unit_test_idx/10.0, 1)[0]
+                            for detection in vehicle.fusionDetections:
+                                detection[1] = detection[1] + vehicle.localizationPositionX_actual - vehicle.localizationPositionX + x_error
+                                detection[2] = detection[2] + vehicle.localizationPositionY_actual - vehicle.localizationPositionY + y_error
+                                detection[3] = sensor.addBivariateGaussians(np.array(vehicle.localizationCovariance), np.array(detection[3])).tolist()
+                        else:
+                            for detection in vehicle.fusionDetections:
+                                detection[1] = detection[1] + vehicle.localizationPositionX_actual - vehicle.localizationPositionX
+                                detection[2] = detection[2] + vehicle.localizationPositionY_actual - vehicle.localizationPositionY
+                                detection[3] = sensor.addBivariateGaussians(np.array(vehicle.localizationCovariance), np.array(detection[3])).tolist()
 
                 # Add CAV fusion results to the global sensor fusion
                 for idx, vehicle in self.vehicles.items():
@@ -937,30 +942,43 @@ class RSU():
         length = .6
         width = .6
         for idx, vehicle in enumerate(self.globalFusionList):
-            # Create a bounding box for vehicle vehicle that is length + 2*buffer long and width + 2*buffer wide
-            x = vehicle[1]
-            y = vehicle[2]
-            theta = math.atan2(vehicle[5], vehicle[4])
-            x1 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
-            y1 = y + ((length/2.0)*math.sin(theta+math.radians(90)) + ((width/2.0)*math.sin(theta-math.radians(180))))
-            x2 = x + ((length/2.0)*math.cos(theta-math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
-            y2 = y + ((length/2.0)*math.sin(theta-math.radians(90)) + ((width/2.0)*math.sin(theta-math.radians(180))))
-            x3 = x + ((length/2.0)*math.cos(theta-math.radians(90)) + ((width/2.0)*math.cos(theta)))
-            y3 = y + ((length/2.0)*math.sin(theta-math.radians(90)) + ((width/2.0)*math.sin(theta)))
-            x4 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta)))
-            y4 = y + ((length/2.0)*math.sin(theta+math.radians(90)) + ((width/2.0)*math.sin(theta)))
-            polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
-            object_polygons.append(polygon)
+            # Rule of 3s, make sure 3 things have seen this
+            if vehicle[7] >= 3:
+                # Create a bounding box for vehicle that is length + 2*buffer long and width + 2*buffer wide
+                x = vehicle[1]
+                y = vehicle[2]
+                theta = math.atan2(vehicle[5], vehicle[4])
+                x1 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
+                y1 = y + ((length/2.0)*math.sin(theta+math.radians(90)) + ((width/2.0)*math.sin(theta-math.radians(180))))
+                x2 = x + ((length/2.0)*math.cos(theta-math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
+                y2 = y + ((length/2.0)*math.sin(theta-math.radians(90)) + ((width/2.0)*math.sin(theta-math.radians(180))))
+                x3 = x + ((length/2.0)*math.cos(theta-math.radians(90)) + ((width/2.0)*math.cos(theta)))
+                y3 = y + ((length/2.0)*math.sin(theta-math.radians(90)) + ((width/2.0)*math.sin(theta)))
+                x4 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta)))
+                y4 = y + ((length/2.0)*math.sin(theta+math.radians(90)) + ((width/2.0)*math.sin(theta)))
+                polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
+                object_polygons.append(polygon)
 
         detectors = []
         for idx, cav in self.vehicles.items():
-            sublist = sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta],
+            sublist_new = sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta, 1.0],
                 cav.cameraSensor.center_angle, cav.cameraSensor.max_distance, cav.cameraSensor.field_of_view, object_polygons)
-            sublist += sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta],
+            sublist_new += sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta, 1.0],
                 cav.lidarSensor.center_angle, cav.lidarSensor.max_distance, cav.lidarSensor.field_of_view, object_polygons)
+            # Look for the same thing 2x
+            seen = set()
+            sublist_mid = []
+            # Look for repeated detections from cam/lidar
+            for x in sublist_new:
+                if x not in seen: sublist_mid.append(x)
+                seen.add(x)
+            sublist = []
+            # Check that this is not ourself -- doesn't make sense we don't know ID #s
+            for each in sublist_mid:
+                if each != idx: sublist.append(each)
             detectors.append(sublist)
         for idx, cis in self.sensors.items():
-            sublist = sensor.check_visble_objects([cis.localizationPositionX, cis.localizationPositionY, cis.theta],
+            sublist = sensor.check_visble_objects([cis.localizationPositionX, cis.localizationPositionY, cis.theta, .5],
                 cis.cameraSensor.center_angle, cis.cameraSensor.max_distance, cis.cameraSensor.field_of_view, object_polygons)
             detectors.append(sublist)
 
@@ -988,7 +1006,8 @@ class RSU():
             # Check off what we have seen
             if sensor_platform_id < self.localizationid:
                 for seen_obj_id in range(len(detectors[sensor_platform_id])):
-                    self.add_error_frame(sensor_platform_id, self.missed_detection_error, .057)
+                    self.add_error_frame(sensor_platform_id, self.missed_detection_error, 10)
+                    print("+++++++++++++++++++++++++++++++++ adding missed detection for ", sensor_platform_id, detectors[sensor_platform_id][seen_obj_id])
 
         # Normalize all the data to 0 (hopefully)
         normalization_numerator = 0.0
@@ -999,10 +1018,13 @@ class RSU():
                 normalization_denominator += self.error_dict[key][0]
         
         # Make sure the fenominator is greater than 0
-        if normalization_denominator != 0.0:
-            error_monitoring_normalizer = normalization_numerator / normalization_denominator
+        if normalization_denominator != 0.0 and self.time < self.error_injection_time:
+            #error_monitoring_normalizer = normalization_numerator / normalization_denominator
+            error_monitoring_normalizer = 1.0
         else:
             error_monitoring_normalizer = 1.0
+
+        # self.error_dict[sensor_platform_id] = [1, 1, [error_std], [num_error]]
 
         self.error_monitoring = []
         twenty_percent_break_check = False
@@ -1013,24 +1035,34 @@ class RSU():
                 if int(key) < self.localization_offset:
                     average_error = average_error / error_monitoring_normalizer
                 self.error_monitoring.append([key, average_error, average_Expected_error, self.error_dict[key][0]])
-                
-                # Only break once the revolving buffer is full
-                if self.twenty_percent_error_end_and_print and self.error_dict[key][0] >= self.revolving_buffer_size and average_error > 1.2:
-                    #twenty_percent_break_check = True
-                    with open('output.txt', 'a') as f:
-                        f.write(str(self.time) + "," + str(average_error) + "\n")
-                        print("breaking test!" + str(self.time-.125) + "," + str(average_error) + "\n")
 
-                # if self.time >= 240.0 and int(key) == 0:
-                #     with open('output.txt', 'a') as f:
-                #         f.write(str(self.time) + "," + str(average_error) + "\n")
-                #         print("writing to file!" + str(self.time-.125) + "," + str(average_error) + "\n")
+                # Write to one file the SDSS vs. baseline at 100 seconds
+                if self.error_at_100 == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                    self.error_at_100 = average_error
+                    # Start the file every time in case we don't hit the mark
+                    with open('twenty_percent_break_point.txt', 'a') as f:
+                        f.write("\n" + str(self.unit_test_idx) + ",")
+
+                average_error_normalized = average_error / self.error_at_100
+
+                if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                    with open('output.txt', 'a') as f:
+                        f.write(str(self.time) + "," + str(average_error_normalized) + "\n")
+                        print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
+
+                # Only break once the revolving buffer is full
+                if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                    if average_error_normalized >= 1.2 and not self.twenty_percent_error_hit:
+                        with open('twenty_percent_break_point.txt', 'a') as f:
+                            f.write(str(self.time) + "," + str(average_error_normalized))
+                            print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
+                            self.twenty_percent_error_hit = True
 
         return twenty_percent_break_check
 
     def add_error_frame(self, sensor_platform_id, error_std, num_error):
         # Allow time for test warmup
-        if self.time > 5.0 and num_error >= 3:
+        if self.time > 25.0 and num_error >= 3:
             if sensor_platform_id in self.error_dict:
                 # Moving revolving_buffer_size place average
                 if self.error_dict[sensor_platform_id][0] < self.revolving_buffer_size:
@@ -1052,3 +1084,6 @@ class RSU():
                         self.error_dict[sensor_platform_id][1] += 1
             else:
                 self.error_dict[sensor_platform_id] = [1, 1, [error_std], [num_error]]
+        if self.time > 25.0 and num_error == 1:
+            # Check for single detections
+            self.add_error_frame(sensor_platform_id, self.non_real_detection_error, 10)

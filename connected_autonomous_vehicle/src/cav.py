@@ -199,7 +199,7 @@ def cav(config, vid, test_idx):
     bounding_box = [[0.0, 0.0],[0.0, 0.0]]
     last_response = []
     data_collect_mode = config.data_collect_mode
-    if vid == 0 and config.simulation:
+    if vid == 1 and config.simulation:
         # CAV, might need to inject error if simuation
         error_type = config.error_injection_type
         error_time = config.error_injection_time
@@ -232,6 +232,11 @@ def cav(config, vid, test_idx):
             settings.outputFilename = "live_test_output.avi"
     else:
         simulation_time = True
+        cavs = config.cav
+        ciss = config.cis
+        cooperative_monitoring = config.cooperative_monitoring
+        cooperative_monitoring_update = config.cooperative_monitoring_update
+        cooperative_monitoring_step = 0
         global_time = 1.0 # This must start as nonzero else Python will confuse with none
 
     # Set up the timing
@@ -367,11 +372,14 @@ def cav(config, vid, test_idx):
                 
                 vehicle_object_positions = sim_values['veh_locations']
 
-                if error_type != 0 and vehicle_id == 0 and fetch_time(simulation_time, global_time) >= error_time:
+                sensor_fusion_messer = 0
+                sensor_fusion_messer_rate = 0.0
+
+                if vehicle_id == 1 and fetch_time(simulation_time, global_time) >= error_time:
                     # 0:none 1:lidar, 2:camera, 3:fusion, 4:random, 5:malicous
                     if error_type == 1: # camera error, shift by certain degree i
                         for each in vehicle_object_positions:
-                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY and test_idx != 0:
+                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
                                 #print(" rotating: ", each)
                                 ox = planner.localizationPositionX
                                 oy = planner.localizationPositionY
@@ -382,11 +390,12 @@ def cav(config, vid, test_idx):
                                 qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
                                 each[0] = qx
                                 each[1] = qy
-                                print("Messing camera data by ", test_idx)
+                                print("------------------------------------ Messing camera data by ", test_idx)
+                                print("old", px, py, " new", qx, qy)
                         cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
                     elif error_type == 2: # Lidar error, shift by certain degree i
                         for each in vehicle_object_positions:
-                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY and test_idx != 0:
+                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
                                 #print(" rotating: ", each)
                                 ox = planner.localizationPositionX
                                 oy = planner.localizationPositionY
@@ -397,11 +406,12 @@ def cav(config, vid, test_idx):
                                 qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
                                 each[0] = qx
                                 each[1] = qy
-                                print("Messing LIDAR data by ", test_idx)
+                                print("------------------------------------ Messing LIDAR data by ", test_idx)
+                                print("old", px, py, " new", qx, qy)
                         cam_returned2, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
                     elif error_type == 3: # Fusion error, shift both by certain degree i
                         for each in vehicle_object_positions:
-                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY and test_idx != 0:
+                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
                                 #print(" rotating: ", each)
                                 ox = planner.localizationPositionX
                                 oy = planner.localizationPositionY
@@ -412,26 +422,41 @@ def cav(config, vid, test_idx):
                                 qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
                                 each[0] = qx
                                 each[1] = qy
-                                print("Messing up fusion data by ", test_idx)
+                                print("------------------------------------ Messing up fusion data by ", test_idx)
+                                print("old", px, py, " new", qx, qy)
                         cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-                    elif error_type == 4: # Random unexplainable error, move detection randomly with probability i
+                    elif error_type == 4: # Random unexplainable error, remove detection randomly with probability i
                         pop_indexes = []
                         for idx, each in enumerate(vehicle_object_positions):
-                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY and test_idx != 0:
+                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
                                 test_int = random.randint(0, 100)
-                                if test_int >= test_idx:
-                                    print("removing random data ", test_idx)
+                                if test_int < test_idx * 10:
+                                    print("------------------------------------ removing random data ", test_idx)
                                     pop_indexes.append(idx)
                         for pop_em in reversed(pop_indexes):
                             vehicle_object_positions.pop(pop_em)
                         cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
                     elif error_type == 5: # Maliciously insert vehicle into middle of traffic light with probability i
                         test_int = random.randint(0, 100)
-                        if test_int >= test_idx:
+                        if test_int < test_idx * 10:
                             # Insert into the middle of the traffic light (there might be another object there)
                             vehicle_object_positions.append([0.0, 0.0, 0.0, 0.0, .3, .59, 99])
+                            print("------------------------------------ adding vehicle maliciously ", test_idx)
                         cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-
+                    # Error # 6 is actually going to happen at the RSU where the localization error is dealt with
+                    elif error_type == 7: # Sensor fusion error sensor weight
+                        if test_idx != 0:
+                            # Mess with the expected sensor accuracies
+                            sensor_fusion_messer = 1
+                            sensor_fusion_messer_rate = (1 + (test_idx/2.0))
+                            print("------------------------------------ increasing camera covaraince ", test_idx)
+                    elif error_type == 8: # Sensor fusion error model weight
+                        if test_idx != 0:
+                            # Mess with the expected sensor accuracies
+                            sensor_fusion_messer = 2
+                            sensor_fusion_messer_rate = (1 + (test_idx/2.0))
+                            print("------------------------------------ increasing camera covaraince ", test_idx)
+                            
                 lidar_recieved = True
                 camera_recieved = True
             else:
@@ -484,9 +509,16 @@ def cav(config, vid, test_idx):
                 fusion_result = []
                 fusion_start = fetch_time(simulation_time, global_time)
                 if not data_collect_mode:
-                    fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, sim_values['parameterized_covariance'])
-                    fusion.processDetectionFrame(local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25, sim_values['parameterized_covariance'])
-                    fusion_result = fusion.fuseDetectionFrame(sim_values['parameterized_covariance'], planner)
+                    if sensor_fusion_messer == 2:
+                        fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, sim_values['parameterized_covariance'], matching_messup_rate = sensor_fusion_messer_rate)
+                        fusion.processDetectionFrame(local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25, sim_values['parameterized_covariance'], matching_messup_rate = sensor_fusion_messer_rate)
+                    else:
+                        fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, sim_values['parameterized_covariance'])
+                        fusion.processDetectionFrame(local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25, sim_values['parameterized_covariance'])
+                    if sensor_fusion_messer == 1:
+                        fusion_result = fusion.fuseDetectionFrame(sensor_fusion_error_injection = sensor_fusion_messer, sensor_fusion_error_injection_rate = sensor_fusion_messer_rate)
+                    else:
+                        fusion_result = fusion.fuseDetectionFrame()
                 else:
                     fusion_result = []
 
@@ -518,6 +550,80 @@ def cav(config, vid, test_idx):
                     }
 
                 if config.simulation:
+                    # Dummy value used if we don't do a round
+                    bosco_results = None
+
+                    # Send and recieve messages for Bosco
+                    if cooperative_monitoring and cooperative_monitoring_step >= cooperative_monitoring_update:
+                        cooperative_monitoring_step = 1
+                        monitor = True
+                    else:
+                        cooperative_monitoring_step += 1
+                        monitor = False
+                    
+                    if monitor:
+                        import json, os
+
+                        bosco_id = vehicle_id
+                        sensor_platform_ids = len(cavs) + len(ciss)
+                        data = [vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
+                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind],
+                            objectPackage, fetch_time(simulation_time, global_time)]
+
+                        # Create a "message" using a file for each of our other vehicles
+                        for platform_id in range(sensor_platform_ids):
+                            if platform_id != bosco_id:
+                                with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_init.txt", 'w') as f:
+                                    json.dump(data, f, sort_keys=True)
+
+                        # Wait some arbitrary time so everyone can write their files (this is hacky)
+                        time.sleep(1)
+
+                        # Read the messages from the other vehicles and delete after reading
+                        recieved_data_init = []
+                        for platform_id in range(sensor_platform_ids):
+                            if platform_id == bosco_id:
+                                recieved_data_init.append(data)
+                            else:
+                                if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt"):
+                                    with open("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt", 'r') as f:
+                                        recieved_data_init.append(json.load(f))
+                                    os.remove("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt")
+                                else:
+                                    print("The file does not exist")
+                                
+
+                        # Now send these larger data packets to all vehicles again
+                        for platform_id in range(sensor_platform_ids):
+                            if platform_id != bosco_id:
+                                with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_final.txt", 'w') as f:
+                                    json.dump(recieved_data_init, f, sort_keys=True)
+
+                        # Wait some arbitrary time so everyone can write their files (this is hacky)
+                        time.sleep(1)
+
+                        # Read the messages from the other vehicles and delete after reading
+                        recieved_data_final = []
+                        for platform_id in range(sensor_platform_ids):
+                            if platform_id == bosco_id:
+                                recieved_data_final.append(data)
+                            else:
+                                if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt"):
+                                    with open("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt", 'r') as f:
+                                        recieved_data_final.append(json.load(f))
+                                    os.remove("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt")
+                                else:
+                                    print("The file does not exist")
+
+                        # Add bosco here using the values stored in recieved_data_final
+                        # recieved_data_final
+
+                        # Faking the results
+                        # [overal_round_finished_boolean, [cav/cis_0_agrees_boolean, cav/cis_1_agrees_boolean, ..., cav/cis_n_agrees_boolean]]
+                        bosco_results = [True, []]
+                        for each in range(sensor_platform_ids):
+                            bosco_results[1].append(True)
+                    
                     response_message = rsu_sim_check.checkin(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
                             planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind],
                             objectPackage, fetch_time(simulation_time, global_time))

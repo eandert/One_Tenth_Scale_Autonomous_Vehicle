@@ -14,7 +14,8 @@ global mainWin
 
 parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3", "two_cav_simulation_unit_test_4","four_cav_simulation_unit_test","four_cav_simulation_unit_test_2","four_cav_simulation_unit_test_3","four_cav_simulation_unit_test_4"]
 error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1", "four_cav_simulation_error_injection_2", "four_cav_simulation_error_injection_3", "four_cav_simulation_error_injection_4", "four_cav_simulation_error_injection_5"]
-
+error_malicious_injection_unit_test_set_retester = ["four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6"]
+error_malicious_injection_unit_test_set_quick = ["four_cav_simulation_error_injection_7", "four_cav_simulation_error_injection_8"]#"four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_7","four_cav_simulation_error_injection_8"]
 class UnitTest():
     def __init__(self):
         self.full_simulation = True
@@ -191,7 +192,7 @@ if __name__ == "__main__":
     # Configure the settings
     multiple_mode = True
     if multiple_mode:
-        conf_list = error_malicious_injection_unit_test_set
+        conf_list = error_malicious_injection_unit_test_set_quick
         unit_test = UnitTest()
         unit_test.run(conf_list)
     else:

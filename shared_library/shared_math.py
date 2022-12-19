@@ -92,7 +92,7 @@ def ellipsify(covariance, num_std_deviations = 3.0):
 def calculateRadiusAtAngle(a, b, phi, measurementAngle):
     denominator = math.sqrt( a**2 * math.sin(phi-measurementAngle)**2 + b**2 * math.cos(phi-measurementAngle)**2 )
     if denominator == 0.0:
-        #print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
+        print ( "Warning: calculateEllipseRadius denom 0! - check localizer definitions " )
         return 0.0
     else:
         return ( a * b ) / denominator

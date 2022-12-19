@@ -314,7 +314,7 @@ class ResizableKalman:
                 # Lets check the accuracy of each sensing platform
                 self.error_tracker_temp = []
                 length = len(self.localTrackersIDList)
-                if monitor and length >= 3:
+                if monitor:
                     for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarianceList, self.localTrackersHList):
                         Z_t = (mu).transpose()
                         Z_t = Z_t.reshape(Z_t.shape[0], -1)
@@ -382,6 +382,7 @@ class GlobalTracked:
         self.match_list = []
         self.fusion_steps = 0
         self.error_monitor = []
+        self.num_trackers = 0
 
         # Add this first match
         new_match = MatchClass(sensor_id, x, y, covariance, dx, dy, dcovariance, 0, time)
@@ -427,6 +428,7 @@ class GlobalTracked:
         self.dy = self.kalman.dy
         self.d_covariance = self.kalman.d_covariance
         self.error_monitor = self.kalman.error_tracker_temp
+        self.num_trackers = len(self.kalman.localTrackersIDList)
         self.fusion_steps += 1
 
     def clearLastFrame(self):
@@ -459,7 +461,7 @@ class GlobalFUSION:
         for track in self.trackedList:
             track.fusion(estimate_covariance, monitor)
             if track.fusion_steps >= self.trackShowThreshold:
-                result.append([track.id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist()])
+                result.append([track.id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist(), track.num_trackers])
                 if track.error_monitor:
                     cooperative_monitoring.append(track.error_monitor)
                 else:

@@ -108,8 +108,8 @@ class Localization:
                                     elipse_angle_expected)
         loc_error_longitudinal_actual = np.random.normal(0, elipse_longitudinal_expected, 1)[0]
         loc_error_lateral_actual = np.random.normal(0, elipse_lateral_expected, 1)[0]
-        actual_error_gaussian = BivariateGaussian(loc_error_longitudinal_actual,
-                                    loc_error_lateral_actual,
+        actual_error_gaussian = BivariateGaussian(loc_error_longitudinal_actual**2,
+                                    loc_error_lateral_actual**2,
                                     elipse_angle_expected)
         actual_sim_error = actual_error_gaussian.calcXYComponents()
         #print("loc: ", actual_sim_error)
@@ -119,8 +119,8 @@ class Localization:
         # We need the real error here so call the other function
         expected_error_gaussian, actual_sim_error = self.getErrorParamsAtVelocity(velocity, theta)
         # It's just a circle so both are the same
-        expected_error_gaussian_2 = BivariateGaussian(self.static_error,
-                                    self.static_error,
+        expected_error_gaussian_2 = BivariateGaussian(self.static_error**2,
+                                    self.static_error**2,
                                     0.0)
         return expected_error_gaussian_2, actual_sim_error
 
@@ -171,16 +171,16 @@ class Sensor:
                                         radial_error**2,
                                         elipse_angle_expected)
             else:
-                expected_error_gaussian = BivariateGaussian(self.static_error,
-                        self.static_error,
+                expected_error_gaussian = BivariateGaussian(self.static_error**2,
+                        self.static_error**2,
                         0.0)
             # Calculate the actual error if this is a simulation, otherwise just return
             if simulation:
                 # Calculate our expected errors in x,y coordinates
                 actualRadialError = np.random.normal(0, radial_error, 1)[0]
                 actualDistanceError = np.random.normal(0, distal_error, 1)[0]
-                actual_error_gaussian = BivariateGaussian(actualDistanceError,
-                                      actualRadialError,
+                actual_error_gaussian = BivariateGaussian(actualDistanceError**2,
+                                      actualRadialError**2,
                                       elipse_angle_expected)
                 actual_sim_error = actual_error_gaussian.calcXYComponents()
                 return True, expected_error_gaussian, actual_sim_error
@@ -202,7 +202,7 @@ def addBivariateGaussians(gaussianA, gaussianB):
 
 # This function is parses the setting from the simulation and calls necessary functions to simulate
 # the sensors and their respective errors
-def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object_positions):
+def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object_positions, fusion_error=False, fusion_error_rate=1.0):
     lidar_returned = [[], [], None]
     cam_returned = [[], None]
     if lidarRecognition != None:
@@ -385,7 +385,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range,
         return lidar_point_cloud, lidar_point_cloud_error, camera_array, camera_error_array, lidar_detected_error
 
 # Use to check if a sensor should have detected an object or not
-def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sensor_fov, object_polygons):
+def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sensor_fov, object_polygons, vehicle_width = .5):
     # Get the points the Slamware M1M1 should generate
     lidar_freq = 7000 / 8
     angle_change = (2 * math.pi) / lidar_freq
@@ -420,7 +420,7 @@ def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sen
             # Get the closest intersection with a polygon as that will be where our lidar beam stops
             for point, polygon_id in zip(intersections, intersection_id):
                 dist = math.hypot(point[0] - sensor_position[0], point[1] - sensor_position[1])
-                if sensor_range >= dist >= .5:
+                if sensor_range >= dist and dist >= vehicle_width:
                     if dist < intersect_dist:
                         final_point = point
                         intersect_dist = dist

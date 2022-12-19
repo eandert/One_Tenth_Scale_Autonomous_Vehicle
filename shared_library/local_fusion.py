@@ -223,7 +223,7 @@ class Tracked:
         except:
             return self.localTrackersMeasurementList[0], self.localTrackersCovarianceList[0]
 
-    def fusion(self, parameterized_covariance, vehicle, predictive):
+    def fusion(self, predictive, sensor_fusion_messer, sensor_fusion_messer_rate):
         self.localTrackersMeasurementList = []
         self.localTrackersCovarianceList = []
         self.localTrackersIDList = []
@@ -323,6 +323,13 @@ class Tracked:
                                     [0, 0, 0, 1, elapsed],
                                     [0, 0, 0, 0, 1]], dtype = 'float')
 
+            if sensor_fusion_messer == 1:
+                print("old-----------------------------------------", self.P_hat_t)
+                for cov in self.F_t:
+                    for entry in cov:
+                        entry = entry * sensor_fusion_messer_rate
+                print("new-----------------------------------------", self.P_hat_t)
+
             # Time to run our predictions!
             self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_hat_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
@@ -413,11 +420,11 @@ class FUSION:
         # Indicate our success
         print('Started FUSION successfully...')
 
-    def fuseDetectionFrame(self, parameterized_covariance, vehicle):
+    def fuseDetectionFrame(self, sensor_fusion_error_injection = 0, sensor_fusion_error_injection_rate = 1.0):
         # Time to go through each track list and fuse!
         result = []
         for track in self.trackedList:
-            track.fusion(parameterized_covariance, vehicle, self.predictive)
+            track.fusion(self.predictive, sensor_fusion_error_injection, sensor_fusion_error_injection_rate)
             if track.fusion_steps >= self.trackShowThreshold:
                 # Calculate a custom ID that encodes the sensor id and local fusion track number
                 universal_id = self.id * MAX_ID + track.id
@@ -427,7 +434,7 @@ class FUSION:
 
         return result
 
-    def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimate_covariance):
+    def processDetectionFrame(self, sensor_id, timestamp, observations, cleanupTime, estimate_covariance, matching_messup_rate = 1.0):
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
@@ -449,7 +456,7 @@ class FUSION:
             # else:
                 #print(" Warning: no covaraince data for ", sensor_id)
                 # Use an arbitrary size if we have no covariance estimate
-            detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
+            detections_position_list.append([det[1], det[2], self.min_size * matching_messup_rate, self.min_size * matching_messup_rate, math.radians(0)])
             detections_list.append([det[0], det[1], det[2], det[3], sensor_id])
 
         # Call the matching function to modify our detections in trackedList

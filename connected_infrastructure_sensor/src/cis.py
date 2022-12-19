@@ -53,6 +53,11 @@ def cis(config, sid, test_idx):
             settings.outputFilename = "live_test_output.avi"
     else:
         simulation_time = True
+        cavs = config.cav
+        ciss = config.cis
+        cooperative_monitoring = config.cooperative_monitoring
+        cooperative_monitoring_update = config.cooperative_monitoring_update
+        cooperative_monitoring_step = 0
         global_time = 1.0 # This must start as nonzero else Python will confuse with none
 
     # Set up the timing
@@ -138,7 +143,7 @@ def cis(config, sid, test_idx):
             fusion_start = fetch_time(simulation_time, global_time)
             if not data_collect_mode:
                 fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, sim_values['parameterized_covariance'])
-                fusion_result = fusion.fuseDetectionFrame(sim_values['parameterized_covariance'], sensor_planner)
+                fusion_result = fusion.fuseDetectionFrame()
         
             # Message the RSU, for now we must do this before our control loop
             # as the RSU has the traffic light state information
@@ -153,6 +158,78 @@ def cis(config, sid, test_idx):
                 "fused_t": fusion_start,
                 "fused_obj": fusion_result
             }
+            
+            # Dummy value used if we don't do a round
+            bosco_results = None
+
+            # Send and recieve messages for Bosco
+            if cooperative_monitoring and cooperative_monitoring_step >= cooperative_monitoring_update:
+                cooperative_monitoring_step = 1
+                monitor = True
+            else:
+                cooperative_monitoring_step += 1
+                monitor = False
+            
+            if monitor:
+                import json, os
+
+                bosco_id = sensor_id
+                sensor_platform_ids = len(cavs) + len(ciss)
+                data = [sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, fetch_time(simulation_time, global_time)]
+
+                # Create a "message" using a file for each of our other vehicles
+                for platform_id in range(sensor_platform_ids):
+                    if platform_id != bosco_id:
+                        with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_init.txt", 'w') as f:
+                            json.dump(data, f, sort_keys=True)
+
+                # Wait some arbitrary time so everyone can write their files (this is hacky)
+                time.sleep(1)
+
+                # Read the messages from the other vehicles and delete after reading
+                recieved_data_init = []
+                for platform_id in range(sensor_platform_ids):
+                    if platform_id == bosco_id:
+                        recieved_data_init.append(data)
+                    else:
+                        if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt"):
+                            with open("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt", 'r') as f:
+                                recieved_data_init.append(json.load(f))
+                            os.remove("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt")
+                        else:
+                            print("The file does not exist")
+                        
+
+                # Now send these larger data packets to all vehicles again
+                for platform_id in range(sensor_platform_ids):
+                    if platform_id != bosco_id:
+                        with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_final.txt", 'w') as f:
+                            json.dump(recieved_data_init, f, sort_keys=True)
+
+                # Wait some arbitrary time so everyone can write their files (this is hacky)
+                time.sleep(1)
+
+                # Read the messages from the other vehicles and delete after reading
+                recieved_data_final = []
+                for platform_id in range(sensor_platform_ids):
+                    if platform_id == bosco_id:
+                        recieved_data_final.append(data)
+                    else:
+                        if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt"):
+                            with open("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt", 'r') as f:
+                                recieved_data_final.append(json.load(f))
+                            os.remove("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt")
+                        else:
+                            print("The file does not exist")
+
+                # Add bosco here using the values stored in recieved_data_final
+                # recieved_data_final
+
+                # Faking the results
+                # [overal_round_finished_boolean, [cav/cis_0_agrees_boolean, cav/cis_1_agrees_boolean, ..., cav/cis_n_agrees_boolean]]
+                bosco_results = [True, []]
+                for each in range(sensor_platform_ids):
+                    bosco_results[1].append(True)
 
             response_checkin = rsu.checkin(sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, fetch_time(simulation_time, global_time))
 
