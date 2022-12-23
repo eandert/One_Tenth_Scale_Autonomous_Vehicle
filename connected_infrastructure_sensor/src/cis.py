@@ -173,9 +173,11 @@ def cis(config, sid, test_idx):
             if monitor:
                 import json, os
 
+                start = time.time()
+
                 bosco_id = sensor_id
                 sensor_platform_ids = len(cavs) + len(ciss)
-                data = [sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, fetch_time(simulation_time, global_time)]
+                data = str([sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, fetch_time(simulation_time, global_time)])
 
                 # Create a "message" using a file for each of our other vehicles
                 for platform_id in range(sensor_platform_ids):
@@ -213,7 +215,7 @@ def cis(config, sid, test_idx):
                 recieved_data_final = []
                 for platform_id in range(sensor_platform_ids):
                     if platform_id == bosco_id:
-                        recieved_data_final.append(data)
+                        recieved_data_final.append(recieved_data_init)
                     else:
                         if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt"):
                             with open("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt", 'r') as f:
@@ -224,12 +226,32 @@ def cis(config, sid, test_idx):
 
                 # Add bosco here using the values stored in recieved_data_final
                 # recieved_data_final
+                bosco_results = [True, []]
+                for check_value in recieved_data_final:
+                    is_good = []
+                    for check_against in recieved_data_final:
+                        #print( "                 +++" + str(check_value))
+                        #print( "                 ---" + str(check_against))
+                        if check_value == check_against:
+                            is_good.append(True)
+                            #print(True)
+                        else:
+                            is_good.append(False)
+                            #print(False)
+                    consensus_result = True
+                    for good_or_naw in is_good:
+                        if not good_or_naw:
+                            consensus_result = False
+                    bosco_results[1].append(consensus_result)
+                    #print(consensus_result)
 
                 # Faking the results
                 # [overal_round_finished_boolean, [cav/cis_0_agrees_boolean, cav/cis_1_agrees_boolean, ..., cav/cis_n_agrees_boolean]]
-                bosco_results = [True, []]
-                for each in range(sensor_platform_ids):
-                    bosco_results[1].append(True)
+                # bosco_results = [True, []]
+                # for each in range(sensor_platform_ids):
+                #     bosco_results[1].append(True)
+
+                print(" ++++++++++++++++++++ Consensus time taken= ", time.time() - start - 2.0)
 
             response_checkin = rsu.checkin(sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, fetch_time(simulation_time, global_time))
 
