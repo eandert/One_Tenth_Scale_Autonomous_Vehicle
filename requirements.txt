@@ -8,3 +8,5 @@ simple_pid
 flask_restx
 PyQt5
 psutil
+scikit-learn
+requests

@@ -8,6 +8,11 @@ from road_side_unit.src import rsu, communication
 from gui.src import gui
 import multiprocessing as mp
 
+# I don't understand why but shapely must be imported in this file
+# or the import will fail in the included files!
+from shapely.geometry import box
+from shapely.affinity import rotate, translate
+
 # Import our config file
 import config
 
