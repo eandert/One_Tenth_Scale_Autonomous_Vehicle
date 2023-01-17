@@ -48,7 +48,7 @@ class RSU():
         self.end_test = False
         self.error_monitoring = []
         self.twenty_percent_error_end_and_print = config.twenty_percent_error_end_and_print
-        self.error_injection_time = config.error_injection_time
+        self.error_injection_time = config.error_injection_time_tmp
         self.revolving_buffer_size = 200
         self.missed_detection_error = 3.0
         self.non_real_detection_error = 3.0
@@ -69,13 +69,13 @@ class RSU():
             self.parameterized_covariance = self.unit_test_config[unit_test_idx][2]
             self.pause_simulation = False
             self.real_lidar = False
-            self.unit_test_time = config.unit_test_time
+            self.unit_test_time = config.unit_test_time_tmp
             self.unit_test_speed_target = config.unit_test_speed_target
             self.unit_test_idx = unit_test_idx
             self.error_type = config.error_injection_type
-            if self.twenty_percent_error_end_and_print:
-                with open('output.txt', 'a') as f:
-                    f.write("Test start " + str(self.unit_test_idx) + "\n")
+            # if self.twenty_percent_error_end_and_print:
+            #     with open('output.txt', 'a') as f:
+            #         f.write("Test start " + str(self.unit_test_idx) + "\n")
         else:
             # Default to 1
             # TODO: add a button for this
@@ -1039,24 +1039,22 @@ class RSU():
                 # Write to one file the SDSS vs. baseline at 100 seconds
                 if self.error_at_100 == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
                     self.error_at_100 = average_error
-                    # Start the file every time in case we don't hit the mark
-                    with open('twenty_percent_break_point.txt', 'a') as f:
-                        f.write("\n" + str(self.unit_test_idx) + ",")
 
                 average_error_normalized = average_error / self.error_at_100
 
                 if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
                     with open('output.txt', 'a') as f:
-                        f.write(str(self.time) + "," + str(average_error_normalized) + "\n")
+                        f.write(str(average_error_normalized) + ",")
                         print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
 
                 # Only break once the revolving buffer is full
                 if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
                     if average_error_normalized >= 1.2 and not self.twenty_percent_error_hit:
                         with open('twenty_percent_break_point.txt', 'a') as f:
-                            f.write(str(self.time) + "," + str(average_error_normalized))
+                            f.write(str(self.time) + ",")
                             print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
                             self.twenty_percent_error_hit = True
+                            twenty_percent_break_check = True
 
         return twenty_percent_break_check
 

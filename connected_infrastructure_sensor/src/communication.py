@@ -66,7 +66,7 @@ class connectServer:
                 print ( "Error: Failed to message RSU, trying again" )
                 time.sleep(.01)
 
-    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, detections, timestamp):
+    def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, detections, bosco_results, timestamp):
   
         # data to be sent to api 
         packet = {'key':self.key, 
@@ -84,7 +84,8 @@ class connectServer:
                 'targetIndexX':0, 
                 'targetIndexY':0,
                 'targetIntersection':0,
-                'detections':detections}
+                'detections':detections,
+                'bosco_results':bosco_results}
   
         try:
             # sending post request

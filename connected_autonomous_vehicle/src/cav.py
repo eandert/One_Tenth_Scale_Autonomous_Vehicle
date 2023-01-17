@@ -168,7 +168,7 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
             got = comm_q.get()
             x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage = got
 
-            response_message = rsu.checkin(vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage, time.time())
+            response_message = rsu.checkin(vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage, None, time.time())
 
             # Check if our result is valid
             if response_message == None:
@@ -202,7 +202,7 @@ def cav(config, vid, test_idx):
     if vid == 1 and config.simulation:
         # CAV, might need to inject error if simuation
         error_type = config.error_injection_type
-        error_time = config.error_injection_time
+        error_time = config.error_injection_time_tmp
     else:
         # Not CAV 0 no injection ever
         error_type = 0
@@ -235,6 +235,7 @@ def cav(config, vid, test_idx):
         cavs = config.cav
         ciss = config.cis
         cooperative_monitoring = config.cooperative_monitoring
+        cooperative_bosco = config.cooperative_bosco
         cooperative_monitoring_update = config.cooperative_monitoring_update
         cooperative_monitoring_step = 0
         global_time = 1.0 # This must start as nonzero else Python will confuse with none
@@ -554,7 +555,7 @@ def cav(config, vid, test_idx):
                     bosco_results = None
 
                     # Send and recieve messages for Bosco
-                    if cooperative_monitoring and cooperative_monitoring_step >= cooperative_monitoring_update:
+                    if cooperative_monitoring and cooperative_bosco and cooperative_monitoring_step >= cooperative_monitoring_update:
                         cooperative_monitoring_step = 1
                         monitor = True
                     else:
@@ -644,7 +645,7 @@ def cav(config, vid, test_idx):
                     
                     response_message = rsu_sim_check.checkin(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
                             planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind],
-                            objectPackage, fetch_time(simulation_time, global_time))
+                            objectPackage, bosco_results, fetch_time(simulation_time, global_time))
 
                     # Check if our result is valid
                     if response_message == None:

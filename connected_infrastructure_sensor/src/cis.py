@@ -56,6 +56,7 @@ def cis(config, sid, test_idx):
         cavs = config.cav
         ciss = config.cis
         cooperative_monitoring = config.cooperative_monitoring
+        cooperative_bosco = config.cooperative_bosco
         cooperative_monitoring_update = config.cooperative_monitoring_update
         cooperative_monitoring_step = 0
         global_time = 1.0 # This must start as nonzero else Python will confuse with none
@@ -163,7 +164,7 @@ def cis(config, sid, test_idx):
             bosco_results = None
 
             # Send and recieve messages for Bosco
-            if cooperative_monitoring and cooperative_monitoring_step >= cooperative_monitoring_update:
+            if cooperative_monitoring and cooperative_bosco and cooperative_monitoring_step >= cooperative_monitoring_update:
                 cooperative_monitoring_step = 1
                 monitor = True
             else:
@@ -253,7 +254,7 @@ def cis(config, sid, test_idx):
 
                 print(" ++++++++++++++++++++ Consensus time taken= ", time.time() - start - 2.0)
 
-            response_checkin = rsu.checkin(sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, fetch_time(simulation_time, global_time))
+            response_checkin = rsu.checkin(sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, bosco_results, fetch_time(simulation_time, global_time))
 
             # Check if our result is valid
             if response_checkin == None:

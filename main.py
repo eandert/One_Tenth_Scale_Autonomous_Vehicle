@@ -1,6 +1,7 @@
 import time
 import math
 import sys
+import random
 from threading import Thread
 
 from road_side_unit.src import rsu, communication
@@ -13,8 +14,8 @@ import config
 global mainWin
 
 parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3", "two_cav_simulation_unit_test_4","four_cav_simulation_unit_test","four_cav_simulation_unit_test_2","four_cav_simulation_unit_test_3","four_cav_simulation_unit_test_4"]
-error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1", "four_cav_simulation_error_injection_2", "four_cav_simulation_error_injection_3", "four_cav_simulation_error_injection_4", "four_cav_simulation_error_injection_5"]
-error_malicious_injection_unit_test_set_retester = ["four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6"]
+error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1"] * 10 + ["four_cav_simulation_error_injection_2"] * 10+ ["four_cav_simulation_error_injection_3"] * 10+ ["four_cav_simulation_error_injection_4"] * 10+ ["four_cav_simulation_error_injection_5"] * 10+ ["four_cav_simulation_error_injection_6"] * 10
+error_malicious_injection_unit_test_set_retester = ["four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_e rror_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6"]
 error_malicious_injection_unit_test_set_quick = ["four_cav_simulation_error_injection_7", "four_cav_simulation_error_injection_8"]#"four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_7","four_cav_simulation_error_injection_8"]
 class UnitTest():
     def __init__(self):
@@ -49,10 +50,14 @@ class UnitTest():
 
             # Determing mode
             while len(conf.unit_test_config) > self.unit_test_idx:
+                injection_offset = random.randint(-conf.error_injection_time_range, conf.error_injection_time_range)
+                conf.error_injection_time_tmp = conf.error_injection_time + injection_offset
+                conf.unit_test_time_tmp = conf.unit_test_time + injection_offset
+
                 # Setup the RSU
                 rsu_instance = rsu.RSU(conf, self.unit_test_idx)
 
-                time.sleep(5)
+                time.sleep(5) 
 
                 # Start the GUI
                 #initGui(conf)
@@ -80,6 +85,13 @@ class UnitTest():
 
                 # Incrememt the unit test state
                 self.unit_test_idx += 1
+
+                # End the file every time in case we don't hit the mark
+                with open('twenty_percent_break_point.txt', 'a') as f:
+                    f.write("\n")
+
+            with open('output.txt', 'a') as f:
+                f.write("\n")
             
             # Calculate the prior results
             self.print_unit_test_stats(end=True)
@@ -142,9 +154,9 @@ class UnitTest():
             print( "  global_rmse_val: ", g_rmse, " variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
             print(self.error_monitor[idx])
 
-            if end:
-                with open('output.txt', 'a') as f:
-                    f.write(str(idx) + "," +  str(self.config.unit_test_config[idx][1]) + "," + str(l_rmse) + "," + str(g_rmse) + "\n")
+            # if end:
+            #     with open('output.txt', 'a') as f:
+            #         f.write(str(idx) + "," +  str(self.config.unit_test_config[idx][1]) + "," + str(l_rmse) + "," + str(g_rmse) + "\n")
 
             idx += 1
 
@@ -192,7 +204,7 @@ if __name__ == "__main__":
     # Configure the settings
     multiple_mode = True
     if multiple_mode:
-        conf_list = error_malicious_injection_unit_test_set_quick
+        conf_list = error_malicious_injection_unit_test_set
         unit_test = UnitTest()
         unit_test.run(conf_list)
     else:

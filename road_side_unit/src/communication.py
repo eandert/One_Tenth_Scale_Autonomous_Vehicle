@@ -178,7 +178,8 @@ class MainClass(Resource):
                 targetIndexY = float(request_data['targetIndexY'])
                 targetIntersection = int(request_data['targetIntersection'])
                 detections = request_data['detections']
-
+                bosco_results = request_data['bosco_results']
+ 
                 returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, targetIntersection, detections)
 
                 #flask_app.config['RSUQueue'].put([key, id, type, timestamp, x, y, yaw, detections])
