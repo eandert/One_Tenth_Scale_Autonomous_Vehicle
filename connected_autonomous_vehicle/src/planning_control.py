@@ -64,6 +64,7 @@ class Planner:
         self.tfl_mode = 0
         self.av_intersection_permission = 0
         self.tind = 0
+        self.bosco_results = None
 
         self.id = None
         self.simVehicle = True
@@ -96,9 +97,9 @@ class Planner:
 
         print(math.hypot(0.03733623589373042 + 0.02798284589109133 * 0.36282835297512617, 0.019538095885057276 + 0.02941907006456509 * 0.36282835297512617))
         self.localization = sensor.Localization(0.02798284589109133, 0.03733623589373042, 0.02941907006456509, 0.019538095885057276)
-        self.lidarSensor = sensor.Sensor("M1M1", math.radians(0.0), math.radians(360), 15.0,
+        self.lidarSensor = sensor.Sensor("M1M1", math.radians(180.0), math.radians(360), 15.0,
                                                0.0097, 0.0361, 0.0517, 0.0126)
-        self.cameraSensor = sensor.Sensor("IMX160", math.radians(0.0), math.radians(160), 10.0,
+        self.cameraSensor = sensor.Sensor("IMX160", math.radians(180.0), math.radians(160), 10.0,
                                                0.0117, 0.023, 0.0165, 0.0607)
 
         # self.localization = sensor.Localization(0.0782, 0.0428, 0.0841, 0.0241)

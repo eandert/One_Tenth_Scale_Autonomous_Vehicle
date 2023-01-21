@@ -59,6 +59,7 @@ class Planner:
         self.followDistance = self.Lfc
         self.followDistanceGain = .5
         self.targetFollowDistance = 1
+        self.bosco_results = None
 
         self.id = None
         self.simVehicle = True
@@ -82,7 +83,7 @@ class Planner:
         # Start sensors with standard error model
         self.localization = sensor.Localization(0.0, 0.001, 0.0, 0.001)
         self.lidarSensor = None
-        self.cameraSensor = sensor.Sensor("IMX160", math.radians(0.0), math.radians(160), 10.0,
+        self.cameraSensor = sensor.Sensor("IMX160", math.radians(180.0), math.radians(160), 10.0,
                                                0.0117, 0.023, 0.0165, 0.0607)
         # self.cameraSensor = sensor.Sensor("IMX160", 0.0, 160, 10.0,
         #                                 0.0117, 0.023, 0.0517, 0.0126)

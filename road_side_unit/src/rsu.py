@@ -14,8 +14,8 @@ from connected_autonomous_vehicle.src import cav
 from connected_autonomous_vehicle.src import planning_control as vehicle_planning
 from connected_infrastructure_sensor.src import cis
 from connected_infrastructure_sensor.src import planning_stationary as camera_planning
-from shared_library import sensor, global_fusion, shared_math
-from road_side_unit.src import mapGenerator, communication, sensor_verification
+from shared_library import sensor, global_fusion, shared_math, consensus
+from road_side_unit.src import mapGenerator, communication
 
 class RSU():
     def __init__(self, config, unit_test_idx = 0):
@@ -73,6 +73,7 @@ class RSU():
             self.unit_test_speed_target = config.unit_test_speed_target
             self.unit_test_idx = unit_test_idx
             self.error_type = config.error_injection_type
+            self.cooperative_bosco = config.cooperative_bosco
             # if self.twenty_percent_error_end_and_print:
             #     with open('output.txt', 'a') as f:
             #         f.write("Test start " + str(self.unit_test_idx) + "\n")
@@ -306,7 +307,7 @@ class RSU():
 
             return registerResponse
 
-    def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, targetIntersection, detections):
+    def checkinFastResponse(self, key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, targetIntersection, detections, bosco_results):
         if type == 0:
             # Double check our security, this is pretty naive at this point
             #if self.vehicles[id].key == key:
@@ -328,6 +329,7 @@ class RSU():
             self.vehicles[id].targetIndexX = targetIndexX
             self.vehicles[id].targetIndexY = targetIndexY
             self.vehicles[id].lidarDetectionsRaw = detections["lidar_detection_raw"]
+            self.vehicles[id].bosco_results = bosco_results
 
             #self.step_sim_vehicle_tracker[id] = False
 
@@ -385,6 +387,7 @@ class RSU():
             self.sensors[id].velocity = detections["localization"][3]
             self.sensors[id].theta = detections["localization"][2]
             self.sensors[id].localizationCovariance = detections["localization"][4]
+            self.sensors[id].bosco_results = bosco_results
 
             #self.step_sim_sensor_tracker[id] = False
 
@@ -516,7 +519,7 @@ class RSU():
                     for idx, vehicle in self.vehicles.items():
                         if self.getTime() >= self.error_injection_time and self.error_type == 6 and idx == self.error_target_vehicle:
                             # Error injection for localization error
-                            print("------------------------------------ increasing localization error ", self.unit_test_idx)
+                            print("------------------------------------ injeting localization error ", self.unit_test_idx)
                             x_error = np.random.normal(0, self.unit_test_idx/10.0, 1)[0]
                             y_error = np.random.normal(0, self.unit_test_idx/10.0, 1)[0]
                             for detection in vehicle.fusionDetections:
@@ -556,9 +559,8 @@ class RSU():
                 # Use the cooperative monitoring method to check the sensors against the global fusion result
                 if monitor:
                     monitor_break = self.cooperative_monitoring_process(error_data)
-
-                    if self.twenty_percent_error_end_and_print and monitor_break:
-                        return True, self.calculate_unit_test_results(), self.error_monitoring
+                else:
+                    monitor_break = False
 
                 if self.unit_test:
                     # Uses true positions of the CAVs to ground truth the sensing.
@@ -595,6 +597,18 @@ class RSU():
                 # We did not run the global fusion in this mode, set the list to empty
                 self.globalFusionList = []
 
+            if self.cooperative_bosco and monitor:
+                bosco_list = []
+                for idx, vehicle in self.vehicles.items():
+                    bosco_list.append(str(vehicle.bosco_results))
+                for idx, vehicle in self.sensors.items():
+                    bosco_list.append(str(vehicle.bosco_results))
+                bosco_result = consensus.bosco(-99, len(bosco_list), bosco_list)
+                if bosco_result != "invalid":
+                    print("++++++++++++++++++++++ Bosco round agreement reached!")
+                else:
+                    print("---------------------- Bosco faled to reach agreement!")
+
             # We have completed fusion, unblock
             self.stepSim()
 
@@ -609,15 +623,14 @@ class RSU():
 
             # If we are unit testing, check if the test has ended or if we need to display intermediate results
             if self.unit_test:
-                if self.time > self.unit_test_time:
-                    # If the unit test has ended, returnt he results from the test
+                if self.twenty_percent_error_end_and_print and monitor_break:
+                    return True, self.calculate_unit_test_results(), self.error_monitoring
+                elif self.time > self.unit_test_time:
+                    # If the unit test has ended, return the results from the test
                     return True, self.calculate_unit_test_results(), self.error_monitoring
                 elif self.time % 3.0 == 0:
                     # If enough time has elapsed, print the intermediate results to the terminal
                     self.calculate_unit_test_results()
-                    print(self.error_monitoring)
-            else:
-                print(self.error_monitoring)
         
         # Return false to indicate the test has not ended
         return False, [], []
@@ -630,7 +643,7 @@ class RSU():
             for idx, thing in enumerate(self.step_sim_sensor_tracker):
                 self.step_sim_sensor_tracker[idx] = True
             self.time += self.interval
-            print ( "Sim time Stepped @: " , self.time)
+            print ( " Sim time Stepped @: " , self.time)
 
     def sendGuiValues(self, velocity_targets, pause, end, button_states):
         # Check if the user has ended it all
@@ -882,7 +895,7 @@ class RSU():
         time.sleep(1)
         import requests
         rsu_ip_address = 'http://' + str(self.rsu_ip) + ':5000'
-        resp = requests.get(rsu_ip_address+'/shutdown/')
+        resp = requests.get(rsu_ip_address + '/shutdown/')
 
     def create_ground_truth(self):
         # Get the last known location of all other vehicles
@@ -1007,7 +1020,7 @@ class RSU():
             if sensor_platform_id < self.localizationid:
                 for seen_obj_id in range(len(detectors[sensor_platform_id])):
                     self.add_error_frame(sensor_platform_id, self.missed_detection_error, 10)
-                    print("+++++++++++++++++++++++++++++++++ adding missed detection for ", sensor_platform_id, detectors[sensor_platform_id][seen_obj_id])
+                    #print("+++++++++++++++++++++++++++++++++ adding missed detection for ", sensor_platform_id, detectors[sensor_platform_id][seen_obj_id])
 
         # Normalize all the data to 0 (hopefully)
         normalization_numerator = 0.0
@@ -1055,6 +1068,8 @@ class RSU():
                             print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
                             self.twenty_percent_error_hit = True
                             twenty_percent_break_check = True
+                        # Sleep to make sure the file gets written
+                        time.sleep(1)
 
         return twenty_percent_break_check
 

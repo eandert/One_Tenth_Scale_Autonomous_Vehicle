@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from multiprocessing import Process, Queue, Manager
 
 from connected_infrastructure_sensor.src import communication, planning_stationary
-from shared_library import local_fusion, sensor
+from shared_library import local_fusion, sensor, consensus
 
 # This function is for controlling the time function in case of simulation
 def fetch_time(simulation_time, global_time = 1.0):
@@ -161,7 +161,7 @@ def cis(config, sid, test_idx):
             }
             
             # Dummy value used if we don't do a round
-            bosco_results = None
+            bosco_results = "invalid"
 
             # Send and recieve messages for Bosco
             if cooperative_monitoring and cooperative_bosco and cooperative_monitoring_step >= cooperative_monitoring_update:
@@ -172,85 +172,16 @@ def cis(config, sid, test_idx):
                 monitor = False
             
             if monitor:
-                import json, os
-
                 start = time.time()
 
-                bosco_id = sensor_id
                 sensor_platform_ids = len(cavs) + len(ciss)
                 data = str([sensor_id, specs[0], specs[1], 0.0, 0.0, 0.0, specs[2], objectPackage, fetch_time(simulation_time, global_time)])
 
-                # Create a "message" using a file for each of our other vehicles
-                for platform_id in range(sensor_platform_ids):
-                    if platform_id != bosco_id:
-                        with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_init.txt", 'w') as f:
-                            json.dump(data, f, sort_keys=True)
+                recieved_data_init = consensus.initial_communication(sensor_id, sensor_platform_ids, data)
 
-                # Wait some arbitrary time so everyone can write their files (this is hacky)
-                time.sleep(1)
+                recieved_data_final = consensus.concatinated_communication(sensor_id, sensor_platform_ids, recieved_data_init)
 
-                # Read the messages from the other vehicles and delete after reading
-                recieved_data_init = []
-                for platform_id in range(sensor_platform_ids):
-                    if platform_id == bosco_id:
-                        recieved_data_init.append(data)
-                    else:
-                        if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt"):
-                            with open("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt", 'r') as f:
-                                recieved_data_init.append(json.load(f))
-                            os.remove("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_init.txt")
-                        else:
-                            print("The file does not exist")
-                        
-
-                # Now send these larger data packets to all vehicles again
-                for platform_id in range(sensor_platform_ids):
-                    if platform_id != bosco_id:
-                        with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_final.txt", 'w') as f:
-                            json.dump(recieved_data_init, f, sort_keys=True)
-
-                # Wait some arbitrary time so everyone can write their files (this is hacky)
-                time.sleep(1)
-
-                # Read the messages from the other vehicles and delete after reading
-                recieved_data_final = []
-                for platform_id in range(sensor_platform_ids):
-                    if platform_id == bosco_id:
-                        recieved_data_final.append(recieved_data_init)
-                    else:
-                        if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt"):
-                            with open("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt", 'r') as f:
-                                recieved_data_final.append(json.load(f))
-                            os.remove("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt")
-                        else:
-                            print("The file does not exist")
-
-                # Add bosco here using the values stored in recieved_data_final
-                # recieved_data_final
-                bosco_results = [True, []]
-                for check_value in recieved_data_final:
-                    is_good = []
-                    for check_against in recieved_data_final:
-                        #print( "                 +++" + str(check_value))
-                        #print( "                 ---" + str(check_against))
-                        if check_value == check_against:
-                            is_good.append(True)
-                            #print(True)
-                        else:
-                            is_good.append(False)
-                            #print(False)
-                    consensus_result = True
-                    for good_or_naw in is_good:
-                        if not good_or_naw:
-                            consensus_result = False
-                    bosco_results[1].append(consensus_result)
-                    #print(consensus_result)
-
-                # Faking the results
-                # [overal_round_finished_boolean, [cav/cis_0_agrees_boolean, cav/cis_1_agrees_boolean, ..., cav/cis_n_agrees_boolean]]
-                # bosco_results = [True, []]
-                # for each in range(sensor_platform_ids):
-                #     bosco_results[1].append(True)
+                bosco_results = consensus.bosco(sensor_id, sensor_platform_ids, recieved_data_final)
 
                 print(" ++++++++++++++++++++ Consensus time taken= ", time.time() - start - 2.0)
 
@@ -270,5 +201,5 @@ def cis(config, sid, test_idx):
                 # Nothing to update since we dont move!
                 fails = 0
 
-            print ( " Time taken: " , time.time() - camtimestamp, time.time() )
+            if debug: print ( " Time taken: " , time.time() - camtimestamp, time.time() )
 

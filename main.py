@@ -8,11 +8,6 @@ from road_side_unit.src import rsu, communication
 from gui.src import gui
 import multiprocessing as mp
 
-# I don't understand why but shapely must be imported in this file
-# or the import will fail in the included files!
-from shapely.geometry import box
-from shapely.affinity import rotate, translate
-
 # Import our config file
 import config
 
@@ -22,6 +17,7 @@ parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_ca
 error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1"] * 10 + ["four_cav_simulation_error_injection_2"] * 10+ ["four_cav_simulation_error_injection_3"] * 10+ ["four_cav_simulation_error_injection_4"] * 10+ ["four_cav_simulation_error_injection_5"] * 10+ ["four_cav_simulation_error_injection_6"] * 10
 error_malicious_injection_unit_test_set_retester = ["four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_e rror_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6"]
 error_malicious_injection_unit_test_set_quick = ["four_cav_simulation_error_injection_7", "four_cav_simulation_error_injection_8"]#"four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_7","four_cav_simulation_error_injection_8"]
+
 class UnitTest():
     def __init__(self):
         self.full_simulation = True
@@ -59,14 +55,16 @@ class UnitTest():
                 conf.error_injection_time_tmp = conf.error_injection_time + injection_offset
                 conf.unit_test_time_tmp = conf.unit_test_time + injection_offset
 
+                print(conf.error_injection_time_tmp, conf.unit_test_time_tmp)
+
                 # Setup the RSU
                 rsu_instance = rsu.RSU(conf, self.unit_test_idx)
 
                 time.sleep(5) 
 
                 # Start the GUI
-                #initGui(conf)
-                #time.sleep(5)
+                # initGui(conf)
+                # time.sleep(5)
 
                 rsu_instance.stepSim()
 
@@ -74,9 +72,22 @@ class UnitTest():
                 while(True):
                     test_end, stats, error_monitor = rsu_instance.check_state()
 
-                    if test_end:
+                    if error_monitor:
+                        print("Test ended due to error monitor")
+                        # End the file every time in case we don't hit the mark
+                        with open('twenty_percent_break_point.txt', 'a') as f:
+                            f.write("\n")
                         rsu_instance.end_threads()
-                        print("Test ended")
+                        time.sleep(5)
+                        break
+
+                    if test_end:
+                        print("Test ended due to time")
+                        # End the file every time in case we don't hit the mark
+                        with open('twenty_percent_break_point.txt', 'a') as f:
+                            f.write("\n")
+                        rsu_instance.end_threads()
+                        time.sleep(5)
                         break
 
                     if rsu_instance.end:
@@ -90,10 +101,6 @@ class UnitTest():
 
                 # Incrememt the unit test state
                 self.unit_test_idx += 1
-
-                # End the file every time in case we don't hit the mark
-                with open('twenty_percent_break_point.txt', 'a') as f:
-                    f.write("\n")
 
             with open('output.txt', 'a') as f:
                 f.write("\n")

@@ -180,7 +180,7 @@ class MainClass(Resource):
                 detections = request_data['detections']
                 bosco_results = request_data['bosco_results']
  
-                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, targetIntersection, detections)
+                returnObject = flask_app.config['RSUClass'].checkinFastResponse(key, id, type, timestamp, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, targetIntersection, detections, bosco_results)
 
                 #flask_app.config['RSUQueue'].put([key, id, type, timestamp, x, y, yaw, detections])
 
