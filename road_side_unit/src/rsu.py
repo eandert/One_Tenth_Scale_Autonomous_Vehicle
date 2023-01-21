@@ -74,9 +74,6 @@ class RSU():
             self.unit_test_idx = unit_test_idx
             self.error_type = config.error_injection_type
             self.cooperative_bosco = config.cooperative_bosco
-            # if self.twenty_percent_error_end_and_print:
-            #     with open('output.txt', 'a') as f:
-            #         f.write("Test start " + str(self.unit_test_idx) + "\n")
         else:
             # Default to 1
             # TODO: add a button for this
@@ -626,6 +623,10 @@ class RSU():
                 if self.twenty_percent_error_end_and_print and monitor_break:
                     return True, self.calculate_unit_test_results(), self.error_monitoring
                 elif self.time > self.unit_test_time:
+                    # Print a blank spot so the count is corect on the output
+                    if not self.twenty_percent_error_hit:
+                        with open('test_output/twenty_percent_break_point.txt', 'a') as f:
+                            f.write(" ,")
                     # If the unit test has ended, return the results from the test
                     return True, self.calculate_unit_test_results(), self.error_monitoring
                 elif self.time % 3.0 == 0:
@@ -1056,15 +1057,15 @@ class RSU():
                 average_error_normalized = average_error / self.error_at_100
 
                 if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                    with open('output.txt', 'a') as f:
+                    with open('test_output/output.txt', 'a') as f:
                         f.write(str(average_error_normalized) + ",")
                         print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
 
                 # Only break once the revolving buffer is full
                 if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
                     if average_error_normalized >= 1.2 and not self.twenty_percent_error_hit:
-                        with open('twenty_percent_break_point.txt', 'a') as f:
-                            f.write(str(self.time) + ",")
+                        with open('test_output/twenty_percent_break_point.txt', 'a') as f:
+                            f.write(str(self.time - self.error_injection_time) + ",")
                             print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
                             self.twenty_percent_error_hit = True
                             twenty_percent_break_check = True

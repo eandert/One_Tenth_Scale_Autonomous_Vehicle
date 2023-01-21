@@ -74,18 +74,12 @@ class UnitTest():
 
                     if error_monitor:
                         print("Test ended due to error monitor")
-                        # End the file every time in case we don't hit the mark
-                        with open('twenty_percent_break_point.txt', 'a') as f:
-                            f.write("\n")
                         rsu_instance.end_threads()
                         time.sleep(5)
                         break
 
                     if test_end:
                         print("Test ended due to time")
-                        # End the file every time in case we don't hit the mark
-                        with open('twenty_percent_break_point.txt', 'a') as f:
-                            f.write("\n")
                         rsu_instance.end_threads()
                         time.sleep(5)
                         break
@@ -102,6 +96,9 @@ class UnitTest():
                 # Incrememt the unit test state
                 self.unit_test_idx += 1
 
+            # End the row after the entire test set is finished
+            with open('test_output/twenty_percent_break_point.txt', 'a') as f:
+                f.write("\n")
             with open('output.txt', 'a') as f:
                 f.write("\n")
             
