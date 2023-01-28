@@ -3,16 +3,18 @@ import os
 import time
 import math
 
-def initial_communication(sensor_id, sensor_platform_ids, data):
+def initial_communication(sensor_id, sensor_platform_ids_count, data):
     bosco_id = sensor_id
     # Arbitrary based on the underlying consensus we use (itc, 0.5)
     # For pure & naive homogenous voting (which is Byzantine fault-tolerant), fault tolerance is 51%
-    fault_tolerance_level = math.floor(len(sensor_platform_ids) * 0.5)
+    # sensor_platform_ids_count = n messages PER NODE, as each node runs individually
+    # Cumulatively across network, generating n^2 messages
+    fault_tolerant_node_limit = math.floor(sensor_platform_ids_count * 0.5)
     successful_message_counter = 0
 
     # --- [STEP] broadcast <VOTE, V_p> to all processors -----------------------------------------
     # Create a "message" using a file for each of our other vehicles
-    for platform_id in range(sensor_platform_ids):
+    for platform_id in range(sensor_platform_ids_count):
         if platform_id != bosco_id:
             with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_init.txt", 'w') as f:
                 json.dump(data, f, sort_keys=True)
@@ -21,12 +23,12 @@ def initial_communication(sensor_id, sensor_platform_ids, data):
     time.sleep(1)
     # --------------------------------------------------------------------------------------------
 
-    # --- [!!! TODO][STEP] wait until n-t VOTE messages have been received ---------------------------------
+    # --- [STEP] wait until n-t VOTE messages have been received ---------------------------------
     # Read the messages from the other vehicles and delete after reading
     recieved_data_init = []
-    for platform_id in range(sensor_platform_ids):
+    for platform_id in range(sensor_platform_ids_count):
         # Break out of loop upon n - t successful receptions
-        if successful_message_counter >= len(sensor_platform_ids) - fault_tolerance_level:
+        if successful_message_counter >= (sensor_platform_ids_count - fault_tolerant_node_limit):
             break
         if platform_id == bosco_id:
             recieved_data_init.append(data)
@@ -42,18 +44,13 @@ def initial_communication(sensor_id, sensor_platform_ids, data):
     return recieved_data_init
     # --------------------------------------------------------------------------------------------
 
-def concatinated_communication(sensor_id, sensor_platform_ids, recieved_data_init):
+def concatinated_communication(sensor_id, sensor_platform_ids_count, recieved_data_init):
     bosco_id = sensor_id
-    fault_tolerance_level = math.floor(len(sensor_platform_ids) * 0.5)
-    consensus_strength_counter = 0
-    decided_v_value = 0
-
-    strongly_one_step = consensus_strength_counter > (len(sensor_platform_ids) + 3*fault_tolerance_level)/2
-    weakly_one_step = consensus_strength_counter > (len(sensor_platform_ids) - fault_tolerance_level)/2
+    fault_tolerant_node_limit = math.floor(sensor_platform_ids_count * 0.5)
 
     # --- [STEP] If more than (n+3t)/2 same, DECIDE ----------------------------------------------
     # Now send these larger data packets to all vehicles again
-    for platform_id in range(sensor_platform_ids):
+    for platform_id in range(sensor_platform_ids_count):
         if platform_id != bosco_id:
             with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_final.txt", 'w') as f:
                 json.dump(recieved_data_init, f, sort_keys=True)
@@ -63,18 +60,8 @@ def concatinated_communication(sensor_id, sensor_platform_ids, recieved_data_ini
 
     # Read the messages from the other vehicles and delete after reading
     recieved_data_final = []
-    for platform_id in range(sensor_platform_ids):
-        # Check if consensus is strongly one-step (n+3t)/2
-        if strongly_one_step:
-            decided_v_value = platform_id
-            break
-        # Check if consensus is weakly one-step (n-2)
-        if weakly_one_step:
-            decided_v_value = platform_id
+    for platform_id in range(sensor_platform_ids_count):
         if platform_id == bosco_id:
-            consensus_strength_counter += 1
-        # Only push to result list to run consensus if either strongly or weakly one-step
-        if platform_id == bosco_id and (strongly_one_step or weakly_one_step):
             recieved_data_final.append(str(recieved_data_init))
         else:
             if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt"):
@@ -86,8 +73,11 @@ def concatinated_communication(sensor_id, sensor_platform_ids, recieved_data_ini
 
     return recieved_data_final
 
-def bosco(sensor_id, sensor_platform_ids, recieved_data_final):
+def bosco_decide(sensor_id, sensor_platform_ids_count, recieved_data_final):
     bosco_id = sensor_id
+
+    # Conditions for strongly and weakly one-step
+    fault_tolerant_node_limit = math.floor(sensor_platform_ids_count * 0.5)
 
     # Add bosco here using the values stored in recieved_data_final
     # Underlying Consensus Mechanism: Naive Voting (Byzantine Fault Tolerant)
@@ -98,17 +88,37 @@ def bosco(sensor_id, sensor_platform_ids, recieved_data_final):
         else:
             results_dictionary[check_value] = 1
 
+    # Dictionary stores values with their corresponding votes. Descending order of votes
+    # {key : value} = {sensor value : number of votes} 
     d_sorted = sorted(results_dictionary.items(), key=lambda kv: kv[1], reverse=True)
-    if(d_sorted[0][1] >= (sensor_platform_ids - math.floor(sensor_platform_ids/3))):
-        bosco_output = d_sorted[0][0]
-    # Not sure what this does, update and re-add
-    # elif (d_sorted[0][1] > (sensor_platform_ids - self.env.get_f())/2):
-    #     if len(d_sorted) > 1 and d_sorted[1][1] > (sensor_platform_ids - self.env.get_f())/2:
-    #         bosco_output = recieved_data_final
-    #     else:
-    #         bosco_output = d_sorted[0][0]
+    strongly_one_step = d_sorted[0][1] > (sensor_platform_ids_count + 3*fault_tolerant_node_limit)/2
+    weakly_one_step = d_sorted[0][1] > (sensor_platform_ids_count - fault_tolerant_node_limit)/2
+
+    # Check if strongly one-step
+    if strongly_one_step:
+        # Store the actual value
+        decided_v = d_sorted[0][0]
+        print(bosco_id + ": Decided as STRONGLY ONE-STEP")
+
+    # Check if weakly one-step (there is no dissension)
+    if weakly_one_step and len(d_sorted == 1):
+        decided_v = d_sorted[0][0]
+        print(bosco_id + ": Decided as WEAKLY ONE-STEP")
+
     else:
-        bosco_output = "invalid"
+        decided_v = "invalid"
 
     # Instead of sending to all parties involved, we are going to send the results to the RSU (which is trusted)
-    return bosco_output
+    return decided_v
+
+def underlying_bft_naive_voting_consensus(sensor_platform_ids_count, decided_v):
+    fault_tolerant_node_limit = math.floor(sensor_platform_ids_count * 0.5)
+
+    # Do you have at least 51% of votes agree with you?
+    if(decided_v >= fault_tolerant_node_limit):
+        confirmed_consensus_value = d_sorted[0][0]
+    else:
+        confirmed_consensus_value = "invalid"
+
+    # Instead of sending to all parties involved, we are going to send the results to the RSU (which is trusted)
+    return confirmed_consensus_value

@@ -360,7 +360,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.use_global_fusion = True
                         self.cooperative_monitoring = True
-                        self.cooperative_bosco = False
+                        self.cooperative_bosco = True
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
                         self.error_injection_type = 1 # 0 is none

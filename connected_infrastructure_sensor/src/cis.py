@@ -181,7 +181,9 @@ def cis(config, sid, test_idx):
 
                 recieved_data_final = consensus.concatinated_communication(sensor_id, sensor_platform_ids, recieved_data_init)
 
-                bosco_results = consensus.bosco(sensor_id, sensor_platform_ids, recieved_data_final)
+                decided_v_from_round = consensus.bosco_decide(sensor_id, sensor_platform_ids, recieved_data_final)
+
+                bosco_results = consensus.underlying_bft_naive_voting_consensus(sensor_platform_ids, decided_v_from_round)
 
                 print(" ++++++++++++++++++++ Consensus time taken= ", time.time() - start - 2.0)
 
