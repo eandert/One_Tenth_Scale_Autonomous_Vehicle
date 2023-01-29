@@ -98,12 +98,12 @@ def bosco_decide(sensor_id, sensor_platform_ids_count, recieved_data_final):
     if strongly_one_step:
         # Store the actual value
         decided_v = d_sorted[0][0]
-        print(bosco_id + ": Decided as STRONGLY ONE-STEP")
+        print(str(bosco_id) + ": Decided as STRONGLY ONE-STEP")
 
     # Check if weakly one-step (there is no dissension)
-    if weakly_one_step and len(d_sorted == 1):
+    elif weakly_one_step and len(d_sorted) == 1:
         decided_v = d_sorted[0][0]
-        print(bosco_id + ": Decided as WEAKLY ONE-STEP")
+        print(str(bosco_id) + ": Decided as WEAKLY ONE-STEP")
 
     else:
         decided_v = "invalid"
@@ -114,8 +114,21 @@ def bosco_decide(sensor_id, sensor_platform_ids_count, recieved_data_final):
 def underlying_bft_naive_voting_consensus(sensor_platform_ids_count, decided_v):
     fault_tolerant_node_limit = math.floor(sensor_platform_ids_count * 0.5)
 
+    # Add bosco here using the values stored in recieved_data_final
+    # Underlying Consensus Mechanism: Naive Voting (Byzantine Fault Tolerant)
+    results_dictionary = {}
+    for check_value in decided_v:
+        if check_value in results_dictionary:
+            results_dictionary[check_value] += 1
+        else:
+            results_dictionary[check_value] = 1
+
+    # Dictionary stores values with their corresponding votes. Descending order of votes
+    # {key : value} = {sensor value : number of votes} 
+    d_sorted = sorted(results_dictionary.items(), key=lambda kv: kv[1], reverse=True)
+
     # Do you have at least 51% of votes agree with you?
-    if(decided_v >= fault_tolerant_node_limit):
+    if(d_sorted[0][1] >= fault_tolerant_node_limit):
         confirmed_consensus_value = d_sorted[0][0]
     else:
         confirmed_consensus_value = "invalid"

@@ -600,8 +600,8 @@ class RSU():
                     bosco_list.append(str(vehicle.bosco_results))
                 for idx, vehicle in self.sensors.items():
                     bosco_list.append(str(vehicle.bosco_results))
-                bosco_result = consensus.bosco(-99, len(bosco_list), bosco_list)
-                if bosco_result != "invalid":
+                bosco_results = consensus.underlying_bft_naive_voting_consensus(len(bosco_list), bosco_list)
+                if bosco_results != "invalid":
                     print("++++++++++++++++++++++ Bosco round agreement reached!")
                 else:
                     print("---------------------- Bosco faled to reach agreement!")

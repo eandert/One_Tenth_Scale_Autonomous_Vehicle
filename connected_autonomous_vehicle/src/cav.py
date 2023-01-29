@@ -553,7 +553,7 @@ def cav(config, vid, test_idx):
 
                 if config.simulation:
                     # Dummy value used if we don't do a round
-                    bosco_results = None
+                    decided_v_from_round = None
 
                     # Send and recieve messages for Bosco
                     if cooperative_monitoring and cooperative_bosco and cooperative_monitoring_step >= cooperative_monitoring_update:
@@ -575,13 +575,13 @@ def cav(config, vid, test_idx):
 
                         recieved_data_final = consensus.concatinated_communication(vehicle_id, sensor_platform_ids, recieved_data_init)
 
-                        bosco_results = consensus.bosco(vehicle_id, sensor_platform_ids, recieved_data_final)
+                        decided_v_from_round = consensus.bosco_decide(vehicle_id, sensor_platform_ids, recieved_data_final)
 
                         print(" ++++++++++++++++++++ Consensus time taken= ", time.time() - start - 2.0)
                     
                     response_message = rsu_sim_check.checkin(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
                             planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind],
-                            objectPackage, bosco_results, fetch_time(simulation_time, global_time))
+                            objectPackage, decided_v_from_round, fetch_time(simulation_time, global_time))
 
                     # Check if our result is valid
                     if response_message == None:
