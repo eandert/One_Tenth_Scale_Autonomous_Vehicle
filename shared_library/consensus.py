@@ -94,6 +94,8 @@ def bosco_decide(sensor_id, sensor_platform_ids_count, recieved_data_final):
     strongly_one_step = d_sorted[0][1] > (sensor_platform_ids_count + 3*fault_tolerant_node_limit)/2
     weakly_one_step = d_sorted[0][1] > (sensor_platform_ids_count - fault_tolerant_node_limit)/2
 
+    print("D_SORTED: " + str(d_sorted))
+
     # Check if strongly one-step
     if strongly_one_step:
         # Store the actual value
@@ -135,3 +137,35 @@ def underlying_bft_naive_voting_consensus(sensor_platform_ids_count, decided_v):
 
     # Instead of sending to all parties involved, we are going to send the results to the RSU (which is trusted)
     return confirmed_consensus_value
+
+# ===========================================================================================================
+# Separate method to fudge sensor values to engineer a Byzantine Fault
+def malicious_concatinated_communication(sensor_id, sensor_platform_ids_count, recieved_data_init):
+    bosco_id = sensor_id
+    fault_tolerant_node_limit = math.floor(sensor_platform_ids_count * 0.5)
+
+    # --- [STEP] If more than (n+3t)/2 same, DECIDE ----------------------------------------------
+    # Now send these larger data packets to all vehicles again
+    for platform_id in range(sensor_platform_ids_count):
+        if platform_id != bosco_id:
+            with open("comms_folder/" + str(platform_id) + "_" + str(bosco_id) + "_final.txt", 'w') as f:
+                json.dump(recieved_data_init, f, sort_keys=True)
+
+    # Wait some arbitrary time so everyone can write their files (this is hacky)
+    time.sleep(1)
+
+    # Read the messages from the other vehicles and delete after reading
+    malicious_recieved_data_final = []
+    for platform_id in range(sensor_platform_ids_count):
+        if platform_id == bosco_id:
+            # Artificially injected arbitrary value (69420) into sensors (nice)
+            malicious_recieved_data_final.append(recieved_data_init.append(str(69420)))
+        else:
+            if os.path.exists("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt"):
+                with open("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt", 'r') as f:
+                    malicious_recieved_data_final.append(str(json.load(f)))
+                os.remove("comms_folder/" + str(bosco_id) + "_" + str(platform_id) + "_final.txt")
+            else:
+                print("The file does not exist")
+
+    return malicious_recieved_data_final

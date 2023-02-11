@@ -573,7 +573,17 @@ def cav(config, vid, test_idx):
 
                         recieved_data_init = consensus.initial_communication(vehicle_id, sensor_platform_ids, data)
 
-                        recieved_data_final = consensus.concatinated_communication(vehicle_id, sensor_platform_ids, recieved_data_init)
+                        # Dishonest Supermajority (iff error code == 11)
+                        if (vehicle_id == 0 or vehicle_id == 1 or vehicle_id == 2 or vehicle_id == 3 or vehicle_id == 4) and fetch_time(simulation_time, global_time) >= 5:
+                            # 0:none 1:camera, 2:lidar
+                            # , 3:fusion, 4:random, 5:malicous
+                            if error_type == 11: # Byzantine Fault
+                                recieved_data_final = consensus.malicious_concatinated_communication(vehicle_id, sensor_platform_ids, recieved_data_init)
+                            else:
+                                recieved_data_final = consensus.concatinated_communication(vehicle_id, sensor_platform_ids, recieved_data_init)
+                        # Honest Minority (iff error code == 11)
+                        else:
+                            recieved_data_final = consensus.concatinated_communication(vehicle_id, sensor_platform_ids, recieved_data_init)
 
                         decided_v_from_round = consensus.bosco_decide(vehicle_id, sensor_platform_ids, recieved_data_final)
 
