@@ -1,6 +1,6 @@
 timeout_decorator
 nanocamera
-shapely
+shapely==1.8
 numpy
 sklearn
 matplotlib

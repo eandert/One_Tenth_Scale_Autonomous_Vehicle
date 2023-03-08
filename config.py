@@ -354,13 +354,13 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .5
-                        self.unit_test_time = 150.0
+                        self.unit_test_time = 180.0
                         self.unit_test_config = [[0,0,True]] * unit_test_count
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
                         self.use_global_fusion = True
                         self.cooperative_monitoring = True
-                        self.cooperative_bosco = True
+                        self.cooperative_bosco = False
                         self.cooperative_monitoring_update = 8 # cycles
                         self.test_one_step_kalman = False
                         self.error_injection_type = 1 # 0 is none
@@ -388,7 +388,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .5
-                        self.unit_test_time = 150.0
+                        self.unit_test_time = 180.0
                         self.unit_test_config = [[0,0,True]] * unit_test_count
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
@@ -422,7 +422,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .5
-                        self.unit_test_time = 150.0
+                        self.unit_test_time = 180.0
                         self.unit_test_config = [[0,0,True]] * unit_test_count
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
@@ -456,7 +456,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .5
-                        self.unit_test_time = 150.0
+                        self.unit_test_time = 180.0
                         self.unit_test_config = [[0,0,True]] * unit_test_count
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
@@ -490,7 +490,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .5
-                        self.unit_test_time = 150.0
+                        self.unit_test_time = 180.0
                         self.unit_test_config = [[0,0,True]] * unit_test_count
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
@@ -524,7 +524,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .5
-                        self.unit_test_time = 150.0
+                        self.unit_test_time = 180.0
                         self.unit_test_config = [[0,0,True]] * unit_test_count
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
@@ -560,7 +560,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .5
-                        self.unit_test_time = 150.0
+                        self.unit_test_time = 180.0
                         self.unit_test_config = [[0,0,True]] * unit_test_count
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
@@ -594,7 +594,7 @@ class Setting:
                         self.data_collect_mode = False
                         self.unit_test = True
                         self.unit_test_speed_target = .5
-                        self.unit_test_time = 150.0
+                        self.unit_test_time = 180.0
                         self.unit_test_config = [[0,0,True]] * unit_test_count
                         self.gui_interval = 100 # 10 hz, hopefully this is fast enough
                         self.data_collect_mode = False
