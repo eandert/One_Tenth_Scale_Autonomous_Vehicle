@@ -7,6 +7,7 @@ from threading import Lock, Thread
 from queue import Queue
 import multiprocessing as mp
 from shapely.geometry.polygon import Polygon
+import copy
 
 # CAV and CIS stuff
 sys.path.append("../../../")
@@ -50,11 +51,16 @@ class RSU():
         self.twenty_percent_error_end_and_print = config.twenty_percent_error_end_and_print
         self.error_injection_time = config.error_injection_time_tmp
         self.revolving_buffer_size = 200
+        self.trupercept_freshness = self.revolving_buffer_size
         self.missed_detection_error = 3.0
         self.non_real_detection_error = 3.0
         self.twenty_percent_error_hit = False
+        self.twenty_percent_error_hit_tp = False
         self.error_at_100 = -99.0
+        self.error_at_100_tp = -99.0
         self.error_target_vehicle = 1
+        self.conclave_error = 1.0
+        self.trupercept_error = 1.0
 
         # Init parameters for unit testing
         self.initUnitTestParams()
@@ -94,8 +100,27 @@ class RSU():
             self.global_one_step_over_detection_miss = 0
             self.global_one_step_under_detection_miss = 0
 
+        # For testing trupercept
+        self.test_trupercept = True
+        if self.test_trupercept:
+            self.globalFusionTrupercept = global_fusion.GlobalFUSION(self.global_fusion_mode)
+            self.globaFusionListTrupercept = []
+            self.global_trupercept_differences = []
+            self.global_trupercept_over_detection_miss = 0
+            self.global_trupercept_under_detection_miss = 0
+
+        self.record_file = config.record_to_file
+        if self.record_file:
+            self.pickle_dict = {}
+        self.read_file = config.replay_from_file
+        if self.read_file:
+            import pickle
+            with open("input/1m8_4cav_2cis/test_" + str(self.unit_test_idx) + "_output_rsu.pickle", 'rb') as handle:
+                self.pickle_dict = pickle.load(handle)
+
         # init trust score method
-        self.error_dict = {}
+        self.conclave_dict = {}
+        self.trupercept_dict = {}
 
         # Lets create the vehicles
         self.step_sim_vehicle_tracker = []
@@ -104,7 +129,7 @@ class RSU():
             new_vehicle = vehicle_planning.Planner()
             new_vehicle.initialVehicleAtPosition(vehicle[0], vehicle[1], vehicle[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, idx, vehicle[3])
             self.vehicles[idx] = new_vehicle
-            self.step_sim_vehicle_tracker.append(False)
+            self.step_sim_vehicle_tracker.append(True)
 
         # Offset the IDs for the cis sensors
         self.cis_offset = len(config.cav)
@@ -115,7 +140,7 @@ class RSU():
             new_sensor = camera_planning.Planner()
             new_sensor.initialSensorAtPosition(cis[0], cis[1], cis[2], self.mapSpecs.xCoordinates, self.mapSpecs.yCoordinates, self.mapSpecs.vCoordinates, self.cis_offset + idx, cis[3])
             self.sensors[idx] = new_sensor
-            self.step_sim_sensor_tracker.append(False)
+            self.step_sim_sensor_tracker.append(True)
 
         # Queue to talk with backend processor so fast replies can be made while results are computed
         self.q = Queue()
@@ -328,6 +353,8 @@ class RSU():
             self.vehicles[id].lidarDetectionsRaw = detections["lidar_detection_raw"]
             self.vehicles[id].bosco_results = bosco_results
 
+            # print(id, self.vehicles[id].localizationPositionX, self.vehicles[id].localizationPositionY)
+
             #self.step_sim_vehicle_tracker[id] = False
 
             # Get the last known location of all other vehicles
@@ -484,6 +511,18 @@ class RSU():
         if continue_blocker_check == False or ((not self.simulation) and (self.getTime() > self.timeout)):
             self.step_sim_vehicle = False
 
+            # TODO: temprorary recording, delete later
+            if self.record_file:
+                self.pickle_dict[self.time] = self.vehicles, self.sensors
+                if self.time == 1.0:
+                    self.pickle_dict[1.125] = self.vehicles, self.sensors
+                # Write to a pickles file every so often
+                if self.time % 80 == 0:
+                    with open("test_output/test_" + str(self.unit_test_idx) + "_output_rsu.pickle", 'wb') as file1:
+                        # dump information to that file
+                        import pickle
+                        pickle.dump(self.pickle_dict, file1, protocol=pickle.HIGHEST_PROTOCOL)
+
             # GLobal fusion time! (if enabled)
             if self.use_global_fusion:
                 # First we need to add the localization frame, since it should be the basis
@@ -530,65 +569,101 @@ class RSU():
                                 detection[3] = sensor.addBivariateGaussians(np.array(vehicle.localizationCovariance), np.array(detection[3])).tolist()
 
                 # Add CAV fusion results to the global sensor fusion
-                for idx, vehicle in self.vehicles.items():
-                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle.fusionDetections, .25, self.parameterized_covariance)
+                for idx, vehicle_ in self.vehicles.items():
+                    if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
+                        self.globalFusion.processDetectionFrame(self.getTime(), vehicle_.fusionDetections, .25, self.parameterized_covariance, self.conclave_error)
+                    else:
+                        self.globalFusion.processDetectionFrame(self.getTime(), vehicle_.fusionDetections, .25, self.parameterized_covariance)
 
                 # Add CIS fusion results to the global sensor fusion
                 for idx, sensor_ in self.sensors.items():
                     self.globalFusion.processDetectionFrame(self.getTime(), sensor_.fusionDetections, .25, self.parameterized_covariance)
 
                 # Perform the global fusion
-                self.globalFusionList, error_data = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance, monitor)
+                self.globalFusionList, error_data, trupercept_data_conclave = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance, monitor)
+
+                # pprint(vars(self.globalFusion))
+
+                print("errors:", self.conclave_error, self.trupercept_error)
 
                 # Testing to make sure the cascading global fusion method results in the same output as a single step
                 if self.test_one_step_kalman:
-                    for idx, vehicle in self.vehicles.items():
+                    for idx, vehicle_2 in self.vehicles.items():
                         # Add to the global sensor fusion
-                        self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), vehicle.cameraDetections, .25, self.parameterized_covariance)
-                        self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), vehicle.lidarDetections, .25, self.parameterized_covariance)
+                        self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), vehicle_2.cameraDetections, .25, self.parameterized_covariance)
+                        self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), vehicle_2.lidarDetections, .25, self.parameterized_covariance)
 
-                    for idx, sensor_ in self.sensors.items():
+                    for idx, sensor_2 in self.sensors.items():
                         # Add to the global sensor fusion
-                        self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), sensor_.cameraDetections, .25, self.parameterized_covariance)
+                        self.globalFusionOneStepKalman.processDetectionFrame(self.getTime(), sensor_2.cameraDetections, .25, self.parameterized_covariance)
 
-                    self.globalFusionListOneStepKalman, error_data_one_step = self.globalFusionOneStepKalman.fuseDetectionFrame(self.parameterized_covariance, False)
+                    self.globalFusionListOneStepKalman, error_data_one_step, trupercept_data_trash = self.globalFusionOneStepKalman.fuseDetectionFrame(self.parameterized_covariance, monitor)
+
+                # Testing accuracy of gloabal fusion with truepercept
+                if self.test_trupercept and self.getTime() == self.error_injection_time:
+                    self.globalFusionTrupercept = copy.deepcopy(self.globalFusion)
+                elif self.test_trupercept and self.getTime() >= self.error_injection_time:
+                    for idx, vehicle_3 in self.vehicles.items():
+                        # Add to the global sensor fusion
+                        if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
+                            self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, 1/self.trupercept_error)
+                        else:
+                            self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
+
+                    for idx, sensor_3 in self.sensors.items():
+                        # Add to the global sensor fusion
+                        self.globalFusionTrupercept.processDetectionFrame(self.getTime(), sensor_3.fusionDetections, .25, self.parameterized_covariance)
+
+                    self.globaFusionListTrupercept, error_data_tf, trupercept_data = self.globalFusionTrupercept.fuseDetectionFrame(self.parameterized_covariance, monitor)
+                    # pprint(vars(self.globalFusionTrupercept))
+                else:
+                    self.globaFusionListTrupercept = self.globalFusionList
+                    trupercept_data = trupercept_data_conclave
 
                 # Use the cooperative monitoring method to check the sensors against the global fusion result
                 if monitor:
-                    monitor_break = self.cooperative_monitoring_process(error_data)
+                    monitor_break = self.cooperative_monitoring_process(error_data, trupercept_data)
                 else:
                     monitor_break = False
 
                 if self.unit_test:
-                    # Uses true positions of the CAVs to ground truth the sensing.
-                    # This mode is only available when in simulation mode and unit testing.
-                    ground_truth = self.create_ground_truth()
+                    if self.getTime() >= self.error_injection_time:
+                        # Uses true positions of the CAVs to ground truth the sensing.
+                        # This mode is only available when in simulation mode and unit testing.
+                        ground_truth = self.create_ground_truth()
 
-                    # Ground truth the local fusion result
-                    for idx, vehicle in self.vehicles.items():
-                        over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(vehicle.fusionDetections, ground_truth, vehicle.id)
-                        self.local_differences = self.local_differences + differences
-                        self.local_over_detection_miss += over_detection_miss
-                        self.local_under_detection_miss += under_detection_miss
+                        # Ground truth the local fusion result
+                        for idx, vehicle_ in self.vehicles.items():
+                            over_detection_miss_v, under_detection_miss_v, differences_v = self.ground_truth_dataset(vehicle_.fusionDetections, ground_truth, vehicle_.id)
+                            self.local_differences += differences_v
+                            self.local_over_detection_miss += over_detection_miss_v
+                            self.local_under_detection_miss += under_detection_miss_v
 
-                    for idx, sensor_ in self.sensors.items():
-                        over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(sensor_.fusionDetections, ground_truth)
-                        self.local_differences = self.local_differences + differences
-                        self.local_over_detection_miss += over_detection_miss
-                        self.local_under_detection_miss += under_detection_miss
+                        for idx, sensor_ in self.sensors.items():
+                            over_detection_miss_s, under_detection_miss_s, differences_s = self.ground_truth_dataset(sensor_.fusionDetections, ground_truth)
+                            self.local_differences += differences_s
+                            self.local_over_detection_miss += over_detection_miss_s
+                            self.local_under_detection_miss += under_detection_miss_s
 
-                    # Ground truth the global fusion result
-                    over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(self.globalFusionList, ground_truth)
-                    self.global_differences = self.global_differences + differences
-                    self.global_over_detection_miss += over_detection_miss
-                    self.global_under_detection_miss += under_detection_miss
+                        # Ground truth the global fusion result
+                        over_detection_miss_g, under_detection_miss_g, differences_g = self.ground_truth_dataset(self.globalFusionList, ground_truth)
+                        self.global_differences += differences_g
+                        self.global_over_detection_miss += over_detection_miss_g
+                        self.global_under_detection_miss += under_detection_miss_g
 
-                    # Ground truth the one setp global fusion result
-                    if self.test_one_step_kalman:
-                        over_detection_miss, under_detection_miss, differences = self.ground_truth_dataset(self.globalFusionListOneStepKalman, ground_truth)
-                        self.global_one_step_differences = self.global_one_step_differences + differences
-                        self.global_one_step_over_detection_miss += over_detection_miss
-                        self.global_one_step_under_detection_miss += under_detection_miss
+                        # Ground truth the one setp global fusion result
+                        if self.test_one_step_kalman:
+                            over_detection_miss_ok, under_detection_miss_ok, differences_ok = self.ground_truth_dataset(self.globalFusionListOneStepKalman, ground_truth)
+                            self.global_one_step_differences += differences_ok
+                            self.global_one_step_over_detection_miss += over_detection_miss_ok
+                            self.global_one_step_under_detection_miss += under_detection_miss_ok
+
+                        # Ground truth the trupercept result
+                        if self.test_trupercept:
+                            over_detection_miss_tp, under_detection_miss_tp, differences_tp = self.ground_truth_dataset(self.globaFusionListTrupercept, ground_truth)
+                            self.global_trupercept_differences += differences_tp
+                            self.global_trupercept_over_detection_miss += over_detection_miss_tp
+                            self.global_trupercept_under_detection_miss += under_detection_miss_tp
 
             else:
                 # We did not run the global fusion in this mode, set the list to empty
@@ -622,13 +697,29 @@ class RSU():
             if self.unit_test:
                 if self.twenty_percent_error_end_and_print and monitor_break:
                     return True, self.calculate_unit_test_results(), self.error_monitoring
-                elif self.time > self.unit_test_time:
+                elif self.time >= self.unit_test_time:
                     # Print a blank spot so the count is corect on the output
+                    results_return = self.calculate_unit_test_results()
                     if not self.twenty_percent_error_hit:
                         with open('test_output/twenty_percent_break_point.txt', 'a') as f:
-                            f.write(" ,")
+                            f.write(", ")
+                    if not self.twenty_percent_error_hit_tp:
+                        with open('test_output/twenty_percent_break_point_tp.txt', 'a') as f:
+                            f.write(", ")  
+                    with open('test_output/rmse_conclave.txt', 'a') as f:
+                        f.write(str(self.conclave_rmse) + " ,")
+                    with open('test_output/variance_conclave.txt', 'a') as f:
+                        f.write(str(self.conclave_variance) + " ,")
+                    with open('test_output/rmse_tp.txt', 'a') as f:
+                        f.write(str(self.trupercept_rmse) + " ,")
+                    with open('test_output/variance_tp.txt', 'a') as f:
+                        f.write(str(self.trupercept_variance) + " ,")
+                    with open('test_output/output.txt', 'a') as f:
+                        f.write("\n")
+                    with open('test_output/output_tp.txt', 'a') as f:
+                        f.write("\n")
                     # If the unit test has ended, return the results from the test
-                    return True, self.calculate_unit_test_results(), self.error_monitoring
+                    return True, results_return, self.error_monitoring
                 elif self.time % 3.0 == 0:
                     # If enough time has elapsed, print the intermediate results to the terminal
                     self.calculate_unit_test_results()
@@ -837,7 +928,10 @@ class RSU():
         results.append(rmse_val_l)
         results.append(variance_l)
 
-        average_velocity = sum(self.localization_velocity)/len(self.localization_velocity)
+        if len(self.localization_velocity) != 0.0:
+            average_velocity = sum(self.localization_velocity)/len(self.localization_velocity)
+        else:
+            average_velocity = 0.0
         results.append(average_velocity)
 
         # Onboard
@@ -856,6 +950,9 @@ class RSU():
         results.append(self.global_over_detection_miss)
         results.append(self.global_under_detection_miss)
 
+        self.conclave_rmse = rmse_val_g
+        self.conclave_variance = variance_g
+
         print( "Test: ", self.unit_test_idx, " l_mode:", self.unit_test_config[self.unit_test_idx][0], " g_mode:", self.unit_test_config[self.unit_test_idx][1], " est_cov:", self.unit_test_config[self.unit_test_idx][2] )
         print( "  localization_rmse_val: ", results[0], " variance: ", results[1], " velocity ", results[2])
         print( "  local_rmse_val: ", results[3], " variance: ", results[4], " over misses: ", results[5], " under misses: ", results[6])
@@ -872,6 +969,16 @@ class RSU():
             " variance: ", variance_g_o,
             " over misses: ", self.global_one_step_over_detection_miss,
             " under misses: ", self.global_one_step_under_detection_miss)
+
+        if self.test_trupercept:
+            rmse_val_g_o2 = shared_math.RMSE(self.global_trupercept_differences)
+            variance_g_o2 = np.var(self.global_trupercept_differences,ddof=1)
+            print( "  trupercept_rmse_val: ", rmse_val_g_o2,
+            " variance: ", variance_g_o2,
+            " over misses: ", self.global_trupercept_over_detection_miss,
+            " under misses: ", self.global_trupercept_under_detection_miss)
+            self.trupercept_rmse = rmse_val_g_o2
+            self.trupercept_variance = variance_g_o2
 
         return results
 
@@ -901,6 +1008,9 @@ class RSU():
     def create_ground_truth(self):
         # Get the last known location of all other vehicles
         vehicleList = []
+        # if self.read_file:
+        #     vehicleList = self.pickle_dict[self.time]
+        # else:
         for idx, vehicle in self.vehicles.items():
             vehicleList.append(vehicle.get_location())
 
@@ -950,7 +1060,7 @@ class RSU():
 
         return over_detection_miss, under_detection_miss, differences
 
-    def cooperative_monitoring_process(self, error_data):
+    def cooperative_monitoring_process(self, error_data, trupercept_data):
         # We have who saw what, but now we need to see who should have seen what
         object_polygons = []
         length = .6
@@ -973,6 +1083,7 @@ class RSU():
                 polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
                 object_polygons.append(polygon)
 
+        # For conclave
         detectors = []
         for idx, cav in self.vehicles.items():
             sublist_new = sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta, 1.0],
@@ -984,12 +1095,14 @@ class RSU():
             sublist_mid = []
             # Look for repeated detections from cam/lidar
             for x in sublist_new:
-                if x not in seen: sublist_mid.append(x)
-                seen.add(x)
+                if x[0] not in seen: 
+                    sublist_mid.append(x)
+                seen.add(x[0])
             sublist = []
             # Check that this is not ourself -- doesn't make sense we don't know ID #s
             for each in sublist_mid:
-                if each != idx: sublist.append(each)
+                if each != idx:
+                    sublist.append(each)
             detectors.append(sublist)
         for idx, cis in self.sensors.items():
             sublist = sensor.check_visble_objects([cis.localizationPositionX, cis.localizationPositionY, cis.theta, .5],
@@ -999,6 +1112,105 @@ class RSU():
         # append an empty set for the localizers
         detectors.append([])
 
+        object_polygons_tp = []
+        length = .6
+        width = .6
+        for idx, vehicle in enumerate(self.globaFusionListTrupercept):
+            # Rule of 3s, make sure 3 things have seen this
+            if vehicle[7] >= 3:
+                # Create a bounding box for vehicle that is length + 2*buffer long and width + 2*buffer wide
+                x = vehicle[1]
+                y = vehicle[2]
+                theta = math.atan2(vehicle[5], vehicle[4])
+                x1 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
+                y1 = y + ((length/2.0)*math.sin(theta+math.radians(90)) + ((width/2.0)*math.sin(theta-math.radians(180))))
+                x2 = x + ((length/2.0)*math.cos(theta-math.radians(90)) + ((width/2.0)*math.cos(theta-math.radians(180))))
+                y2 = y + ((length/2.0)*math.sin(theta-math.radians(90)) + ((width/2.0)*math.sin(theta-math.radians(180))))
+                x3 = x + ((length/2.0)*math.cos(theta-math.radians(90)) + ((width/2.0)*math.cos(theta)))
+                y3 = y + ((length/2.0)*math.sin(theta-math.radians(90)) + ((width/2.0)*math.sin(theta)))
+                x4 = x + ((length/2.0)*math.cos(theta+math.radians(90)) + ((width/2.0)*math.cos(theta)))
+                y4 = y + ((length/2.0)*math.sin(theta+math.radians(90)) + ((width/2.0)*math.sin(theta)))
+                polygon = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)])
+                object_polygons_tp.append(polygon)
+
+        # For trupercept
+        detectors_tp = []
+        for idx, cav in self.vehicles.items():
+            sublist_new = sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta, 1.0],
+                cav.cameraSensor.center_angle, cav.cameraSensor.max_distance, cav.cameraSensor.field_of_view, object_polygons_tp)
+            sublist_new += sensor.check_visble_objects([cav.localizationPositionX, cav.localizationPositionY, cav.theta, 1.0],
+                cav.lidarSensor.center_angle, cav.lidarSensor.max_distance, cav.lidarSensor.field_of_view, object_polygons_tp)
+            # Look for the same thing 2x
+            seen = set()
+            sublist_mid = []
+            # Look for repeated detections from cam/lidar
+            for x in sublist_new:
+                if x[0] not in seen: 
+                    sublist_mid.append(x)
+                seen.add(x[0])
+            sublist = []
+            # Check that this is not ourself -- doesn't make sense we don't know ID #s
+            for each in sublist_mid:
+                if each != idx:
+                    sublist.append(each)
+            detectors_tp.append(sublist)
+        for idx, cis in self.sensors.items():
+            sublist = sensor.check_visble_objects([cis.localizationPositionX, cis.localizationPositionY, cis.theta, .5],
+                cis.cameraSensor.center_angle, cis.cameraSensor.max_distance, cis.cameraSensor.field_of_view, object_polygons)
+            detectors_tp.append(sublist)
+
+        # append an empty set for the localizers
+        detectors_tp.append([])
+
+        # Trupercept
+        # Add add iou data
+        # [id_test, id, iou, confidence_test, confidence]
+        # print(trupercept_data)
+        visibility_threshold = .5
+        for object_id, trupercept_object_frame in enumerate(trupercept_data):
+            for detector_test in trupercept_object_frame: 
+                detection_numerator = 0.0
+                detection_denominator = 0.0
+                if detector_test[0]/self.localizationid >= 1:
+                    sensor_platform_id = detector[0]
+                else:
+                    vid_self = math.floor(detector_test[0]/10000)
+                    confidence_self = detector_test[1]
+                    # Algorithm 3 in trupercept paper
+                    for detector in trupercept_object_frame:
+                        # Make sure we do not record ourself vs. ourself
+                        if vid_self != detector[0]:
+                            # Check if this is a localizer or a sensor
+                            if detector[0]/self.localizationid >= 1:
+                                sensor_platform_id = detector[0]
+                            else:
+                                sensor_platform_id = math.floor(detector[0]/10000)
+                                confidence_other = detector[1]
+                                visibility = -1
+                                # print(object_id, sensor_platform_id)
+                                # print(detectors)
+                                for objects_should_be_seen_id in reversed(range(len(detectors_tp[sensor_platform_id]))):
+                                    if object_id == detectors_tp[sensor_platform_id][objects_should_be_seen_id][0]:
+                                        visibility = detectors_tp[sensor_platform_id][objects_should_be_seen_id][1]
+                                # print(vid_self, sensor_platform_id, visibility, confidence_other)
+                                if visibility != -1:
+                                    if visibility >= visibility_threshold:
+                                        detection_numerator += visibility * confidence_other
+                                        detection_denominator += visibility
+                    if detection_denominator != 0.0 and confidence_self != 0.0:
+                        detection_trust = detection_numerator / detection_denominator
+                        vehicle_detection_trust_score = confidence_self * detection_trust / confidence_self
+                        self.add_trupercept_frame(vid_self, vehicle_detection_trust_score)
+
+        # Add the error for missed detections
+        for sensor_platform_id in self.trupercept_dict.keys():
+            # Check off what we have seen
+            if sensor_platform_id < self.localizationid:
+                for seen_obj_id in range(len(detectors_tp[sensor_platform_id])):
+                    #print("+++++++++++++++++++++++++++++++++ adding missed detection for ", sensor_platform_id, detectors[sensor_platform_id][seen_obj_id])
+                    self.add_trupercept_frame(sensor_platform_id, 0)
+
+        # Conclave method
         # Add our covariance data to the global sensor list
         for object_id, object_trackers in enumerate(error_data):
             for error_frame in object_trackers:
@@ -1012,11 +1224,11 @@ class RSU():
                 # Check off detected objects if they exist
                 if sensor_platform_id < self.localizationid:
                     for objects_should_be_seen_id in reversed(range(len(detectors[sensor_platform_id]))):
-                        if object_id == detectors[sensor_platform_id][objects_should_be_seen_id]:
+                        if object_id == detectors[sensor_platform_id][objects_should_be_seen_id][0]:
                             detectors[sensor_platform_id].pop(objects_should_be_seen_id)
 
         # Add the error for missed detections
-        for sensor_platform_id in self.error_dict.keys():
+        for sensor_platform_id in self.conclave_dict.keys():
             # Check off what we have seen
             if sensor_platform_id < self.localizationid:
                 for seen_obj_id in range(len(detectors[sensor_platform_id])):
@@ -1026,10 +1238,10 @@ class RSU():
         # Normalize all the data to 0 (hopefully)
         normalization_numerator = 0.0
         normalization_denominator = 0.0
-        for key in self.error_dict.keys():
-            if self.error_dict[key][0] > 5 and int(key) < self.localization_offset:
-                normalization_numerator += sum(self.error_dict[key][2])
-                normalization_denominator += self.error_dict[key][0]
+        for key in self.conclave_dict.keys():
+            if self.conclave_dict[key][0] > 5 and int(key) < self.localization_offset:
+                normalization_numerator += sum(self.conclave_dict[key][2])
+                normalization_denominator += self.conclave_dict[key][0]
         
         # Make sure the fenominator is greater than 0
         if normalization_denominator != 0.0 and self.time < self.error_injection_time:
@@ -1038,17 +1250,46 @@ class RSU():
         else:
             error_monitoring_normalizer = 1.0
 
-        # self.error_dict[sensor_platform_id] = [1, 1, [error_std], [num_error]]
+        # self.conclave_dict[sensor_platform_id] = [1, 1, [error_std], [num_error]]
+
+        # Trupercept Algorihtm 4
+        self.trupercept_monitoring = []
+        for key in self.trupercept_dict.keys():
+            if self.trupercept_dict[key][0] > 5:
+                trupercept_score = sum(self.trupercept_dict[key][2])/self.trupercept_dict[key][0]
+                self.trupercept_monitoring.append([key, trupercept_score, self.trupercept_dict[key][0]])
+
+                print(trupercept_score)
+
+                # Write to one file the SDSS vs. baseline at 100 seconds
+                if self.error_at_100_tp == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                    self.error_at_100_tp = trupercept_score
+
+                average_error_normalized = trupercept_score / self.error_at_100_tp
+                print(trupercept_score, self.error_at_100_tp)
+
+                if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                    self.trupercept_error = average_error_normalized
+                    with open('test_output/output_tp.txt', 'a') as f:
+                        f.write(str(average_error_normalized) + ",")
+                        print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
+
+                # Only break once the revolving buffer is full
+                if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                    if average_error_normalized <= 0.8 and not self.twenty_percent_error_hit_tp:
+                        with open('test_output/twenty_percent_break_point_tp.txt', 'a') as f:
+                            f.write(str(self.time - self.error_injection_time) + ",")
+                        self.twenty_percent_error_hit_tp = True
 
         self.error_monitoring = []
         twenty_percent_break_check = False
-        for key in self.error_dict.keys():
-            if self.error_dict[key][0] > 5:
-                average_error = sum(self.error_dict[key][2])/self.error_dict[key][0]
-                average_Expected_error = sum(self.error_dict[key][3])/self.error_dict[key][0]
+        for key in self.conclave_dict.keys():
+            if self.conclave_dict[key][0] > 5:
+                average_error = sum(self.conclave_dict[key][2])/self.conclave_dict[key][0]
+                average_Expected_error = sum(self.conclave_dict[key][3])/self.conclave_dict[key][0]
                 if int(key) < self.localization_offset:
                     average_error = average_error / error_monitoring_normalizer
-                self.error_monitoring.append([key, average_error, average_Expected_error, self.error_dict[key][0]])
+                self.error_monitoring.append([key, average_error, average_Expected_error, self.conclave_dict[key][0]])
 
                 # Write to one file the SDSS vs. baseline at 100 seconds
                 if self.error_at_100 == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
@@ -1056,7 +1297,8 @@ class RSU():
 
                 average_error_normalized = average_error / self.error_at_100
 
-                if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                if self.time >= self.error_injection_time and int(key) >= self.error_target_vehicle:
+                    self.conclave_error = 1.0 / average_error_normalized
                     with open('test_output/output.txt', 'a') as f:
                         f.write(str(average_error_normalized) + ",")
                         print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
@@ -1069,35 +1311,56 @@ class RSU():
                             print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
                             self.twenty_percent_error_hit = True
                             twenty_percent_break_check = True
-                        # Sleep to make sure the file gets written
-                        time.sleep(1)
 
         return twenty_percent_break_check
 
     def add_error_frame(self, sensor_platform_id, error_std, num_error):
         # Allow time for test warmup
         if self.time > 25.0 and num_error >= 3:
-            if sensor_platform_id in self.error_dict:
+            if sensor_platform_id in self.conclave_dict:
                 # Moving revolving_buffer_size place average
-                if self.error_dict[sensor_platform_id][0] < self.revolving_buffer_size:
-                    self.error_dict[sensor_platform_id][0] += 1
-                    self.error_dict[sensor_platform_id][2].append(error_std)
-                    self.error_dict[sensor_platform_id][3].append(num_error)
-                    self.error_dict[sensor_platform_id][1] += 1
+                if self.conclave_dict[sensor_platform_id][0] < self.revolving_buffer_size:
+                    self.conclave_dict[sensor_platform_id][0] += 1
+                    self.conclave_dict[sensor_platform_id][2].append(error_std)
+                    self.conclave_dict[sensor_platform_id][3].append(num_error)
+                    self.conclave_dict[sensor_platform_id][1] += 1
                 # We have filled revolving_buffer_size places, time to revolve the buffer now
                 else:
-                    if self.error_dict[sensor_platform_id][1] < self.revolving_buffer_size:
+                    if self.conclave_dict[sensor_platform_id][1] < self.revolving_buffer_size:
                         # Replace the element with the next one
-                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_std
-                        self.error_dict[sensor_platform_id][3][self.error_dict[sensor_platform_id][1]] = num_error
-                        self.error_dict[sensor_platform_id][1] += 1
+                        self.conclave_dict[sensor_platform_id][2][self.conclave_dict[sensor_platform_id][1]] = error_std
+                        self.conclave_dict[sensor_platform_id][3][self.conclave_dict[sensor_platform_id][1]] = num_error
+                        self.conclave_dict[sensor_platform_id][1] += 1
                     else:
-                        self.error_dict[sensor_platform_id][1] = 0
-                        self.error_dict[sensor_platform_id][2][self.error_dict[sensor_platform_id][1]] = error_std
-                        self.error_dict[sensor_platform_id][3][self.error_dict[sensor_platform_id][1]] = num_error
-                        self.error_dict[sensor_platform_id][1] += 1
+                        self.conclave_dict[sensor_platform_id][1] = 0
+                        self.conclave_dict[sensor_platform_id][2][self.conclave_dict[sensor_platform_id][1]] = error_std
+                        self.conclave_dict[sensor_platform_id][3][self.conclave_dict[sensor_platform_id][1]] = num_error
+                        self.conclave_dict[sensor_platform_id][1] += 1
             else:
-                self.error_dict[sensor_platform_id] = [1, 1, [error_std], [num_error]]
+                self.conclave_dict[sensor_platform_id] = [1, 1, [error_std], [num_error]]
         if self.time > 25.0 and num_error == 1:
-            # Check for single detections
+            # Check for lack of detections
             self.add_error_frame(sensor_platform_id, self.non_real_detection_error, 10)
+
+    # TODO: finish this!
+    def add_trupercept_frame(self, sensor_platform_id, detection_trust):
+        # Allow time for test warmup
+        if self.time > 25.0:
+            if sensor_platform_id in self.trupercept_dict:
+                # Moving trupercept_freshness place average
+                if self.trupercept_dict[sensor_platform_id][0] < self.trupercept_freshness:
+                    self.trupercept_dict[sensor_platform_id][0] += 1
+                    self.trupercept_dict[sensor_platform_id][1] += 1
+                    self.trupercept_dict[sensor_platform_id][2].append(detection_trust)
+                # We have filled trupercept_freshness places, time to revolve the buffer now
+                else:
+                    if self.trupercept_dict[sensor_platform_id][1] < self.trupercept_freshness:
+                        # Replace the element with the next one
+                        self.trupercept_dict[sensor_platform_id][2][self.trupercept_dict[sensor_platform_id][1]] = detection_trust
+                        self.trupercept_dict[sensor_platform_id][1] += 1
+                    else:
+                        self.trupercept_dict[sensor_platform_id][1] = 0
+                        self.trupercept_dict[sensor_platform_id][2][self.trupercept_dict[sensor_platform_id][1]] = detection_trust
+                        self.trupercept_dict[sensor_platform_id][1] += 1
+            else:
+                self.trupercept_dict[sensor_platform_id] = [1, 1, [detection_trust]]

@@ -14,9 +14,10 @@ import config
 global mainWin
 
 parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3", "two_cav_simulation_unit_test_4","four_cav_simulation_unit_test","four_cav_simulation_unit_test_2","four_cav_simulation_unit_test_3","four_cav_simulation_unit_test_4"]
-error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1"] * 10 + ["four_cav_simulation_error_injection_2"] * 10+ ["four_cav_simulation_error_injection_3"] * 10+ ["four_cav_simulation_error_injection_4"] * 10+ ["four_cav_simulation_error_injection_5"] * 10+ ["four_cav_simulation_error_injection_6"] * 10
-error_malicious_injection_unit_test_set_retester = ["four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_e rror_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_6"]
-error_malicious_injection_unit_test_set_quick = ["four_cav_simulation_error_injection_7", "four_cav_simulation_error_injection_8"]#"four_cav_simulation_error_injection_4","four_cav_simulation_error_injection_5","four_cav_simulation_error_injection_6","four_cav_simulation_error_injection_7","four_cav_simulation_error_injection_8"]
+test_length = 1
+error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1"] * test_length + ["four_cav_simulation_error_injection_2"] * test_length + ["four_cav_simulation_error_injection_3"] * test_length + ["four_cav_simulation_error_injection_4"] * test_length + ["four_cav_simulation_error_injection_5"] * test_length + ["four_cav_simulation_error_injection_6"] * test_length
+# error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_6"] * 5 + ["four_cav_simulation_error_injection_7"] * 10 + ["four_cav_simulation_error_injection_8"] * 10
+position_recording = ["position_recording"] * 10
 
 class UnitTest():
     def __init__(self):
@@ -43,11 +44,12 @@ class UnitTest():
         self.config = None
 
     def run(self, config_list):
-        for conf_name in config_list:
+        for iteration_idx, conf_name in enumerate(config_list):
             print(" Setting test config to: ", conf_name)
             conf = config.Setting(conf_name)
             self.unit_test_idx = 0
             self.config = conf
+            conf.test_iteration = iteration_idx
 
             # Determing mode
             while len(conf.unit_test_config) > self.unit_test_idx:
@@ -61,7 +63,7 @@ class UnitTest():
                 rsu_instance = rsu.RSU(conf, self.unit_test_idx)
 
                 time.sleep(5) 
-
+ 
                 # Start the GUI
                 # initGui(conf)
                 # time.sleep(5)
@@ -99,7 +101,19 @@ class UnitTest():
             # End the row after the entire test set is finished
             with open('test_output/twenty_percent_break_point.txt', 'a') as f:
                 f.write("\n")
-            with open('output.txt', 'a') as f:
+            with open('test_output/twenty_percent_break_point_tp.txt', 'a') as f:
+                f.write("\n")
+            with open('test_output/output.txt', 'a') as f:
+                f.write("\n")
+            with open('test_output/output_tp.txt', 'a') as f:
+                f.write("\n")
+            with open('test_output/rmse_conclave.txt', 'a') as f:
+                f.write("\n")
+            with open('test_output/variance_conclave.txt', 'a') as f:
+                f.write("\n")
+            with open('test_output/rmse_tp.txt', 'a') as f:
+                f.write("\n")
+            with open('test_output/variance_tp.txt', 'a') as f:
                 f.write("\n")
             
             # Calculate the prior results

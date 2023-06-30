@@ -187,6 +187,10 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
                 response["error"] = 0
                 fails = 0
 
+# def open_sensor_file(cav, vid, test_idx):
+#     if cav:
+
+
 def cav(config, vid, test_idx):
     # The first thing we should always do is initialize the control module
     # This is important to make sure a rogue signal doesn't drive us away
@@ -198,6 +202,28 @@ def cav(config, vid, test_idx):
     global_time = -99
     bounding_box = [[0.0, 0.0],[0.0, 0.0]]
     last_response = []
+    test_iteration = config.test_iteration
+    read_file = config.replay_from_file
+    if read_file:
+        import pickle
+        with open("input/1m8_4cav_2cis/test_" + str(test_iteration) + "_output_cav_" + str(vehicle_id) + ".pickle", 'rb') as handle:
+            pickle_dict = pickle.load(handle)
+            if vid == 0:
+                try:
+                    print(pickle_dict[1.0])
+                except:
+                    print("no 1.0!")
+                try:
+                    print(pickle_dict[1.125])
+                except:
+                    print("no 1.125!")
+                try:
+                    print(pickle_dict[1.25])
+                except:
+                    print("no 1.25!")
+    record_file = config.record_to_file
+    if record_file:
+        pickle_dict = {}
     data_collect_mode = config.data_collect_mode
     if vid == 1 and config.simulation:
         # CAV, might need to inject error if simuation
@@ -305,6 +331,12 @@ def cav(config, vid, test_idx):
     # Now that we have chatted with the RSU server, we should know where we are going
     planner.initialVehicleAtPosition(init["t_x"], init["t_y"], init["t_yaw"], init["route_x"], init["route_y"],
                                     init["route_TFL"], vehicle_id, config.simulation)
+    
+    if record_file:
+        pickle_dict[fetch_time(simulation_time, global_time)] = [], [], planner, []
+    elif read_file:
+        _, _, planner, _ = pickle_dict[fetch_time(simulation_time, global_time)]
+
     if debug: print( " Vehicle ", vehicle_id, " planner initialized " , planner.localizationPositionX, planner.localizationPositionY, planner.theta, planner.positionX_offset, planner.positionY_offset, planner.theta_offset)
 
     # Do a quick check of the coordinates to make a bounding box filter so that we can take out uneccessary points
@@ -352,26 +384,61 @@ def cav(config, vid, test_idx):
                 exit(0)
         if fetch_time(simulation_time, global_time) >= next_time:
             if config.simulation:
-                # Special simulation setup where we do not use the source threads
-                # Update the localization first because we use it here
-                planner.updatePosition(interval)
-                planner.update_localization(use_localization = False)
-                if debug: print( " Vehicle ", vehicle_id, " posiiton and localization updated" )
-                
-                # Send the lolcailzation values to the RSU
-                rsu_sim_check.sendSimPosition(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
-                if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
+                if read_file:
+                    read_time = fetch_time(simulation_time, global_time)
+                    # print("cav " + str(vehicle_id) + "  " + str(read_time) + " ---------------------------------------")
+                    cam_returned, lidar_returned, temp_planner, vehicle_object_positions = pickle_dict[read_time]
+                    sim_values = {}
+                    sim_values['parameterized_covariance'] = True
 
-                # Recieve positions of other vehicles from RSU so we can fake the sensor values
-                sim_values = rsu_sim_check.getSimPositions(vehicle_id)
-                while(sim_values['step_sim_vehicle'] == False):
-                    time.sleep(.01)
+                    if read_time > 1.5:
+                        planner.localizationPositionX = temp_planner.localizationPositionX
+                        planner.localizationPositionY = temp_planner.localizationPositionY
+                        planner.positionX_sim = temp_planner.positionX_sim
+                        planner.positionY_sim = temp_planner.positionY_sim
+                        planner.rearAxlePositionX = temp_planner.rearAxlePositionX
+                        planner.rearAxlePositionY = temp_planner.rearAxlePositionY
+                        planner.theta = temp_planner.theta
+                        planner.velocity = temp_planner.velocity
+                        planner.steeringAcceleration = temp_planner.steeringAcceleration
+                        planner.motorAcceleration = temp_planner.motorAcceleration
+                        planner.targetIndexX = temp_planner.targetIndexX
+                        planner.vCoordinates = temp_planner.vCoordinates
+                        planner.tind = temp_planner.tind
+
+                    # Send the lolcailzation values to the RSU
+                    rsu_sim_check.sendSimPosition(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
+                    if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
+
+                    # Recieve positions of other vehicles from RSU so we can fake the sensor values
+                    temp_sim_values = rsu_sim_check.getSimPositions(vehicle_id)
+                    while(temp_sim_values['step_sim_vehicle'] == False):
+                        time.sleep(.01)
+                        temp_sim_values = rsu_sim_check.getSimPositions(vehicle_id)
+                        if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
+                else:
+                    read_time = fetch_time(simulation_time, global_time)
+                    # print("cav " + str(vehicle_id) + "  " + str(read_time) + " ---------------------------------------")
+                    # Special simulation setup where we do not use the source threads
+                    # Update the localization first because we use it here
+                    planner.updatePosition(interval)
+                    planner.update_localization(use_localization = False)
+                    if debug: print( " Vehicle ", vehicle_id, " posiiton and localization updated" )
+                    
+                    # Send the lolcailzation values to the RSU
+                    rsu_sim_check.sendSimPosition(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
+                    if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
+
+                    # Recieve positions of other vehicles from RSU so we can fake the sensor values
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
-                    if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
+                    while(sim_values['step_sim_vehicle'] == False):
+                        time.sleep(.01)
+                        sim_values = rsu_sim_check.getSimPositions(vehicle_id)
+                        if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
 
-                cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, sim_values['veh_locations'])
+                    cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, sim_values['veh_locations'])
                 
-                vehicle_object_positions = sim_values['veh_locations']
+                    vehicle_object_positions = sim_values['veh_locations']
 
                 sensor_fusion_messer = 0
                 sensor_fusion_messer_rate = 0.0
@@ -461,6 +528,19 @@ def cav(config, vid, test_idx):
                             
                 lidar_recieved = True
                 camera_recieved = True
+ 
+                # TODO: temprorary recording, delete later
+                if record_file:
+                    pickle_dict[fetch_time(simulation_time, global_time)] = cam_returned, lidar_returned, planner, vehicle_object_positions
+                    if fetch_time(simulation_time, global_time) == 1.25:
+                        pickle_dict[1.125] = cam_returned, lidar_returned, planner, vehicle_object_positions
+                    # Write to a pickles file every so often
+                    if fetch_time(simulation_time, global_time) % 80 == 0:
+                        with open("test_output/test_" + str(test_idx) + "_output_cav_" + str(vehicle_id) + ".pickle", 'wb') as file1:
+                            # dump information to that file
+                            import pickle
+                            pickle.dump(pickle_dict, file1, protocol=pickle.HIGHEST_PROTOCOL)
+
             else:
                 # This is not simulation so we need to get the streams from the LIDAR and camera
                 lidar_recieved = False
@@ -495,17 +575,19 @@ def cav(config, vid, test_idx):
                     localization[0] = planner.localizationPositionX
                     localization[1] = planner.localizationPositionY
                     localization[2] = planner.theta
-                planner.pure_pursuit_control()
 
-                # # Now update our current PID with respect to other vehicles
-                planner.check_positions_of_other_vehicles_adjust_velocity(last_response)
-                # # We can't update the PID controls until after all positions are known
-                planner.update_pid()
+                if not read_file:
+                    planner.pure_pursuit_control()
 
-                # Finally, issue the commands to the motors
-                steering_ppm, motor_pid = planner.return_command_package()
-                if not config.simulation:
-                    egoVehicle.setControlMotors(steering_ppm, motor_pid)
+                    # # Now update our current PID with respect to other vehicles
+                    planner.check_positions_of_other_vehicles_adjust_velocity(last_response)
+                    # # We can't update the PID controls until after all positions are known
+                    planner.update_pid()
+
+                    # Finally, issue the commands to the motors
+                    steering_ppm, motor_pid = planner.return_command_package()
+                    if not config.simulation:
+                        egoVehicle.setControlMotors(steering_ppm, motor_pid)
 
                 # Fusion
                 fusion_result = []
@@ -629,24 +711,25 @@ def cav(config, vid, test_idx):
                     #     index += 1
                 else:
                     # Update our various pieces
-                    planner.tfl_mode = int(response["intersection_mode"])
-                    planner.av_intersection_permission = int(response["av_intersection_permission"])
-                    planner.targetVelocityGeneral = float(response["v_t"])
-                    planner.recieve_coordinate_group_commands(response["tfl_state"])
-                    planner.pure_pursuit_control()
+                    if not read_file:
+                        planner.tfl_mode = int(response["intersection_mode"])
+                        planner.av_intersection_permission = int(response["av_intersection_permission"])
+                        planner.targetVelocityGeneral = float(response["v_t"])
+                        planner.recieve_coordinate_group_commands(response["tfl_state"])
+                        planner.pure_pursuit_control()
 
-                    # Now update our current PID with respect to other vehicles
-                    planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
-                    if debug: print( " Vehicle ", vehicle_id, " target velocity ", planner.motorAcceleration, planner.targetVelocityGeneral, planner.targetVelocity, planner.targetFollowDistance, planner.followDistance )
-                    last_response = response["veh_locations"]
-                    # We can't update the PID controls until after all positions are known
-                    planner.update_pid()
-                    if debug: print( " Vehicle ", vehicle_id, " ppm, pwm ", steering_ppm, motor_pid )
+                        # Now update our current PID with respect to other vehicles
+                        planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
+                        if debug: print( " Vehicle ", vehicle_id, " target velocity ", planner.motorAcceleration, planner.targetVelocityGeneral, planner.targetVelocity, planner.targetFollowDistance, planner.followDistance )
+                        last_response = response["veh_locations"]
+                        # We can't update the PID controls until after all positions are known
+                        planner.update_pid()
+                        if debug: print( " Vehicle ", vehicle_id, " ppm, pwm ", steering_ppm, motor_pid )
 
-                    # Finally, issue the commands to the motors
-                    steering_ppm, motor_pid = planner.return_command_package()
-                    if not config.simulation:
-                        egoVehicle.setControlMotors(steering_ppm, motor_pid)
+                        # Finally, issue the commands to the motors
+                        steering_ppm, motor_pid = planner.return_command_package()
+                        if not config.simulation:
+                            egoVehicle.setControlMotors(steering_ppm, motor_pid)
 
                     # with open("timing.txt", 'a') as file1:
                     #     file1.write(lidarDevice.localizationIdx, fetch_time(simulation_time, global_time))

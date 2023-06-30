@@ -19,7 +19,7 @@ class MapSpecs():
         # Simulation/Real Params
         self.isSimulation = 1
         self.lightTime = 0
-        self.lightTimePeriod = 8 * 5  # 5 seconds * 8 hz
+        self.lightTimePeriod = 8 * 4.5  # 5 seconds * 8 hz
 
         # Generating a figure 8 for now TODO: incorporate SUMO/ATLAS
         self.map = map

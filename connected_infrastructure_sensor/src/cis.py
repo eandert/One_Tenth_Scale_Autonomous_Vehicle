@@ -29,6 +29,15 @@ def cis(config, sid, test_idx):
     global_time = -99
     bounding_box = [[0.0, 0.0],[0.0, 0.0]]
     last_response = []
+    test_iteration = config.test_iteration
+    read_file = config.replay_from_file
+    if read_file:
+        import pickle
+        with open("input/1m8_4cav_2cis/test_" + str(test_iteration) + "_output_cis_" + str(sensor_id) + ".pickle", 'rb') as handle:
+            pickle_dict = pickle.load(handle)
+    record_file = config.record_to_file
+    if record_file:
+        pickle_dict = {}
     data_collect_mode = config.data_collect_mode
     if config.unit_test:
         local_fusion_mode = config.unit_test_config[test_idx][0]
@@ -115,18 +124,46 @@ def cis(config, sid, test_idx):
                 exit(0)
         if fetch_time(simulation_time, global_time) >= next_time:
             if config.simulation:
-                # Receive positions of other vehicles from RSU so we can fake the sensor values
-                sim_values = rsu.getSimPositions(sensor_id)
-                while(sim_values['step_sim_vehicle'] == False):
-                    time.sleep(.01)
-                    sim_values = rsu.getSimPositions(sensor_id)
-                    if debug: print( " CIS ", sensor_id, " requesting simulation positions" )
-                
-                vehicle_object_positions = sim_values['veh_locations']
+                if read_file:
+                    read_time = fetch_time(simulation_time, global_time)
+                    # print("cis " + str(sensor_id) + "   " + str(read_time) + " ---------------------------------------")
+                    cam_returned, lidar_returned = pickle_dict[read_time]
+                    sim_values = {}
+                    sim_values['parameterized_covariance'] = True
 
-                cam_returned, lidar_returned = sensor.simulate_sensors(sensor_planner, None, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                    sim_values_temp = rsu.getSimPositions(sensor_id)
+                    while(sim_values_temp['step_sim_vehicle'] == False):
+                        time.sleep(.01)
+                        sim_values_temp = rsu.getSimPositions(sensor_id)
+                        if debug: print( " CIS ", sensor_id, " requesting simulation positions" )
+                else:
+                    # Receive positions of other vehicles from RSU so we can fake the sensor values
+                    read_time = fetch_time(simulation_time, global_time)
+                    # print("cis " + str(sensor_id) + "   " + str(read_time) + " ---------------------------------------")
+                    sim_values = rsu.getSimPositions(sensor_id)
+                    while(sim_values['step_sim_vehicle'] == False):
+                        time.sleep(.01)
+                        sim_values = rsu.getSimPositions(sensor_id)
+                        if debug: print( " CIS ", sensor_id, " requesting simulation positions" )
+                    
+                    vehicle_object_positions = sim_values['veh_locations']
+                    
+                    cam_returned, lidar_returned = sensor.simulate_sensors(sensor_planner, None, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                
                 camcoordinates = cam_returned[0]
                 camtimestamp = cam_returned[1]
+
+                # TODO: temprorary recording, delete later
+                if record_file:
+                    pickle_dict[fetch_time(simulation_time, global_time)] = cam_returned, lidar_returned
+                    if fetch_time(simulation_time, global_time) == 1.25:
+                        pickle_dict[1.125] = cam_returned, lidar_returned
+                    # Write to a pickles file every so often
+                    if fetch_time(simulation_time, global_time) % 80 == 0:
+                        with open("test_output/test_" + str(test_idx) + "_output_cis_" + str(sensor_id) + ".pickle", 'wb') as file1:
+                            # dump information to that file
+                            import pickle
+                            pickle.dump(pickle_dict, file1, protocol=pickle.HIGHEST_PROTOCOL)
 
             else:
                 # Process the camera frame
@@ -202,4 +239,11 @@ def cis(config, sid, test_idx):
                 fails = 0
 
             if debug: print ( " Time taken: " , time.time() - camtimestamp, time.time() )
+
+            last_next_time = next_time
+            while next_time <= fetch_time(simulation_time, global_time):
+                next_time = last_next_time + interval
+                last_next_time = next_time
+
+        time.sleep(.001)
 

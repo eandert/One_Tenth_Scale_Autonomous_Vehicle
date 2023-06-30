@@ -311,7 +311,7 @@ class Planner:
         self.coordinateGroupVelocities = commands
 
     def get_location(self):
-        return [self.localizationPositionX, self.localizationPositionY, self.theta, self.targetVelocity, self.width, self.length, self.id]
+        return [self.localizationPositionX, self.localizationPositionY, self.theta, self.velocity, self.width, self.length, self.id]
 
     def get_route(self):
         messageString = ""
