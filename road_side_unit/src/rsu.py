@@ -613,8 +613,8 @@ class RSU():
                     for idx, vehicle_3 in self.vehicles.items():
                         # Add to the global sensor fusion
                         if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
-                            self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, 1/self.trupercept_error)
-                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, 1/self.conclave_error)
+                            self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.trupercept_error)
+                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.conclave_error)
                         else:
                             self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
                             self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
@@ -1298,19 +1298,24 @@ class RSU():
                 # Write to one file the SDSS vs. baseline at 100 seconds
                 if self.error_at_100_tp == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
                     self.error_at_100_tp = trupercept_score
+                    if self.error_at_100_tp == 0.0:
+                        self.error_at_100_tp = 0.001
 
-                average_error_normalized = trupercept_score / self.error_at_100_tp
+                average_error_normalized_tp = trupercept_score / self.error_at_100_tp
                 print(trupercept_score, self.error_at_100_tp)
 
                 if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                    self.trupercept_error = average_error_normalized
+                    if average_error_normalized_tp != 0:
+                        self.trupercept_error = 1.0 / average_error_normalized_tp
+                    else:
+                        self.trupercept_error = 2.0
                     with open('test_output/output_tp.txt', 'a') as f:
-                        f.write(str(average_error_normalized) + ",")
-                        print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
+                        f.write(str(average_error_normalized_tp) + ",")
+                        print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized_tp) + "\n")
 
                 # Only break once the revolving buffer is full
                 if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                    if average_error_normalized <= 0.8 and not self.twenty_percent_error_hit_tp:
+                    if average_error_normalized_tp <= 0.8 and not self.twenty_percent_error_hit_tp:
                         with open('test_output/twenty_percent_break_point_tp.txt', 'a') as f:
                             f.write(str(self.time - self.error_injection_time) + ",")
                         self.twenty_percent_error_hit_tp = True
@@ -1328,21 +1333,23 @@ class RSU():
                 # Write to one file the SDSS vs. baseline at 100 seconds
                 if self.error_at_100 == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
                     self.error_at_100 = average_error
+                    if self.error_at_100 == 0.0:
+                        self.error_at_100 = 0.001
 
-                average_error_normalized = average_error / self.error_at_100
+                average_error_normalized_conclave = average_error / self.error_at_100
 
                 if self.time >= self.error_injection_time and int(key) >= self.error_target_vehicle:
-                    self.conclave_error = 1.0 / average_error_normalized
-                    with open('test_output/output.txt', 'a') as f:
-                        f.write(str(average_error_normalized) + ",")
-                        print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
+                    self.conclave_error = average_error_normalized_conclave
+                    with open('test_output/output_conclave.txt', 'a') as f:
+                        f.write(str(average_error_normalized_conclave) + ",")
+                        print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized_conclave) + "\n")
 
                 # Only break once the revolving buffer is full
                 if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                    if average_error_normalized >= 1.2 and not self.twenty_percent_error_hit:
+                    if average_error_normalized_conclave >= 1.2 and not self.twenty_percent_error_hit:
                         with open('test_output/twenty_percent_break_point.txt', 'a') as f:
                             f.write(str(self.time - self.error_injection_time) + ",")
-                            print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized) + "\n")
+                            print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized_conclave) + "\n")
                             self.twenty_percent_error_hit = True
                             twenty_percent_break_check = True
 

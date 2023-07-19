@@ -525,6 +525,15 @@ def cav(config, vid, test_idx):
                             sensor_fusion_messer = 2
                             sensor_fusion_messer_rate = (1 + (test_idx/2.0))
                             print("------------------------------------ increasing camera covaraince ", test_idx)
+                    elif error_type == 9: # Maliciously insert vehicle into middle of traffic light with probability i
+                        test_int = random.randint(0, 100)
+                        if test_int < test_idx * 10:
+                            # Insert into the middle of the traffic light (there might be another object there)
+                            for test_idx in reversed(range(vehicle_object_positions)):
+                                if -.5 <= vehicle_object_positions[test_idx][0] <= .5 and -.5 <= vehicle_object_positions[test_idx][1] <= .5:
+                                    vehicle_object_positions.pop()
+                            print("------------------------------------ removed vehicle maliciously ", test_idx)
+                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
                             
                 lidar_recieved = True
                 camera_recieved = True
