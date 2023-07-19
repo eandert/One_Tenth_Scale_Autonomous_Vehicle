@@ -109,6 +109,15 @@ class RSU():
             self.global_trupercept_over_detection_miss = 0
             self.global_trupercept_under_detection_miss = 0
 
+        # For testing Conclave
+        self.test_conclave = True
+        if self.test_conclave:
+            self.globalFusionConclave= global_fusion.GlobalFUSION(self.global_fusion_mode)
+            self.globaFusionListConclave = []
+            self.global_conclave_differences = []
+            self.global_conclave_over_detection_miss = 0
+            self.global_conclave_under_detection_miss = 0
+
         self.record_file = config.record_to_file
         if self.record_file:
             self.pickle_dict = {}
@@ -570,17 +579,14 @@ class RSU():
 
                 # Add CAV fusion results to the global sensor fusion
                 for idx, vehicle_ in self.vehicles.items():
-                    if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
-                        self.globalFusion.processDetectionFrame(self.getTime(), vehicle_.fusionDetections, .25, self.parameterized_covariance, self.conclave_error)
-                    else:
-                        self.globalFusion.processDetectionFrame(self.getTime(), vehicle_.fusionDetections, .25, self.parameterized_covariance)
+                    self.globalFusion.processDetectionFrame(self.getTime(), vehicle_.fusionDetections, .25, self.parameterized_covariance)
 
                 # Add CIS fusion results to the global sensor fusion
                 for idx, sensor_ in self.sensors.items():
                     self.globalFusion.processDetectionFrame(self.getTime(), sensor_.fusionDetections, .25, self.parameterized_covariance)
 
                 # Perform the global fusion
-                self.globalFusionList, error_data, trupercept_data_conclave = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance, monitor)
+                self.globalFusionList, conclave_data, trupercept_data = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance, monitor)
 
                 # pprint(vars(self.globalFusion))
 
@@ -600,29 +606,33 @@ class RSU():
                     self.globalFusionListOneStepKalman, error_data_one_step, trupercept_data_trash = self.globalFusionOneStepKalman.fuseDetectionFrame(self.parameterized_covariance, monitor)
 
                 # Testing accuracy of gloabal fusion with truepercept
-                if self.test_trupercept and self.getTime() == self.error_injection_time:
+                if self.test_trupercept and self.test_conclave and self.getTime() == self.error_injection_time:
                     self.globalFusionTrupercept = copy.deepcopy(self.globalFusion)
-                elif self.test_trupercept and self.getTime() >= self.error_injection_time:
+                    self.globalFusionConclave = copy.deepcopy(self.globalFusion)
+                elif self.test_trupercept and self.test_conclave and self.getTime() > self.error_injection_time:
                     for idx, vehicle_3 in self.vehicles.items():
                         # Add to the global sensor fusion
                         if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
                             self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, 1/self.trupercept_error)
+                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, 1/self.conclave_error)
                         else:
                             self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
+                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
 
                     for idx, sensor_3 in self.sensors.items():
                         # Add to the global sensor fusion
                         self.globalFusionTrupercept.processDetectionFrame(self.getTime(), sensor_3.fusionDetections, .25, self.parameterized_covariance)
+                        self.globalFusionConclave.processDetectionFrame(self.getTime(), sensor_3.fusionDetections, .25, self.parameterized_covariance)
 
-                    self.globaFusionListTrupercept, error_data_tf, trupercept_data = self.globalFusionTrupercept.fuseDetectionFrame(self.parameterized_covariance, monitor)
-                    # pprint(vars(self.globalFusionTrupercept))
+                    self.globaFusionListTrupercept, conclave_data_trash, trupercept_data = self.globalFusionTrupercept.fuseDetectionFrame(self.parameterized_covariance, monitor)
+                    self.globaFusionListConclave, conclave_data, trupercept_data_trash = self.globalFusionConclave.fuseDetectionFrame(self.parameterized_covariance, monitor)
                 else:
-                    self.globaFusionListTrupercept = self.globalFusionList
-                    trupercept_data = trupercept_data_conclave
+                    self.globaFusionListTrupercept = copy.deepcopy(self.globalFusionList)
+                    self.globaFusionListConclave = copy.deepcopy(self.globalFusionList)
 
                 # Use the cooperative monitoring method to check the sensors against the global fusion result
                 if monitor:
-                    monitor_break = self.cooperative_monitoring_process(error_data, trupercept_data)
+                    monitor_break = self.cooperative_monitoring_process(conclave_data, trupercept_data)
                 else:
                     monitor_break = False
 
@@ -665,6 +675,14 @@ class RSU():
                             self.global_trupercept_over_detection_miss += over_detection_miss_tp
                             self.global_trupercept_under_detection_miss += under_detection_miss_tp
 
+                        # Ground truth the trupercept result
+                        if self.test_conclave:
+                            over_detection_miss_c, under_detection_miss_c, differences_c = self.ground_truth_dataset(self.globaFusionListConclave, ground_truth)
+                            self.global_conclave_differences += differences_c
+                            self.global_conclave_over_detection_miss += over_detection_miss_c
+                            self.global_conclave_under_detection_miss += under_detection_miss_c
+
+
             else:
                 # We did not run the global fusion in this mode, set the list to empty
                 self.globalFusionList = []
@@ -706,6 +724,10 @@ class RSU():
                     if not self.twenty_percent_error_hit_tp:
                         with open('test_output/twenty_percent_break_point_tp.txt', 'a') as f:
                             f.write(", ")  
+                    with open('test_output/rmse.txt', 'a') as f:
+                        f.write(str(self.rmse) + " ,")
+                    with open('test_output/variance.txt', 'a') as f:
+                        f.write(str(self.variance) + " ,")
                     with open('test_output/rmse_conclave.txt', 'a') as f:
                         f.write(str(self.conclave_rmse) + " ,")
                     with open('test_output/variance_conclave.txt', 'a') as f:
@@ -715,6 +737,8 @@ class RSU():
                     with open('test_output/variance_tp.txt', 'a') as f:
                         f.write(str(self.trupercept_variance) + " ,")
                     with open('test_output/output.txt', 'a') as f:
+                        f.write("\n")
+                    with open('test_output/output_conclave.txt', 'a') as f:
                         f.write("\n")
                     with open('test_output/output_tp.txt', 'a') as f:
                         f.write("\n")
@@ -950,8 +974,8 @@ class RSU():
         results.append(self.global_over_detection_miss)
         results.append(self.global_under_detection_miss)
 
-        self.conclave_rmse = rmse_val_g
-        self.conclave_variance = variance_g
+        self.rmse = rmse_val_g
+        self.variance = variance_g
 
         print( "Test: ", self.unit_test_idx, " l_mode:", self.unit_test_config[self.unit_test_idx][0], " g_mode:", self.unit_test_config[self.unit_test_idx][1], " est_cov:", self.unit_test_config[self.unit_test_idx][2] )
         print( "  localization_rmse_val: ", results[0], " variance: ", results[1], " velocity ", results[2])
@@ -979,6 +1003,16 @@ class RSU():
             " under misses: ", self.global_trupercept_under_detection_miss)
             self.trupercept_rmse = rmse_val_g_o2
             self.trupercept_variance = variance_g_o2
+
+        if self.test_conclave:
+            rmse_val_g_c = shared_math.RMSE(self.global_conclave_differences)
+            variance_g_c = np.var(self.global_conclave_differences,ddof=1)
+            print( "  trupercept_rmse_val: ", rmse_val_g_c,
+            " variance: ", variance_g_c,
+            " over misses: ", self.global_trupercept_over_detection_miss,
+            " under misses: ", self.global_trupercept_under_detection_miss)
+            self.conclave_rmse = rmse_val_g_c
+            self.conclave_variance = variance_g_c
 
         return results
 
@@ -1060,7 +1094,7 @@ class RSU():
 
         return over_detection_miss, under_detection_miss, differences
 
-    def cooperative_monitoring_process(self, error_data, trupercept_data):
+    def cooperative_monitoring_process(self, conclave_data, trupercept_data):
         # We have who saw what, but now we need to see who should have seen what
         object_polygons = []
         length = .6
@@ -1212,7 +1246,7 @@ class RSU():
 
         # Conclave method
         # Add our covariance data to the global sensor list
-        for object_id, object_trackers in enumerate(error_data):
+        for object_id, object_trackers in enumerate(conclave_data):
             for error_frame in object_trackers:
                 # Check if this is a localizer or a sensor
                 if error_frame[0]/self.localizationid >= 1:

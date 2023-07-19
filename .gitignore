@@ -8,3 +8,5 @@ cloc-1.92.exe
 output.txt
 output.txt
 test_output/twenty_percent_break_point.txt
+test_output/initial_run/output_conclave.txt
+*.txt

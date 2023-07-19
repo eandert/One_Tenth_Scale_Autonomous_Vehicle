@@ -14,7 +14,7 @@ import config
 global mainWin
 
 parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3", "two_cav_simulation_unit_test_4","four_cav_simulation_unit_test","four_cav_simulation_unit_test_2","four_cav_simulation_unit_test_3","four_cav_simulation_unit_test_4"]
-test_length = 1
+test_length = 10
 error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1"] * test_length + ["four_cav_simulation_error_injection_2"] * test_length + ["four_cav_simulation_error_injection_3"] * test_length + ["four_cav_simulation_error_injection_4"] * test_length + ["four_cav_simulation_error_injection_5"] * test_length + ["four_cav_simulation_error_injection_6"] * test_length
 # error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_6"] * 5 + ["four_cav_simulation_error_injection_7"] * 10 + ["four_cav_simulation_error_injection_8"] * 10
 position_recording = ["position_recording"] * 10
@@ -114,6 +114,10 @@ class UnitTest():
             with open('test_output/rmse_tp.txt', 'a') as f:
                 f.write("\n")
             with open('test_output/variance_tp.txt', 'a') as f:
+                f.write("\n")
+            with open('test_output/rmse.txt', 'a') as f:
+                f.write("\n")
+            with open('test_output/variance.txt', 'a') as f:
                 f.write("\n")
             
             # Calculate the prior results
