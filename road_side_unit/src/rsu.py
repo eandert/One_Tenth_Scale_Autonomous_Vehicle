@@ -52,8 +52,8 @@ class RSU():
         self.error_injection_time = config.error_injection_time_tmp
         self.revolving_buffer_size = 200
         self.trupercept_freshness = self.revolving_buffer_size
-        self.missed_detection_error = 3.0
-        self.non_real_detection_error = 3.0
+        self.missed_detection_error = 1.0
+        self.non_real_detection_error = 1.0
         self.twenty_percent_error_hit = False
         self.twenty_percent_error_hit_tp = False
         self.error_at_100 = -99.0
@@ -1007,7 +1007,7 @@ class RSU():
         if self.test_conclave:
             rmse_val_g_c = shared_math.RMSE(self.global_conclave_differences)
             variance_g_c = np.var(self.global_conclave_differences,ddof=1)
-            print( "  trupercept_rmse_val: ", rmse_val_g_c,
+            print( "  conclave_rmse_val: ", rmse_val_g_c,
             " variance: ", variance_g_c,
             " over misses: ", self.global_trupercept_over_detection_miss,
             " under misses: ", self.global_trupercept_under_detection_miss)
@@ -1326,19 +1326,21 @@ class RSU():
             if self.conclave_dict[key][0] > 5:
                 average_error = sum(self.conclave_dict[key][2])/self.conclave_dict[key][0]
                 average_Expected_error = sum(self.conclave_dict[key][3])/self.conclave_dict[key][0]
+                print(average_error)
                 if int(key) < self.localization_offset:
                     average_error = average_error / error_monitoring_normalizer
+                adjusted_error = average_error / average_Expected_error
                 self.error_monitoring.append([key, average_error, average_Expected_error, self.conclave_dict[key][0]])
 
                 # Write to one file the SDSS vs. baseline at 100 seconds
                 if self.error_at_100 == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                    self.error_at_100 = average_error
+                    self.error_at_100 = adjusted_error
                     if self.error_at_100 == 0.0:
                         self.error_at_100 = 0.001
 
-                average_error_normalized_conclave = average_error / self.error_at_100
+                average_error_normalized_conclave = adjusted_error / self.error_at_100
 
-                if self.time >= self.error_injection_time and int(key) >= self.error_target_vehicle:
+                if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
                     self.conclave_error = average_error_normalized_conclave
                     with open('test_output/output_conclave.txt', 'a') as f:
                         f.write(str(average_error_normalized_conclave) + ",")
