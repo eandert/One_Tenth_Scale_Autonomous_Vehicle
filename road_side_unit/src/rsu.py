@@ -1324,36 +1324,40 @@ class RSU():
         twenty_percent_break_check = False
         for key in self.conclave_dict.keys():
             if self.conclave_dict[key][0] > 5:
-                average_error = sum(self.conclave_dict[key][2])/self.conclave_dict[key][0]
-                average_Expected_error = sum(self.conclave_dict[key][3])/self.conclave_dict[key][0]
-                print(average_error)
-                if int(key) < self.localization_offset:
-                    average_error = average_error / error_monitoring_normalizer
-                adjusted_error = average_error / average_Expected_error
-                self.error_monitoring.append([key, average_error, average_Expected_error, self.conclave_dict[key][0]])
+                try:
+                    average_error = sum(self.conclave_dict[key][2])/self.conclave_dict[key][0]
+                    average_Expected_error = sum(self.conclave_dict[key][3])/self.conclave_dict[key][0]
+                    print(average_error)
+                    adjusted_error = 1.0 / average_error / average_Expected_error
+                    if int(key) < self.localization_offset:
+                        average_error = average_error / error_monitoring_normalizer
+                    self.error_monitoring.append([key, average_error, average_Expected_error, self.conclave_dict[key][0]])
 
-                # Write to one file the SDSS vs. baseline at 100 seconds
-                if self.error_at_100 == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                    self.error_at_100 = adjusted_error
-                    if self.error_at_100 == 0.0:
-                        self.error_at_100 = 0.001
+                    # Write to one file the SDSS vs. baseline at 100 seconds
+                    if self.error_at_100 == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                        self.error_at_100 = adjusted_error
+                        if self.error_at_100 == 0.0:
+                            self.error_at_100 = 0.001
 
-                average_error_normalized_conclave = adjusted_error / self.error_at_100
+                    average_error_normalized_conclave = adjusted_error / self.error_at_100
 
-                if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                    self.conclave_error = average_error_normalized_conclave
-                    with open('test_output/output_conclave.txt', 'a') as f:
-                        f.write(str(average_error_normalized_conclave) + ",")
-                        print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized_conclave) + "\n")
+                    if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                        self.conclave_error = average_error_normalized_conclave
+                        with open('test_output/output_conclave.txt', 'a') as f:
+                            f.write(str(average_error_normalized_conclave) + ",")
+                            print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized_conclave) + "\n")
 
-                # Only break once the revolving buffer is full
-                if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                    if average_error_normalized_conclave >= 1.2 and not self.twenty_percent_error_hit:
-                        with open('test_output/twenty_percent_break_point.txt', 'a') as f:
-                            f.write(str(self.time - self.error_injection_time) + ",")
-                            print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized_conclave) + "\n")
-                            self.twenty_percent_error_hit = True
-                            twenty_percent_break_check = True
+                    # Only break once the revolving buffer is full
+                    if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
+                        if average_error_normalized_conclave >= 1.2 and not self.twenty_percent_error_hit:
+                            with open('test_output/twenty_percent_break_point.txt', 'a') as f:
+                                f.write(str(self.time - self.error_injection_time) + ",")
+                                print("breaking test!" + str(self.time-.125) + "," + str(average_error_normalized_conclave) + "\n")
+                                self.twenty_percent_error_hit = True
+                                twenty_percent_break_check = True
+                except:
+                    print("Division error")
+        
 
         return twenty_percent_break_check
 
