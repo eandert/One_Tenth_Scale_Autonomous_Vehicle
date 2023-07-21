@@ -496,6 +496,8 @@ class GlobalFUSION:
                     trupercept_monitoring.append(track.trupercept_list)
             # Clear the previous detection list
             track.clearLastFrame()
+
+        if len(self.trackedList) >=2 :
             # Clean up the tracks for next time
             self.cleanDetections(estimate_covariance)
 

@@ -1274,13 +1274,13 @@ class RSU():
         normalization_denominator = 0.0
         for key in self.conclave_dict.keys():
             if self.conclave_dict[key][0] > 5 and int(key) < self.localization_offset:
-                normalization_numerator += sum(self.conclave_dict[key][2])
+                normalization_numerator += (sum(self.conclave_dict[key][2]) / sum(self.conclave_dict[key][3]))
                 normalization_denominator += self.conclave_dict[key][0]
         
         # Make sure the fenominator is greater than 0
         if normalization_denominator != 0.0 and self.time < self.error_injection_time:
-            #error_monitoring_normalizer = normalization_numerator / normalization_denominator
-            error_monitoring_normalizer = 1.0
+            error_monitoring_normalizer = normalization_numerator / normalization_denominator
+            # error_monitoring_normalizer = 1.0
         else:
             error_monitoring_normalizer = 1.0
 
