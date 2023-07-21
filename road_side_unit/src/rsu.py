@@ -52,8 +52,8 @@ class RSU():
         self.error_injection_time = config.error_injection_time_tmp
         self.revolving_buffer_size = 200
         self.trupercept_freshness = self.revolving_buffer_size
-        self.missed_detection_error = 1.0
-        self.non_real_detection_error = 1.0
+        self.missed_detection_error = 3.0
+        self.non_real_detection_error = 3.0
         self.twenty_percent_error_hit = False
         self.twenty_percent_error_hit_tp = False
         self.error_at_100 = -99.0
@@ -614,7 +614,7 @@ class RSU():
                         # Add to the global sensor fusion
                         if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
                             self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.trupercept_error)
-                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.conclave_error)
+                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, 1.0 / self.conclave_error)
                         else:
                             self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
                             self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
@@ -1328,7 +1328,7 @@ class RSU():
                     average_error = sum(self.conclave_dict[key][2])/self.conclave_dict[key][0]
                     average_Expected_error = sum(self.conclave_dict[key][3])/self.conclave_dict[key][0]
                     print(average_error)
-                    adjusted_error = 1.0 / average_error / average_Expected_error
+                    adjusted_error = average_error / average_Expected_error
                     if int(key) < self.localization_offset:
                         average_error = average_error / error_monitoring_normalizer
                     self.error_monitoring.append([key, average_error, average_Expected_error, self.conclave_dict[key][0]])
