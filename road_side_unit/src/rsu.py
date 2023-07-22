@@ -1279,8 +1279,8 @@ class RSU():
         
         # Make sure the fenominator is greater than 0
         if normalization_denominator != 0.0 and self.time < self.error_injection_time:
-            error_monitoring_normalizer = normalization_numerator / normalization_denominator
-            # error_monitoring_normalizer = 1.0
+            # error_monitoring_normalizer = normalization_numerator / normalization_denominator
+            error_monitoring_normalizer = 1.0
         else:
             error_monitoring_normalizer = 1.0
 
