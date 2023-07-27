@@ -257,7 +257,7 @@ def simulate_sensors(planner, lidarRecognition, time, sim_values, vehicle_object
 def fake_lidar_and_camera(detector, positions, objects, lidar_range,
                             lidar_center_angle, lidar_fov, cam_range,
                             cam_center_angle, cam_fov, parameterized_covariance,
-                            lidar_min_points = 3, camera_min_percentage = 0.33):
+                            lidar_min_percentage = 0.25, camera_min_percentage = 0.33):
 
         # print ( "FAKING LIDAR" )
         lidar_point_cloud = []
@@ -361,14 +361,14 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range,
                     # Add a point to all polygons IDs in the path
                     if cam_visible:
                         if final_polygon_id in available_point_set_camera:
-                            available_point_set_camera[final_polygon_id] += 1
+                            available_point_set_camera[final_polygon_id] += 0.5
                         else:
-                            available_point_set_camera[final_polygon_id] = 1
+                            available_point_set_camera[final_polygon_id] = 0.5
                     if lidar_visible:
                         if final_polygon_id in available_point_set_lidar:
-                            available_point_set_lidar[final_polygon_id] += 1
+                            available_point_set_lidar[final_polygon_id] += 0.5
                         else:
-                            available_point_set_lidar[final_polygon_id] = 1
+                            available_point_set_lidar[final_polygon_id] = 0.5
 
                 # Make sure this worked and is not None
                 if final_point != None:
@@ -392,6 +392,8 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range,
                         else:
                             seen_point_set_lidar[final_polygon_id] = [1, list(final_polygon.centroid.coords)[0]]
 
+        # check_visble_objects([detector.localizationPositionX, detector.localizationPositionY, detector.theta], lidar_center_angle, lidar_range, lidar_fov, polygons)
+
         # Here we do the final check to see what percentage of each we can see
         final_set_camera = []
         for key in seen_point_set_camera.keys():
@@ -402,7 +404,7 @@ def fake_lidar_and_camera(detector, positions, objects, lidar_range,
         # Do the same for LIDAR just using min points instead
         final_set_lidar = []
         for key in seen_point_set_lidar.keys():
-            if seen_point_set_lidar[key][0] >= lidar_min_points:
+            if seen_point_set_lidar[key][0] >= lidar_min_percentage * available_point_set_lidar[key]:
                 # lidar_min_points or more is visible, add it to the should see it list
                 final_set_lidar.append([key, seen_point_set_lidar[key][1]])
 
@@ -470,21 +472,22 @@ def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sen
         intersection_id = []
         intersect_dist = 9999999999
         final_point = None
+        angle = angle_idx * angle_change
 
-        #print(angle_idx * angle_change, sensor_angle, sensor_fov)
-        if shared_math.check_in_fov(angle_idx * angle_change,
+        if shared_math.check_in_fov(angle,
                                     sensor_angle, sensor_fov):
 
             # Go through all the polygons that the line intersects with and add them
             for obj_idx, poly in enumerate(object_polygons):
                 line = [(sensor_position[0], sensor_position[1]), (
-                sensor_position[0] + (sensor_range * math.cos(angle_idx * angle_change)),
-                sensor_position[1] + (sensor_range * math.sin(angle_idx * angle_change)))]
+                sensor_position[0] + (sensor_range * math.cos(angle)),
+                sensor_position[1] + (sensor_range * math.sin(angle)))]
                 shapely_line = LineString(line)
-                temp_intersection_list = list(poly.intersection(shapely_line).coords)
-                intersections += temp_intersection_list
-                for count in range(len(temp_intersection_list)):
-                    intersection_id.append(obj_idx)
+                if poly.intersects(shapely_line):
+                    temp_intersection_list = list(poly.intersection(shapely_line).coords)
+                    intersections += temp_intersection_list
+                    for count in range(len(temp_intersection_list)):
+                        intersection_id.append(obj_idx)
 
             # Get the closest intersection with a polygon as that will be where our lidar beam stops
             for point, polygon_id in zip(intersections, intersection_id):
@@ -498,10 +501,10 @@ def check_visble_objects(sensor_position, sensor_center_angle, sensor_range, sen
                     # Add a point to all polygons IDs in the path
                     if polygon_id in available_point_set:
                         # Square polygons are intersected 2x so only add .5
-                        available_point_set[polygon_id] += .5
+                        available_point_set[polygon_id] += 0.5
                     else:
                         # Square polygons are intersected 2x so only add .5
-                        available_point_set[polygon_id] = .5
+                        available_point_set[polygon_id] = 0.5
 
             # If we have a final point, add to the list
             if final_point != None:

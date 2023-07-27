@@ -326,6 +326,12 @@ class ResizableKalman:
             length = len(self.localTrackersIDList)
             if monitor:
                 # Our method
+                if self.P_hat_t[0][0] != 0.0 and self.P_hat_t[0][1] != 0.0:
+                    global_error_x, global_error_y, global_error_angle = shared_math.ellipsify([[self.P_hat_t[0][0], self.P_hat_t[0][1]], [self.P_hat_t[1][0], self.P_hat_t[1][1]]], 1.0)
+                else:
+                    global_error_x = 0.0
+                    global_error_y = 0.0 
+                    global_error_angle = 0.0
                 for id, mu, cov, h_t_type in zip(self.localTrackersIDList, self.localTrackersMeasurementList, self.localTrackersCovarianceList, self.localTrackersHList):
                     Z_t = (mu).transpose()
                     Z_t = Z_t.reshape(Z_t.shape[0], -1)
@@ -335,7 +341,7 @@ class ResizableKalman:
                     expected_a, expected_b, expected_angle = shared_math.ellipsify(cov, 1.0)
                     expected_x = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(0))
                     expected_y = shared_math.calculateRadiusAtAngle(expected_a, expected_b, expected_angle, math.radians(90))
-                    expected_location_error = math.hypot(expected_x, expected_y)
+                    expected_location_error = math.hypot(expected_x, expected_y) - math.hypot(global_error_x, global_error_y)
                     #cov
                     location_error_std = location_error / expected_location_error
                     #print(location_error, expected_location_error, location_error_std)

@@ -59,7 +59,7 @@ class RSU():
         self.error_at_100 = -99.0
         self.error_at_100_tp = -99.0
         self.error_target_vehicle = 1
-        self.conclave_error = 1.0
+        self.conclave_error = [1.0] * (len(config.cav) + len(config.cis))
         self.trupercept_error = 1.0
 
         # Init parameters for unit testing
@@ -614,7 +614,7 @@ class RSU():
                         # Add to the global sensor fusion
                         if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
                             self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.trupercept_error)
-                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, 1.0 / self.conclave_error)
+                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.conclave_error[idx])
                         else:
                             self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
                             self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
@@ -1272,24 +1272,26 @@ class RSU():
         # Normalize all the data to 0 (hopefully)
         normalization_numerator = 0.0
         normalization_denominator = 0.0
+        print(self.conclave_dict.keys())
         for key in self.conclave_dict.keys():
-            if self.conclave_dict[key][0] > 5 and int(key) < self.localization_offset:
-                normalization_numerator += (sum(self.conclave_dict[key][2]) / sum(self.conclave_dict[key][3]))
-                normalization_denominator += self.conclave_dict[key][0]
+            normalization_numerator += sum(self.conclave_dict[key][2])
+            normalization_denominator += self.conclave_dict[key][0]
         
         # Make sure the fenominator is greater than 0
         if normalization_denominator != 0.0 and self.time < self.error_injection_time:
-            # error_monitoring_normalizer = normalization_numerator / normalization_denominator
-            error_monitoring_normalizer = 1.0
+            error_monitoring_normalizer = normalization_numerator / normalization_denominator
+            # error_monitoring_normalizer = 1.0
         else:
             error_monitoring_normalizer = 1.0
+
+        print(error_monitoring_normalizer)
 
         # self.conclave_dict[sensor_platform_id] = [1, 1, [error_std], [num_error]]
 
         # Trupercept Algorihtm 4
         self.trupercept_monitoring = []
         for key in self.trupercept_dict.keys():
-            if self.trupercept_dict[key][0] > 5:
+            if self.trupercept_dict[key][0] > (self.revolving_buffer_size / 2.0):
                 trupercept_score = sum(self.trupercept_dict[key][2])/self.trupercept_dict[key][0]
                 self.trupercept_monitoring.append([key, trupercept_score, self.trupercept_dict[key][0]])
 
@@ -1323,26 +1325,26 @@ class RSU():
         self.error_monitoring = []
         twenty_percent_break_check = False
         for key in self.conclave_dict.keys():
-            if self.conclave_dict[key][0] > 5:
+            if self.conclave_dict[key][0] > (self.revolving_buffer_size / 2.0):
                 try:
-                    average_error = sum(self.conclave_dict[key][2])/self.conclave_dict[key][0]
-                    average_Expected_error = sum(self.conclave_dict[key][3])/self.conclave_dict[key][0]
-                    print(average_error)
-                    adjusted_error = average_error / average_Expected_error
-                    if int(key) < self.localization_offset:
-                        average_error = average_error / error_monitoring_normalizer
-                    self.error_monitoring.append([key, average_error, average_Expected_error, self.conclave_dict[key][0]])
+                    average_error_std = sum(self.conclave_dict[key][2])/self.conclave_dict[key][0]
+                    print(key, "avg", average_error_std)
+                    average_error_normalized_conclave = average_error_std / error_monitoring_normalizer
+                    print(key, "norm", average_error_normalized_conclave)
 
                     # Write to one file the SDSS vs. baseline at 100 seconds
                     if self.error_at_100 == -99.0 and self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                        self.error_at_100 = adjusted_error
+                        self.error_at_100 = average_error_std
                         if self.error_at_100 == 0.0:
                             self.error_at_100 = 0.001
 
-                    average_error_normalized_conclave = adjusted_error / self.error_at_100
+                    # average_error_normalized_conclave = average_error_std / self.error_at_100
+                    # average_error_normalized_conclave = average_error / error_monitoring_normalizer
+
+                    self.conclave_error[key] = average_error_normalized_conclave
 
                     if self.time >= self.error_injection_time and int(key) == self.error_target_vehicle:
-                        self.conclave_error = average_error_normalized_conclave
+                        self.conclave_error[key] = average_error_normalized_conclave / self.error_at_100
                         with open('test_output/output_conclave.txt', 'a') as f:
                             f.write(str(average_error_normalized_conclave) + ",")
                             print("writing to file!" + str(self.time-.125) + "," + str(average_error_normalized_conclave) + "\n")
