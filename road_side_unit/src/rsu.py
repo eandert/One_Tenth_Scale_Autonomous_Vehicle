@@ -565,11 +565,12 @@ class RSU():
                         if self.getTime() >= self.error_injection_time and self.error_type == 6 and idx == self.error_target_vehicle:
                             # Error injection for localization error
                             print("------------------------------------ injeting localization error ", self.unit_test_idx)
-                            x_error = np.random.normal(0, self.unit_test_idx/10.0, 1)[0]
-                            y_error = np.random.normal(0, self.unit_test_idx/10.0, 1)[0]
+                            x_error = 1.0 + self.unit_test_idx / 10.0
+                            y_error = 1.0 + self.unit_test_idx / 10.0
+                            print(x_error, y_error)
                             for detection in vehicle.fusionDetections:
-                                detection[1] = detection[1] + vehicle.localizationPositionX_actual - vehicle.localizationPositionX + x_error
-                                detection[2] = detection[2] + vehicle.localizationPositionY_actual - vehicle.localizationPositionY + y_error
+                                detection[1] = detection[1] + ((vehicle.localizationPositionX_actual - vehicle.localizationPositionX) * x_error)
+                                detection[2] = detection[2] + ((vehicle.localizationPositionY_actual - vehicle.localizationPositionY) * y_error)
                                 detection[3] = sensor.addBivariateGaussians(np.array(vehicle.localizationCovariance), np.array(detection[3])).tolist()
                         else:
                             for detection in vehicle.fusionDetections:
@@ -656,27 +657,28 @@ class RSU():
                             self.local_under_detection_miss += under_detection_miss_s
 
                         # Ground truth the global fusion result
-                        over_detection_miss_g, under_detection_miss_g, differences_g = self.ground_truth_dataset(self.globalFusionList, ground_truth)
-                        self.global_differences += differences_g
-                        self.global_over_detection_miss += over_detection_miss_g
-                        self.global_under_detection_miss += under_detection_miss_g
+                        if self.getTime() >= self.error_injection_time:
+                            over_detection_miss_g, under_detection_miss_g, differences_g = self.ground_truth_dataset(self.globalFusionList, ground_truth)
+                            self.global_differences += differences_g
+                            self.global_over_detection_miss += over_detection_miss_g
+                            self.global_under_detection_miss += under_detection_miss_g
 
                         # Ground truth the one setp global fusion result
-                        if self.test_one_step_kalman:
+                        if self.test_one_step_kalman and self.getTime() >= self.error_injection_time:
                             over_detection_miss_ok, under_detection_miss_ok, differences_ok = self.ground_truth_dataset(self.globalFusionListOneStepKalman, ground_truth)
                             self.global_one_step_differences += differences_ok
                             self.global_one_step_over_detection_miss += over_detection_miss_ok
                             self.global_one_step_under_detection_miss += under_detection_miss_ok
 
                         # Ground truth the trupercept result
-                        if self.test_trupercept:
+                        if self.test_trupercept and self.getTime() >= self.error_injection_time:
                             over_detection_miss_tp, under_detection_miss_tp, differences_tp = self.ground_truth_dataset(self.globaFusionListTrupercept, ground_truth)
                             self.global_trupercept_differences += differences_tp
                             self.global_trupercept_over_detection_miss += over_detection_miss_tp
                             self.global_trupercept_under_detection_miss += under_detection_miss_tp
 
                         # Ground truth the trupercept result
-                        if self.test_conclave:
+                        if self.test_conclave and self.getTime() >= self.error_injection_time:
                             over_detection_miss_c, under_detection_miss_c, differences_c = self.ground_truth_dataset(self.globaFusionListConclave, ground_truth)
                             self.global_conclave_differences += differences_c
                             self.global_conclave_over_detection_miss += over_detection_miss_c

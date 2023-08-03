@@ -14,8 +14,8 @@ import config
 global mainWin
 
 parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3", "two_cav_simulation_unit_test_4","four_cav_simulation_unit_test","four_cav_simulation_unit_test_2","four_cav_simulation_unit_test_3","four_cav_simulation_unit_test_4"]
-test_length = 10
-error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1"] * test_length + ["four_cav_simulation_error_injection_2"] * test_length + ["four_cav_simulation_error_injection_3"] * test_length + ["four_cav_simulation_error_injection_4"] * test_length + ["four_cav_simulation_error_injection_5"] * test_length + ["four_cav_simulation_error_injection_9"] * test_length + ["four_cav_simulation_error_injection_6"] * test_length + ["four_cav_simulation_error_injection_7"] * test_length + ["four_cav_simulation_error_injection_8"] * test_length
+test_length = 1
+error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1"] * 0 + ["four_cav_simulation_error_injection_2"] * 0 + ["four_cav_simulation_error_injection_3"] * 0 + ["four_cav_simulation_error_injection_4"] * 0 + ["four_cav_simulation_error_injection_5"] * 0 + ["four_cav_simulation_error_injection_6"] * test_length + ["four_cav_simulation_error_injection_7"] * test_length + ["four_cav_simulation_error_injection_8"] * test_length  + ["four_cav_simulation_error_injection_9"] * test_length
 position_recording = ["position_recording"] * 10
 
 class UnitTest():
