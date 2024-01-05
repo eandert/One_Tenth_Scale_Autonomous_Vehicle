@@ -343,7 +343,7 @@ class Tracked:
 
             if sensor_fusion_messer == 1:
                 print("old-----------------------------------------", self.P_hat_t)
-                for cov in self.F_t:
+                for cov in self.P_hat_t:
                     for entry in cov:
                         entry = entry * sensor_fusion_messer_rate
                 print("new-----------------------------------------", self.P_hat_t)

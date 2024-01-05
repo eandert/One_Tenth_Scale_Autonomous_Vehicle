@@ -112,15 +112,15 @@ class RSU():
         # For testing Conclave
         self.test_conclave = True
         if self.test_conclave:
-            self.globalFusionConclave= global_fusion.GlobalFUSION(self.global_fusion_mode)
+            self.globalFusionConclave = global_fusion.GlobalFUSION(self.global_fusion_mode)
             self.globaFusionListConclave = []
             self.global_conclave_differences = []
             self.global_conclave_over_detection_miss = 0
             self.global_conclave_under_detection_miss = 0
 
         self.record_file = config.record_to_file
-        if self.record_file:
-            self.pickle_dict = {}
+        # if self.record_file:
+        self.pickle_dict = {}
         self.read_file = config.replay_from_file
         if self.read_file:
             import pickle
@@ -578,16 +578,40 @@ class RSU():
                                 detection[2] = detection[2] + vehicle.localizationPositionY_actual - vehicle.localizationPositionY
                                 detection[3] = sensor.addBivariateGaussians(np.array(vehicle.localizationCovariance), np.array(detection[3])).tolist()
 
+                cav_cis_fusions = []
+
                 # Add CAV fusion results to the global sensor fusion
                 for idx, vehicle_ in self.vehicles.items():
                     self.globalFusion.processDetectionFrame(self.getTime(), vehicle_.fusionDetections, .25, self.parameterized_covariance)
+                    cav_cis_fusions.append(vehicle_.fusionDetections)
 
                 # Add CIS fusion results to the global sensor fusion
                 for idx, sensor_ in self.sensors.items():
                     self.globalFusion.processDetectionFrame(self.getTime(), sensor_.fusionDetections, .25, self.parameterized_covariance)
+                    cav_cis_fusions.append(sensor_.fusionDetections)
+
+                # # For conclave
+                # cavs = []
+                # ciss = []
+                # for idx, cav in self.vehicles.items():
+                #     cavs.append([cav.localizationPositionX, cav.localizationPositionY, cav.theta,
+                #                 cav.cameraSensor.center_angle, cav.cameraSensor.max_distance, cav.cameraSensor.field_of_view,
+                #                 cav.lidarSensor.center_angle, cav.lidarSensor.max_distance, cav.lidarSensor.field_of_view])
+                # for idx, cis in self.sensors.items():
+                #     ciss.append([cis.localizationPositionX, cis.localizationPositionY, cis.theta,
+                #                 cis.cameraSensor.center_angle, cis.cameraSensor.max_distance, cis.cameraSensor.field_of_view])
+
+                # # Save the inputs
+                # self.pickle_dict[self.getTime()] = [self.create_ground_truth(), cav_cis_fusions, cavs, ciss]
+                # # Write to a pickles file every so often
+                # if self.time >= self.error_injection_time + 59:
+                #     with open("input_fast_global_mode/four_cav_simulation_error_injection_" + str(self.error_type) + "_0_" + str(self.unit_test_idx) + ".pickle", 'wb') as file1:
+                #         # dump information to that file
+                #         import pickle
+                #         pickle.dump(self.pickle_dict, file1, protocol=pickle.HIGHEST_PROTOCOL)
 
                 # Perform the global fusion
-                self.globalFusionList, conclave_data, trupercept_data = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance, monitor)
+                self.globalFusionList, _, _ = self.globalFusion.fuseDetectionFrame(self.parameterized_covariance, monitor)
 
                 # pprint(vars(self.globalFusion))
 
@@ -607,29 +631,23 @@ class RSU():
                     self.globalFusionListOneStepKalman, error_data_one_step, trupercept_data_trash = self.globalFusionOneStepKalman.fuseDetectionFrame(self.parameterized_covariance, monitor)
 
                 # Testing accuracy of gloabal fusion with truepercept
-                if self.test_trupercept and self.test_conclave and self.getTime() == self.error_injection_time:
-                    self.globalFusionTrupercept = copy.deepcopy(self.globalFusion)
-                    self.globalFusionConclave = copy.deepcopy(self.globalFusion)
-                elif self.test_trupercept and self.test_conclave and self.getTime() > self.error_injection_time:
+                if self.test_trupercept and self.test_conclave:
                     for idx, vehicle_3 in self.vehicles.items():
                         # Add to the global sensor fusion
-                        if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
-                            self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.trupercept_error)
-                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.conclave_error[idx])
-                        else:
-                            self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
-                            self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
+                        # if self.getTime() >= self.error_injection_time and idx == self.error_target_vehicle:
+                            # self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.trupercept_error)
+                            # self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance, self.conclave_error[idx])
+                        # else:
+                        self.globalFusionTrupercept.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
+                        self.globalFusionConclave.processDetectionFrame(self.getTime(), vehicle_3.fusionDetections, .25, self.parameterized_covariance)
 
                     for idx, sensor_3 in self.sensors.items():
                         # Add to the global sensor fusion
                         self.globalFusionTrupercept.processDetectionFrame(self.getTime(), sensor_3.fusionDetections, .25, self.parameterized_covariance)
                         self.globalFusionConclave.processDetectionFrame(self.getTime(), sensor_3.fusionDetections, .25, self.parameterized_covariance)
 
-                    self.globaFusionListTrupercept, conclave_data_trash, trupercept_data = self.globalFusionTrupercept.fuseDetectionFrame(self.parameterized_covariance, monitor)
-                    self.globaFusionListConclave, conclave_data, trupercept_data_trash = self.globalFusionConclave.fuseDetectionFrame(self.parameterized_covariance, monitor)
-                else:
-                    self.globaFusionListTrupercept = copy.deepcopy(self.globalFusionList)
-                    self.globaFusionListConclave = copy.deepcopy(self.globalFusionList)
+                    self.globaFusionListTrupercept, _, trupercept_data = self.globalFusionTrupercept.fuseDetectionFrame(self.parameterized_covariance, monitor)
+                    self.globaFusionListConclave, conclave_data, _ = self.globalFusionConclave.fuseDetectionFrame(self.parameterized_covariance, monitor)
 
                 # Use the cooperative monitoring method to check the sensors against the global fusion result
                 if monitor:
@@ -1101,7 +1119,7 @@ class RSU():
         object_polygons = []
         length = .6
         width = .6
-        for idx, vehicle in enumerate(self.globalFusionList):
+        for idx, vehicle in enumerate(self.globaFusionListConclave):
             # Rule of 3s, make sure 3 things have seen this
             if vehicle[7] >= 3:
                 # Create a bounding box for vehicle that is length + 2*buffer long and width + 2*buffer wide
