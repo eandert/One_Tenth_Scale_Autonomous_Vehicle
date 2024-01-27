@@ -2,6 +2,9 @@ import math
 
 
 class VehicleType:
+    """
+    Represents the types of vehicles.
+    """
     CAV_REV_1 = "CAV_REV_1"
     CIS_REV_1 = "CIS_REV_1"
 
@@ -12,6 +15,15 @@ class VehicleParams:
     """
 
     def __init__(self, type):
+        """
+        Initialize the VehicleParams object.
+
+        Args:
+            type (VehicleType): The type of the vehicle.
+
+        Raises:
+            Exception: If the vehicle type is not supported.
+        """
         if type not in [VehicleType.CAV_REV_1, VehicleType.CIS_REV_1]:
             raise Exception("Vehicle type not supported: ", type)
 
