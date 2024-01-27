@@ -26,7 +26,7 @@ class Planner:
     def __init__(self):
         # Vehicle parameters
         self.vehicle_params = vehicle_settings.VehicleParams(
-            vehicle_settings.VehicleType.CAV)
+            vehicle_settings.VehicleType.CAV_REV_1)
 
         # Physics simulator for tracking position in simulation mode
         self.physics = physics.Physics(
