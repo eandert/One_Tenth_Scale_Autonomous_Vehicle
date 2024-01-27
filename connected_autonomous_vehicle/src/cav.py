@@ -9,31 +9,37 @@ import random
 from connected_autonomous_vehicle.src import planning_control, communication
 from shared_library import local_fusion, sensor, lidar_recognition, consensus
 
-#import local_fusion
+# import local_fusion
 
 pipeFromC = "/home/jetson/Projects/slamware/fifo_queues/fifopipefromc"
 pipeToC = "/home/jetson/Projects/slamware/fifo_queues/fifopipetoc"
 
 # This function is for controlling the time function in case of simulation
-def fetch_time(simulation_time, global_time = 1.0):
+
+
+def fetch_time(simulation_time, global_time=1.0):
     if simulation_time:
         return global_time
     else:
         return time.time()
 
-def update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check = None):
-    while(True):
+
+def update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check=None):
+    while (True):
         new_time = rsu_sim_check.getSimTime()["time"]
         if new_time != -99 and new_time != None:
-            if debug: print( " Vehicle ", vehicle_id, " got sim time from server ", new_time)
+            if debug:
+                print(" Vehicle ", vehicle_id,
+                      " got sim time from server ", new_time)
             return new_time
         elif new_time == -99:
             return -99
 
+
 def sourceImagesThread(out_queue, settings, camSpecs, simulation_time, data_collect_mode, start_time, interval):
     # DO our imports within this function so we dont disturb the simulation
     from connected_autonomous_vehicle.src import camera_recognition
-    
+
     # Init the camera class
     cameraRecognition = camera_recognition.Camera(settings, camSpecs)
 
@@ -47,7 +53,7 @@ def sourceImagesThread(out_queue, settings, camSpecs, simulation_time, data_coll
     # Now wait and ask for input
     while 1:
         if fetch_time(simulation_time) >= target:
-            #print( "camera")
+            # print( "camera")
             now = fetch_time(simulation_time)
 
             # Take the camera frame and process
@@ -56,22 +62,22 @@ def sourceImagesThread(out_queue, settings, camSpecs, simulation_time, data_coll
                 camcoordinates = []
                 camtimestamp_start, frame = cameraRecognition.takeCameraFrameRaw()
             else:
-                #camcoordinates, camtimestamp_start, camtimestamp_end = cameraRecognition.takeCameraFrame()
+                # camcoordinates, camtimestamp_start, camtimestamp_end = cameraRecognition.takeCameraFrame()
                 camtimestamp_start = time.simte()
-            #print ( "CAM got " + str(fetch_time(simulation_time, global_time)))
+            # print ( "CAM got " + str(fetch_time(simulation_time, global_time)))
 
             # Prep value to be sent to the part of the program
-	    # Clear the queue of old data
+            # Clear the queue of old data
             while not out_queue.empty():
                 out_queue.get()
             out_queue.put([camcoordinates, camtimestamp_start, now])
 
             # Sleep to reduce busy wait
-            #wait_until_next = round(fetch_time(simulation_time, global_time),3) % interval - .001
-            #if wait_until_next > 0:
+            # wait_until_next = round(fetch_time(simulation_time, global_time),3) % interval - .001
+            # if wait_until_next > 0:
             #    time.sleep(wait_until_next)
 
-            #with open("cam_output.txt", 'a') as file1:
+            # with open("cam_output.txt", 'a') as file1:
             #    file1.write(str(camtimestamp_start) + ',' + str(frame) + '\n')
 
             # New target
@@ -93,9 +99,9 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, simulation_tim
 
     start, end = lidarDevice.getFromC()
     lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(),
-                                                                          start, 
+                                                                          start,
                                                                           lidarDevice.localizationX,
-                                                                          lidarDevice.localizationY, 
+                                                                          lidarDevice.localizationY,
                                                                           lidarDevice.localizationYaw,
                                                                           lidarSensor)
 
@@ -112,9 +118,9 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, simulation_tim
     while 1:
         if fetch_time(simulation_time) >= target:
             # Take the LIDAR frame and process
-            #print ( "LIDAR start " + str(fetch_time(simulation_time, global_time)))
+            # print ( "LIDAR start " + str(fetch_time(simulation_time, global_time)))
             start, end = lidarDevice.getFromC()
-            #print ( "LIDAR got " + str(fetch_time(simulation_time, global_time)))
+            # print ( "LIDAR got " + str(fetch_time(simulation_time, global_time)))
             if data_collect_mode:
                 # Only collecting data, skip processing
                 raw_lidar = lidarDevice.parseFromC()
@@ -122,16 +128,17 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, simulation_tim
                 lidartimestamp = end
             else:
                 lidarcoordinates, lidartimestamp = lidarRecognition.processLidarFrame(lidarDevice.parseFromC(),
-                                                                                    start,
-                                                                                    lidarDevice.localizationX,
-                                                                                    lidarDevice.localizationY, 
-                                                                                    lidarDevice.localizationYaw,
-                                                                                    lidarSensor)
-            localization = [lidarDevice.localizationX, lidarDevice.localizationY, lidarDevice.localizationYaw, index, start]
-            #print ( "LIDAR detect " + str(fetch_time(simulation_time, global_time)))
+                                                                                      start,
+                                                                                      lidarDevice.localizationX,
+                                                                                      lidarDevice.localizationY,
+                                                                                      lidarDevice.localizationYaw,
+                                                                                      lidarSensor)
+            localization = [lidarDevice.localizationX, lidarDevice.localizationY,
+                            lidarDevice.localizationYaw, index, start]
+            # print ( "LIDAR detect " + str(fetch_time(simulation_time, global_time)))
 
             # Send the localization and coordinate results to the fusion function
-	        # Clear the queue of old data
+            # Clear the queue of old data
             while not out_queue.empty():
                 out_queue.get()
             out_queue.put([localization, lidarcoordinates, lidartimestamp])
@@ -139,18 +146,20 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, simulation_tim
             # Log this to a file
             index += 1
 
-            #with open("lidar_output.txt", 'a') as file1:
+            # with open("lidar_output.txt", 'a') as file1:
             #    file1.write(str(lidartimestamp) + '\n' + str(localization) + '\n' + str(raw_lidar) + '\n')
 
             # New target
             target = target + interval
         time.sleep(.001)
 
+
 def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
     vehicle_id = v_id
     # Start the connection with the RSU (Road Side Unit) server through sockets
     rsu = communication.connectServer(rsu_ip)
-    init_returned = rsu.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, time.time())
+    init_returned = rsu.register(
+        vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, time.time())
 
     init["t_x"] = init_returned["t_x"]
     init["t_y"] = init_returned["t_y"]
@@ -166,9 +175,10 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
     while 1:
         if not comm_q.empty():
             got = comm_q.get()
-            x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage = got
+            x, y, z, roll, pitch, yaw, steering_acceleration, motor_acceleration, target_index_x, target_index_y, intersection_id, objectPackage = got
 
-            response_message = rsu.checkin(vehicle_id, x, y, z, roll, pitch, yaw, steeringAcceleration, motorAcceleration, targetIndexX, targetIndexY, intersection_id, objectPackage, None, time.time())
+            response_message = rsu.checkin(vehicle_id, x, y, z, roll, pitch, yaw, steering_acceleration,
+                                           motor_acceleration, target_index_x, target_index_y, intersection_id, objectPackage, None, time.time())
 
             # Check if our result is valid
             if response_message == None:
@@ -179,7 +189,8 @@ def processCommunicationsThread(comm_q, v_id, init, response, rsu_ip):
                 else:
                     print("Attempting to re-register with RSU")
                     # We have failed a lot lets try to re-register but use our known location
-                    response_message = rsu.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, time.time())
+                    response_message = rsu.register(
+                        vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, time.time())
             else:
                 response["v_t"] = response_message["v_t"]
                 response["tfl_state"] = response_message["tfl_state"]
@@ -200,7 +211,7 @@ def cav(config, vid, test_idx):
     simulation_time = False
     rsu_sim_check = None
     global_time = -99
-    bounding_box = [[0.0, 0.0],[0.0, 0.0]]
+    bounding_box = [[0.0, 0.0], [0.0, 0.0]]
     last_response = []
     test_iteration = config.test_iteration
     read_file = config.replay_from_file
@@ -238,10 +249,10 @@ def cav(config, vid, test_idx):
     else:
         local_fusion_mode = 0
 
-    print( " CAV ", vid, " begin.")
+    print(" CAV ", vid, " begin.")
 
     if not config.simulation:
-    	# Do our imports within this function so we dont disturb the simulation
+        # Do our imports within this function so we dont disturb the simulation
         from connected_autonomous_vehicle.src import motors
         from shared_library import camera_recognition
         egoVehicle = motors.Motors()
@@ -264,13 +275,14 @@ def cav(config, vid, test_idx):
         cooperative_bosco = config.cooperative_bosco
         cooperative_monitoring_update = config.cooperative_monitoring_update
         cooperative_monitoring_step = 0
-        global_time = 1.0 # This must start as nonzero else Python will confuse with none
+        global_time = 1.0  # This must start as nonzero else Python will confuse with none
 
     # Set up the timing
     if config.simulation:
         start_time = fetch_time(simulation_time, global_time)
     else:
-        start_time = fetch_time(simulation_time, global_time) + config.init_time
+        start_time = fetch_time(
+            simulation_time, global_time) + config.init_time
     interval = config.interval
     interval_offset = config.offset_interval
     fallthrough_delay = config.fallthrough_delay
@@ -281,12 +293,14 @@ def cav(config, vid, test_idx):
     if not config.simulation:
         # Spawn the camera processing thread
         cam_out_queue = Queue()
-        cameraThread = Process(target=sourceImagesThread, args=(cam_out_queue, settings, camSpecs, simulation_time, data_collect_mode, start_time, interval))
+        cameraThread = Process(target=sourceImagesThread, args=(
+            cam_out_queue, settings, camSpecs, simulation_time, data_collect_mode, start_time, interval))
         cameraThread.start()
 
         # Spawn the lidar processign thread
         lidar_out_queue = Queue()
-        cameraThread = Process(target=sourceLIDARThread, args=(lidar_out_queue, pipeFromC, pipeToC, planner.lidarSensor, simulation_time, data_collect_mode, start_time, interval))
+        cameraThread = Process(target=sourceLIDARThread, args=(lidar_out_queue, pipeFromC, pipeToC,
+                               planner.lidarSensor, simulation_time, data_collect_mode, start_time, interval))
         cameraThread.start()
 
         # Spawn the communication thread
@@ -295,11 +309,12 @@ def cav(config, vid, test_idx):
         response = manager.dict()
         response["error"] = 1
         comm_q = Queue()
-        commThread = Process(target=processCommunicationsThread, args=(comm_q, vehicle_id, init, response, config.rsu_ip))
+        commThread = Process(target=processCommunicationsThread, args=(
+            comm_q, vehicle_id, init, response, config.rsu_ip))
         commThread.start()
     else:
         # We are in sumulation and cannot start unlimited threads so this will be done in series
-        fails = 0        
+        fails = 0
         simulation_time = True
         global_time = 1.0
         init = {}
@@ -307,12 +322,18 @@ def cav(config, vid, test_idx):
         lidarRecognition = lidar_recognition.LIDAR(0.0)
 
         # Manually do what the thread would normally do
-        if debug: print( " Vehicle ", vehicle_id, " connecting to RSU... ", config.rsu_ip)
+        if debug:
+            print(" Vehicle ", vehicle_id,
+                  " connecting to RSU... ", config.rsu_ip)
         # Start the connection with the RSU (Road Side Unit) server through sockets
         rsu_sim_check = communication.connectServer(config.rsu_ip)
-        if debug: print( " Vehicle ", vehicle_id, " connected ", config.rsu_ip)
-        init_returned = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, fetch_time(simulation_time, global_time))
-        if debug: print( " Vehicle ", vehicle_id, " registered with RSU ", config.rsu_ip)
+        if debug:
+            print(" Vehicle ", vehicle_id, " connected ", config.rsu_ip)
+        init_returned = rsu_sim_check.register(
+            vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, fetch_time(simulation_time, global_time))
+        if debug:
+            print(" Vehicle ", vehicle_id,
+                  " registered with RSU ", config.rsu_ip)
 
         # Store the init values for continuous use
         init["t_x"] = init_returned["t_x"]
@@ -326,18 +347,24 @@ def cav(config, vid, test_idx):
     while 'route_x' not in init:
         time.sleep(.01)
 
-    if debug: print( " Vehicle ", vehicle_id, " init pos ", init["t_x"], init["t_y"], init["t_yaw"])
+    if debug:
+        print(" Vehicle ", vehicle_id, " init pos ",
+              init["t_x"], init["t_y"], init["t_yaw"])
 
     # Now that we have chatted with the RSU server, we should know where we are going
     planner.initialVehicleAtPosition(init["t_x"], init["t_y"], init["t_yaw"], init["route_x"], init["route_y"],
-                                    init["route_TFL"], vehicle_id, config.simulation)
-    
-    if record_file:
-        pickle_dict[fetch_time(simulation_time, global_time)] = [], [], planner, []
-    elif read_file:
-        _, _, planner, _ = pickle_dict[fetch_time(simulation_time, global_time)]
+                                     init["route_TFL"], vehicle_id, config.simulation)
 
-    if debug: print( " Vehicle ", vehicle_id, " planner initialized " , planner.localizationPositionX, planner.localizationPositionY, planner.theta, planner.positionX_offset, planner.positionY_offset, planner.theta_offset)
+    if record_file:
+        pickle_dict[fetch_time(simulation_time, global_time)] = [
+        ], [], planner, []
+    elif read_file:
+        _, _, planner, _ = pickle_dict[fetch_time(
+            simulation_time, global_time)]
+
+    if debug:
+        print(" Vehicle ", vehicle_id, " planner initialized ", planner.global_position_x, planner.global_position_y,
+              planner.theta, planner.localizer_position_offset_x, planner.localizer_position_offset_y, planner.localizer_theta_offset)
 
     # Do a quick check of the coordinates to make a bounding box filter so that we can take out uneccessary points
     min_x = 99.0
@@ -355,31 +382,39 @@ def cav(config, vid, test_idx):
         if y < min_y:
             min_y = y
     buffer = .25
-    bounding_box = [[min_x - buffer, max_x + buffer],[min_y - buffer, max_y + buffer]]
-    if debug: print( " Vehicle ", vehicle_id, " bounding box params ", bounding_box )
+    bounding_box = [[min_x - buffer, max_x + buffer],
+                    [min_y - buffer, max_y + buffer]]
+    if debug:
+        print(" Vehicle ", vehicle_id, " bounding box params ", bounding_box)
 
     # If this is a simulation we need a second communication class to get some ideal positions
     if config.simulation:
-        global_time = update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check)
-        if debug: print("global_time", global_time)
+        global_time = update_time_from_rsu_sim(
+            vehicle_id, debug, rsu_sim_check)
+        if debug:
+            print("global_time", global_time)
 
     # Start the sensor fusion pipeline
     fusion = local_fusion.FUSION(local_fusion_mode, vehicle_id)
-    if debug: print( " Vehicle ", vehicle_id, " started fusion node" )
+    if debug:
+        print(" Vehicle ", vehicle_id, " started fusion node")
 
     # Sleep until test start time
-    wait_until_start = start_time - fetch_time(simulation_time, global_time) - .01
+    wait_until_start = start_time - \
+        fetch_time(simulation_time, global_time) - .01
     if wait_until_start > 0 and not config.simulation:
         time.sleep(wait_until_start)
 
     next_time = start_time + interval_offset
-    if debug: print( " Vehicle ", vehicle_id, " start time is ", next_time)
+    if debug:
+        print(" Vehicle ", vehicle_id, " start time is ", next_time)
 
     last_lidar_time = fetch_time(simulation_time, global_time)
 
     while True:
         if config.simulation:
-            global_time = update_time_from_rsu_sim(vehicle_id, debug, rsu_sim_check)
+            global_time = update_time_from_rsu_sim(
+                vehicle_id, debug, rsu_sim_check)
             if global_time == -99:
                 exit(0)
         if fetch_time(simulation_time, global_time) >= next_time:
@@ -387,57 +422,73 @@ def cav(config, vid, test_idx):
                 if read_file:
                     read_time = fetch_time(simulation_time, global_time)
                     # print("cav " + str(vehicle_id) + "  " + str(read_time) + " ---------------------------------------")
-                    cam_returned, lidar_returned, temp_planner, vehicle_object_positions = pickle_dict[read_time]
+                    cam_returned, lidar_returned, temp_planner, vehicle_object_positions = pickle_dict[
+                        read_time]
                     sim_values = {}
                     sim_values['parameterized_covariance'] = True
 
                     if read_time > 1.5:
-                        planner.localizationPositionX = temp_planner.localizationPositionX
-                        planner.localizationPositionY = temp_planner.localizationPositionY
+                        planner.global_position_x = temp_planner.global_position_x
+                        planner.global_position_y = temp_planner.global_position_y
                         planner.positionX_sim = temp_planner.positionX_sim
                         planner.positionY_sim = temp_planner.positionY_sim
-                        planner.rearAxlePositionX = temp_planner.rearAxlePositionX
-                        planner.rearAxlePositionY = temp_planner.rearAxlePositionY
+                        planner.physics.rear_axle_x = temp_planner.physics.rear_axle_x
+                        planner.physics.rear_axle_y = temp_planner.physics.rear_axle_y
                         planner.theta = temp_planner.theta
                         planner.velocity = temp_planner.velocity
-                        planner.steeringAcceleration = temp_planner.steeringAcceleration
-                        planner.motorAcceleration = temp_planner.motorAcceleration
-                        planner.targetIndexX = temp_planner.targetIndexX
-                        planner.vCoordinates = temp_planner.vCoordinates
+                        planner.steering_acceleration = temp_planner.steering_acceleration
+                        planner.motor_acceleration = temp_planner.motor_acceleration
+                        planner.target_index_x = temp_planner.target_index_x
+                        planner.velocity_coordinates = temp_planner.velocity_coordinates
                         planner.tind = temp_planner.tind
 
                     # Send the lolcailzation values to the RSU
-                    rsu_sim_check.sendSimPosition(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
-                    if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
+                    rsu_sim_check.sendSimPosition(vehicle_id, planner.global_position_x,
+                                                  planner.global_position_y, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
+                    if debug:
+                        print(" Vehicle ", vehicle_id,
+                              " sent simulated position to RSU")
 
                     # Recieve positions of other vehicles from RSU so we can fake the sensor values
                     temp_sim_values = rsu_sim_check.getSimPositions(vehicle_id)
-                    while(temp_sim_values['step_sim_vehicle'] == False):
+                    while (temp_sim_values['step_sim_vehicle'] == False):
                         time.sleep(.01)
-                        temp_sim_values = rsu_sim_check.getSimPositions(vehicle_id)
-                        if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
+                        temp_sim_values = rsu_sim_check.getSimPositions(
+                            vehicle_id)
+                        if debug:
+                            print(" Vehicle ", vehicle_id,
+                                  " requesting simulation positions")
                 else:
                     read_time = fetch_time(simulation_time, global_time)
                     # print("cav " + str(vehicle_id) + "  " + str(read_time) + " ---------------------------------------")
                     # Special simulation setup where we do not use the source threads
                     # Update the localization first because we use it here
-                    planner.updatePosition(interval)
-                    planner.update_localization(use_localization = False)
-                    if debug: print( " Vehicle ", vehicle_id, " posiiton and localization updated" )
-                    
+                    planner.update_position(interval)
+                    planner.update_localization(
+                        use_incoming_localization=False)
+                    if debug:
+                        print(" Vehicle ", vehicle_id,
+                              " posiiton and localization updated")
+
                     # Send the lolcailzation values to the RSU
-                    rsu_sim_check.sendSimPosition(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
-                    if debug: print( " Vehicle ", vehicle_id, " sent simulated position to RSU" )
+                    rsu_sim_check.sendSimPosition(vehicle_id, planner.global_position_x,
+                                                  planner.global_position_y, 0.0, 0.0, 0.0, planner.theta, planner.velocity)
+                    if debug:
+                        print(" Vehicle ", vehicle_id,
+                              " sent simulated position to RSU")
 
                     # Recieve positions of other vehicles from RSU so we can fake the sensor values
                     sim_values = rsu_sim_check.getSimPositions(vehicle_id)
-                    while(sim_values['step_sim_vehicle'] == False):
+                    while (sim_values['step_sim_vehicle'] == False):
                         time.sleep(.01)
                         sim_values = rsu_sim_check.getSimPositions(vehicle_id)
-                        if debug: print( " Vehicle ", vehicle_id, " requesting simulation positions" )
+                        if debug:
+                            print(" Vehicle ", vehicle_id,
+                                  " requesting simulation positions")
 
-                    cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, sim_values['veh_locations'])
-                
+                    cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(
+                        simulation_time, global_time), sim_values, sim_values['veh_locations'])
+
                     vehicle_object_positions = sim_values['veh_locations']
 
                 sensor_fusion_messer = 0
@@ -446,101 +497,129 @@ def cav(config, vid, test_idx):
                 if vehicle_id == 1 and fetch_time(simulation_time, global_time) >= error_time:
                     # 0:none 1:camera, 2:lidar
                     # , 3:fusion, 4:random, 5:malicous
-                    if error_type == 1: # camera error, shift by certain degree i
+                    if error_type == 1:  # camera error, shift by certain degree i
                         for each in vehicle_object_positions:
-                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
-                                #print(" rotating: ", each)
-                                ox = planner.localizationPositionX
-                                oy = planner.localizationPositionY
+                            if each[0] != planner.global_position_x and each[1] != planner.global_position_y:
+                                # print(" rotating: ", each)
+                                ox = planner.global_position_x
+                                oy = planner.global_position_y
                                 angle = math.radians(test_idx)
                                 px = each[0]
                                 py = each[1]
-                                qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
-                                qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+                                qx = ox + \
+                                    math.cos(angle) * (px - ox) - \
+                                    math.sin(angle) * (py - oy)
+                                qy = oy + \
+                                    math.sin(angle) * (px - ox) + \
+                                    math.cos(angle) * (py - oy)
                                 each[0] = qx
                                 each[1] = qy
-                                print("------------------------------------ Messing camera data by ", test_idx)
+                                print(
+                                    "------------------------------------ Messing camera data by ", test_idx)
                                 print("old", px, py, " new", qx, qy)
-                        cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-                    elif error_type == 2: # Lidar error, shift by certain degree i
+                        cam_returned, lidar_returned2 = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(
+                            simulation_time, global_time), sim_values, vehicle_object_positions)
+                    elif error_type == 2:  # Lidar error, shift by certain degree i
                         for each in vehicle_object_positions:
-                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
-                                #print(" rotating: ", each)
-                                ox = planner.localizationPositionX
-                                oy = planner.localizationPositionY
+                            if each[0] != planner.global_position_x and each[1] != planner.global_position_y:
+                                # print(" rotating: ", each)
+                                ox = planner.global_position_x
+                                oy = planner.global_position_y
                                 angle = math.radians(test_idx)
                                 px = each[0]
                                 py = each[1]
-                                qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
-                                qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+                                qx = ox + \
+                                    math.cos(angle) * (px - ox) - \
+                                    math.sin(angle) * (py - oy)
+                                qy = oy + \
+                                    math.sin(angle) * (px - ox) + \
+                                    math.cos(angle) * (py - oy)
                                 each[0] = qx
                                 each[1] = qy
-                                print("------------------------------------ Messing LIDAR data by ", test_idx)
+                                print(
+                                    "------------------------------------ Messing LIDAR data by ", test_idx)
                                 print("old", px, py, " new", qx, qy)
-                        cam_returned2, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-                    elif error_type == 3: # Fusion error, shift both by certain degree i
+                        cam_returned2, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(
+                            simulation_time, global_time), sim_values, vehicle_object_positions)
+                    elif error_type == 3:  # Fusion error, shift both by certain degree i
                         for each in vehicle_object_positions:
-                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
-                                #print(" rotating: ", each)
-                                ox = planner.localizationPositionX
-                                oy = planner.localizationPositionY
+                            if each[0] != planner.global_position_x and each[1] != planner.global_position_y:
+                                # print(" rotating: ", each)
+                                ox = planner.global_position_x
+                                oy = planner.global_position_y
                                 angle = math.radians(test_idx)
                                 px = each[0]
                                 py = each[1]
-                                qx = ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy)
-                                qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
+                                qx = ox + \
+                                    math.cos(angle) * (px - ox) - \
+                                    math.sin(angle) * (py - oy)
+                                qy = oy + \
+                                    math.sin(angle) * (px - ox) + \
+                                    math.cos(angle) * (py - oy)
                                 each[0] = qx
                                 each[1] = qy
-                                print("------------------------------------ Messing up fusion data by ", test_idx)
+                                print(
+                                    "------------------------------------ Messing up fusion data by ", test_idx)
                                 print("old", px, py, " new", qx, qy)
-                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-                    elif error_type == 4: # Random unexplainable error, remove detection randomly with probability i
+                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(
+                            simulation_time, global_time), sim_values, vehicle_object_positions)
+                    elif error_type == 4:  # Random unexplainable error, remove detection randomly with probability i
                         pop_indexes = []
                         for idx, each in enumerate(vehicle_object_positions):
-                            if each[0] != planner.localizationPositionX and each[1] != planner.localizationPositionY:
+                            if each[0] != planner.global_position_x and each[1] != planner.global_position_y:
                                 test_int = random.randint(0, 100)
                                 if test_int < test_idx * 10:
-                                    print("------------------------------------ removing random data ", test_idx)
+                                    print(
+                                        "------------------------------------ removing random data ", test_idx)
                                     pop_indexes.append(idx)
                         for pop_em in reversed(pop_indexes):
                             vehicle_object_positions.pop(pop_em)
-                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-                    elif error_type == 5: # Maliciously insert vehicle into middle of traffic light with probability i
+                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(
+                            simulation_time, global_time), sim_values, vehicle_object_positions)
+                    elif error_type == 5:  # Maliciously insert vehicle into middle of traffic light with probability i
                         test_int = random.randint(0, 100)
                         if test_int < test_idx * 10:
                             # Insert into the middle of the traffic light (there might be another object there)
-                            vehicle_object_positions.append([0.0, 0.0, 0.0, 0.0, .3, .59, 99])
-                            print("------------------------------------ adding vehicle maliciously ", test_idx)
-                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
+                            vehicle_object_positions.append(
+                                [0.0, 0.0, 0.0, 0.0, .3, .59, 99])
+                            print(
+                                "------------------------------------ adding vehicle maliciously ", test_idx)
+                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(
+                            simulation_time, global_time), sim_values, vehicle_object_positions)
                     # Error # 6 is actually going to happen at the RSU where the localization error is dealt with
-                    elif error_type == 7: # Sensor fusion error sensor weight
+                    elif error_type == 7:  # Sensor fusion error sensor weight
                         if test_idx != 0:
                             # Mess with the expected sensor accuracies
                             sensor_fusion_messer = 1
                             sensor_fusion_messer_rate = (1 - (test_idx/10.0))
-                            print("------------------------------------ increasing camera covaraince ", test_idx)
-                    elif error_type == 8: # Sensor fusion error model weight
+                            print(
+                                "------------------------------------ increasing camera covaraince ", test_idx)
+                    elif error_type == 8:  # Sensor fusion error model weight
                         if test_idx != 0:
                             # Mess with the expected sensor accuracies
                             sensor_fusion_messer = 2
                             sensor_fusion_messer_rate = (1 + (test_idx/10.0))
-                            print("------------------------------------ increasing camera covaraince ", test_idx)
-                    elif error_type == 9: # Maliciously insert vehicle into middle of traffic light with probability i
+                            print(
+                                "------------------------------------ increasing camera covaraince ", test_idx)
+                    elif error_type == 9:  # Maliciously insert vehicle into middle of traffic light with probability i
                         test_int = random.randint(0, 100)
                         if test_int < test_idx * 10:
                             # Insert into the middle of the traffic light (there might be another object there)
                             for remove_idx in reversed(range(vehicle_object_positions)):
                                 if -.5 <= vehicle_object_positions[remove_idx][0] <= .5 and -.5 <= vehicle_object_positions[remove_idx][1] <= .5:
                                     vehicle_object_positions.pop()
-                            print("------------------------------------ removed vehicle maliciously ", remove_idx)
-                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(simulation_time, global_time), sim_values, vehicle_object_positions)
-                            
+                            print(
+                                "------------------------------------ removed vehicle maliciously ", remove_idx)
+                        cam_returned, lidar_returned = sensor.simulate_sensors(planner, lidarRecognition, fetch_time(
+                            simulation_time, global_time), sim_values, vehicle_object_positions)
+
                 lidar_recieved = True
                 camera_recieved = True
- 
+
                 # TODO: temprorary recording, delete later
                 if record_file:
-                    pickle_dict[fetch_time(simulation_time, global_time)] = cam_returned, lidar_returned, planner, vehicle_object_positions
+                    pickle_dict[fetch_time(
+                        simulation_time, global_time)] = cam_returned, lidar_returned, planner, vehicle_object_positions
                     if fetch_time(simulation_time, global_time) == 1.25:
                         pickle_dict[1.125] = cam_returned, lidar_returned, planner, vehicle_object_positions
                     # Write to a pickles file every so often
@@ -548,27 +627,29 @@ def cav(config, vid, test_idx):
                         with open("test_output/test_" + str(test_idx) + "_output_cav_" + str(vehicle_id) + ".pickle", 'wb') as file1:
                             # dump information to that file
                             import pickle
-                            pickle.dump(pickle_dict, file1, protocol=pickle.HIGHEST_PROTOCOL)
+                            pickle.dump(pickle_dict, file1,
+                                        protocol=pickle.HIGHEST_PROTOCOL)
 
             else:
                 # This is not simulation so we need to get the streams from the LIDAR and camera
                 lidar_recieved = False
                 camera_recieved = False
 
-                fallthrough = fetch_time(simulation_time, global_time) + fallthrough_delay
-                while(fetch_time(simulation_time, global_time) < fallthrough and not (lidar_recieved and camera_recieved)):
+                fallthrough = fetch_time(
+                    simulation_time, global_time) + fallthrough_delay
+                while (fetch_time(simulation_time, global_time) < fallthrough and not (lidar_recieved and camera_recieved)):
                     # Get the lidar
                     if not lidar_out_queue.empty():
                         lidar_returned = lidar_out_queue.get()
-                        #print( " Got LIDAR " )
+                        # print( " Got LIDAR " )
                         lidar_recieved = True
 
                     # Get the camera
                     if not cam_out_queue.empty():
                         cam_returned = cam_out_queue.get()
-                        #print( " Got camera " )
+                        # print( " Got camera " )
                         camera_recieved = True
-            
+
             if lidar_recieved and camera_recieved:
                 localization = lidar_returned[0]
                 lidarcoordinates = lidar_returned[1]
@@ -580,16 +661,18 @@ def cav(config, vid, test_idx):
 
                 # Update the steering here while we wait for sensor fusion results and the reply from the RSU about the plan
                 if not config.simulation:
-                    planner.update_localization(True, [localization[0], localization[1], localization[2]])
-                    localization[0] = planner.localizationPositionX
-                    localization[1] = planner.localizationPositionY
+                    planner.update_localization(
+                        True, [localization[0], localization[1], localization[2]])
+                    localization[0] = planner.global_position_x
+                    localization[1] = planner.global_position_y
                     localization[2] = planner.theta
 
                 if not read_file:
                     planner.pure_pursuit_control()
 
                     # # Now update our current PID with respect to other vehicles
-                    planner.check_positions_of_other_vehicles_adjust_velocity(last_response)
+                    planner.check_positions_of_other_vehicles_adjust_velocity(
+                        last_response)
                     # # We can't update the PID controls until after all positions are known
                     planner.update_pid()
 
@@ -603,13 +686,18 @@ def cav(config, vid, test_idx):
                 fusion_start = fetch_time(simulation_time, global_time)
                 if not data_collect_mode:
                     if sensor_fusion_messer == 2:
-                        fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, sim_values['parameterized_covariance'], matching_messup_rate = sensor_fusion_messer_rate)
-                        fusion.processDetectionFrame(local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25, sim_values['parameterized_covariance'], matching_messup_rate = sensor_fusion_messer_rate)
+                        fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25,
+                                                     sim_values['parameterized_covariance'], matching_messup_rate=sensor_fusion_messer_rate)
+                        fusion.processDetectionFrame(local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25,
+                                                     sim_values['parameterized_covariance'], matching_messup_rate=sensor_fusion_messer_rate)
                     else:
-                        fusion.processDetectionFrame(local_fusion.CAMERA, camtimestamp, camcoordinates, .25, sim_values['parameterized_covariance'])
-                        fusion.processDetectionFrame(local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25, sim_values['parameterized_covariance'])
+                        fusion.processDetectionFrame(
+                            local_fusion.CAMERA, camtimestamp, camcoordinates, .25, sim_values['parameterized_covariance'])
+                        fusion.processDetectionFrame(
+                            local_fusion.LIDAR, lidartimestamp, lidarcoordinates, .25, sim_values['parameterized_covariance'])
                     if sensor_fusion_messer == 1:
-                        fusion_result = fusion.fuseDetectionFrame(sensor_fusion_error_injection = sensor_fusion_messer, sensor_fusion_error_injection_rate = sensor_fusion_messer_rate)
+                        fusion_result = fusion.fuseDetectionFrame(
+                            sensor_fusion_error_injection=sensor_fusion_messer, sensor_fusion_error_injection_rate=sensor_fusion_messer_rate)
                     else:
                         fusion_result = fusion.fuseDetectionFrame()
                 else:
@@ -658,31 +746,39 @@ def cav(config, vid, test_idx):
                         start = time.time()
 
                         sensor_platform_ids = len(cavs) + len(ciss)
-                        data = str([vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
-                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind],
-                            objectPackage, fetch_time(simulation_time, global_time)])
+                        data = str([vehicle_id, planner.global_position_x, planner.global_position_y, 0.0, 0.0, 0.0, planner.theta,
+                                    planner.steering_acceleration, planner.motor_acceleration, planner.target_index_x, planner.target_index_y, planner.velocity_coordinates[
+                                        planner.tind],
+                                    objectPackage, fetch_time(simulation_time, global_time)])
 
-                        recieved_data_init = consensus.initial_communication(vehicle_id, sensor_platform_ids, data)
+                        recieved_data_init = consensus.initial_communication(
+                            vehicle_id, sensor_platform_ids, data)
 
                         # Dishonest Supermajority (iff error code == 11)
                         if (vehicle_id == 0 or vehicle_id == 1 or vehicle_id == 2 or vehicle_id == 3 or vehicle_id == 4) and fetch_time(simulation_time, global_time) >= 5:
                             # 0:none 1:camera, 2:lidar
                             # , 3:fusion, 4:random, 5:malicous
-                            if error_type == 11: # Byzantine Fault
-                                recieved_data_final = consensus.malicious_concatinated_communication(vehicle_id, sensor_platform_ids, recieved_data_init)
+                            if error_type == 11:  # Byzantine Fault
+                                recieved_data_final = consensus.malicious_concatinated_communication(
+                                    vehicle_id, sensor_platform_ids, recieved_data_init)
                             else:
-                                recieved_data_final = consensus.concatinated_communication(vehicle_id, sensor_platform_ids, recieved_data_init)
+                                recieved_data_final = consensus.concatinated_communication(
+                                    vehicle_id, sensor_platform_ids, recieved_data_init)
                         # Honest Minority (iff error code == 11)
                         else:
-                            recieved_data_final = consensus.concatinated_communication(vehicle_id, sensor_platform_ids, recieved_data_init)
+                            recieved_data_final = consensus.concatinated_communication(
+                                vehicle_id, sensor_platform_ids, recieved_data_init)
 
-                        decided_v_from_round = consensus.bosco_decide(vehicle_id, sensor_platform_ids, recieved_data_final)
+                        decided_v_from_round = consensus.bosco_decide(
+                            vehicle_id, sensor_platform_ids, recieved_data_final)
 
-                        print(" ++++++++++++++++++++ Consensus time taken= ", time.time() - start - 2.0)
-                    
-                    response_message = rsu_sim_check.checkin(vehicle_id, planner.localizationPositionX, planner.localizationPositionY, 0.0, 0.0, 0.0, planner.theta,
-                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.tind],
-                            objectPackage, decided_v_from_round, fetch_time(simulation_time, global_time))
+                        print(" ++++++++++++++++++++ Consensus time taken= ",
+                              time.time() - start - 2.0)
+
+                    response_message = rsu_sim_check.checkin(vehicle_id, planner.global_position_x, planner.global_position_y, 0.0, 0.0, 0.0, planner.theta,
+                                                             planner.steering_acceleration, planner.motor_acceleration, planner.target_index_x, planner.target_index_y, planner.velocity_coordinates[
+                                                                 planner.tind],
+                                                             objectPackage, decided_v_from_round, fetch_time(simulation_time, global_time))
 
                     # Check if our result is valid
                     if response_message == None:
@@ -693,7 +789,8 @@ def cav(config, vid, test_idx):
                         else:
                             print("Attempting to re-register with RSU")
                             # We have failed a lot lets try to re-register but use our known location
-                            response_message = rsu_sim_check.register(vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, fetch_time(simulation_time, global_time))
+                            response_message = rsu_sim_check.register(
+                                vehicle_id, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, fetch_time(simulation_time, global_time))
                     else:
                         response["v_t"] = response_message["v_t"]
                         response["tfl_state"] = response_message["tfl_state"]
@@ -704,8 +801,8 @@ def cav(config, vid, test_idx):
                         fails = 0
                 else:
                     comm_q.put(
-                        [planner.rearAxlePositionX, planner.rearAxlePositionY, 0.0, 0.0, 0.0, planner.theta,
-                            planner.steeringAcceleration, planner.motorAcceleration, planner.targetIndexX, planner.targetIndexY, planner.vCoordinates[planner.ind], objectPackage])
+                        [planner.physics.rear_axle_y, planner.physics.rear_axle_y, 0.0, 0.0, 0.0, planner.theta,
+                            planner.steering_acceleration, planner.motor_acceleration, planner.target_index_x, planner.target_index_y, planner.velocity_coordinates[planner.ind], objectPackage])
 
                     # This should not take long but we will delay just a bit
                     time.sleep(.01)
@@ -722,34 +819,47 @@ def cav(config, vid, test_idx):
                     # Update our various pieces
                     if not read_file:
                         planner.tfl_mode = int(response["intersection_mode"])
-                        planner.av_intersection_permission = int(response["av_intersection_permission"])
-                        planner.targetVelocityGeneral = float(response["v_t"])
-                        planner.recieve_coordinate_group_commands(response["tfl_state"])
+                        planner.av_intersection_permission = int(
+                            response["av_intersection_permission"])
+                        planner.target_velocity_general = float(
+                            response["v_t"])
+                        planner.recieve_coordinate_group_commands(
+                            response["tfl_state"])
                         planner.pure_pursuit_control()
 
                         # Now update our current PID with respect to other vehicles
-                        planner.check_positions_of_other_vehicles_adjust_velocity(response["veh_locations"])
-                        if debug: print( " Vehicle ", vehicle_id, " target velocity ", planner.motorAcceleration, planner.targetVelocityGeneral, planner.targetVelocity, planner.targetFollowDistance, planner.followDistance )
+                        planner.check_positions_of_other_vehicles_adjust_velocity(
+                            response["veh_locations"])
+                        if debug:
+                            print(" Vehicle ", vehicle_id, " target velocity ", planner.motor_acceleration, planner.target_velocity_general,
+                                  planner.target_velocity, planner.targetFollowDistance, planner.followDistance)
                         last_response = response["veh_locations"]
                         # We can't update the PID controls until after all positions are known
                         planner.update_pid()
-                        if debug: print( " Vehicle ", vehicle_id, " ppm, pwm ", steering_ppm, motor_pid )
+                        if debug:
+                            print(" Vehicle ", vehicle_id,
+                                  " ppm, pwm ", steering_ppm, motor_pid)
 
                         # Finally, issue the commands to the motors
                         steering_ppm, motor_pid = planner.return_command_package()
                         if not config.simulation:
-                            egoVehicle.setControlMotors(steering_ppm, motor_pid)
+                            egoVehicle.setControlMotors(
+                                steering_ppm, motor_pid)
 
                     # with open("timing.txt", 'a') as file1:
                     #     file1.write(lidarDevice.localizationIdx, fetch_time(simulation_time, global_time))
                     #     index += 1
                     last_lidar_time = fetch_time(simulation_time, global_time)
                 if not config.simulation:
-                    if debug: print(" Time taken: ", fetch_time(simulation_time, global_time) - lidartimestamp, fetch_time(simulation_time, global_time) - camtimestamp, fetch_time(simulation_time, global_time))
+                    if debug:
+                        print(" Time taken: ", fetch_time(simulation_time, global_time) - lidartimestamp, fetch_time(
+                            simulation_time, global_time) - camtimestamp, fetch_time(simulation_time, global_time))
             else:
-                if debug: print(" Error, no camera/lidar frame returned ", lidar_recieved, camera_recieved)
+                if debug:
+                    print(" Error, no camera/lidar frame returned ",
+                          lidar_recieved, camera_recieved)
                 # Cut the engine to make sure that we don't hit anything since we are blind
-                if not config.simulation and (fetch_time(simulation_time, global_time) - last_lidar_time) >= .250 :
+                if not config.simulation and (fetch_time(simulation_time, global_time) - last_lidar_time) >= .250:
                     egoVehicle.emergencyStop()
 
             last_next_time = next_time
@@ -757,14 +867,17 @@ def cav(config, vid, test_idx):
                 next_time = last_next_time + interval
                 last_next_time = next_time
 
-            #time.sleep(last_next_time - .01)
+            # time.sleep(last_next_time - .01)
         if config.simulation:
-            if debug: print(" Vehicle ", vehicle_id, fetch_time(simulation_time, global_time))
+            if debug:
+                print(" Vehicle ", vehicle_id, fetch_time(
+                    simulation_time, global_time))
 
         time.sleep(.001)
 
     if not config.simulation:
         egoVehicle.emergencyStop()
+
 
 def fake_thread_that_just_prints():
     print("I is a thread! With much success!")

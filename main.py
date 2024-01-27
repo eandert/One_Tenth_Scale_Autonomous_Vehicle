@@ -13,10 +13,14 @@ import config
 
 global mainWin
 
-parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test","two_cav_simulation_unit_test_2","two_cav_simulation_unit_test_3", "two_cav_simulation_unit_test_4","four_cav_simulation_unit_test","four_cav_simulation_unit_test_2","four_cav_simulation_unit_test_3","four_cav_simulation_unit_test_4"]
+parameterized_covariance_unit_test_set = ["two_cav_simulation_unit_test", "two_cav_simulation_unit_test_2", "two_cav_simulation_unit_test_3",
+                                          "two_cav_simulation_unit_test_4", "four_cav_simulation_unit_test", "four_cav_simulation_unit_test_2", "four_cav_simulation_unit_test_3", "four_cav_simulation_unit_test_4"]
 test_length = 10
-error_malicious_injection_unit_test_set = ["four_cav_simulation_error_injection_1"] * test_length + ["four_cav_simulation_error_injection_2"] * test_length# + ["four_cav_simulation_error_injection_3"] * test_length + ["four_cav_simulation_error_injection_4"] * test_length + ["four_cav_simulation_error_injection_5"] * test_length + ["four_cav_simulation_error_injection_6"] * test_length + ["four_cav_simulation_error_injection_7"] * test_length + ["four_cav_simulation_error_injection_8"] * test_length  + ["four_cav_simulation_error_injection_9"] * test_length
+# + ["four_cav_simulation_error_injection_3"] * test_length + ["four_cav_simulation_error_injection_4"] * test_length + ["four_cav_simulation_error_injection_5"] * test_length + ["four_cav_simulation_error_injection_6"] * test_length + ["four_cav_simulation_error_injection_7"] * test_length + ["four_cav_simulation_error_injection_8"] * test_length  + ["four_cav_simulation_error_injection_9"] * test_length
+error_malicious_injection_unit_test_set = [
+    "four_cav_simulation_error_injection_1"] * test_length + ["four_cav_simulation_error_injection_2"] * test_length
 position_recording = ["position_recording"] * 10
+
 
 class UnitTest():
     def __init__(self):
@@ -52,7 +56,8 @@ class UnitTest():
 
             # Determing mode
             while len(conf.unit_test_config) > self.unit_test_idx:
-                injection_offset = random.randint(-conf.error_injection_time_range, conf.error_injection_time_range)
+                injection_offset = random.randint(
+                    -conf.error_injection_time_range, conf.error_injection_time_range)
                 conf.error_injection_time_tmp = conf.error_injection_time + injection_offset
                 conf.unit_test_time_tmp = conf.unit_test_time + injection_offset
 
@@ -61,16 +66,16 @@ class UnitTest():
                 # Setup the RSU
                 rsu_instance = rsu.RSU(conf, self.unit_test_idx)
 
-                time.sleep(5) 
- 
+                time.sleep(5)
+
                 # Start the GUI
-                # initGui(conf)
-                # time.sleep(5)
+                initGui(conf)
+                time.sleep(5)
 
                 rsu_instance.stepSim()
 
-                stats = [0,0,0,0,0,0,0,0,0,0,0]
-                while(True):
+                stats = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                while (True):
                     test_end, stats, error_monitor = rsu_instance.check_state()
 
                     if error_monitor:
@@ -118,12 +123,12 @@ class UnitTest():
                 f.write("\n")
             with open('test_output/variance.txt', 'a') as f:
                 f.write("\n")
-            
+
             # Calculate the prior results
             self.print_unit_test_stats(end=True)
 
             self.clear_unit_test_stats()
-        
+
         # Test over
         sys.exit()
 
@@ -165,19 +170,23 @@ class UnitTest():
         self.unit_test_global_over_detection_miss_results = []
         self.error_monitor = []
 
-    def print_unit_test_stats(self, end = False):
+    def print_unit_test_stats(self, end=False):
         idx = 0
         fails = 0
         for l_rmse, l_var, l_vel, o_rmse, o_var, o_o_miss, o_u_miss, g_rmse, g_var, g_o_miss, g_u_miss in zip(self.unit_test_localization_rmse_results,
-            self.unit_test_localization_velocity_results, self.unit_test_localization_variance_results, 
-            self.unit_test_local_rmse_results, self.unit_test_local_variance_results,
-            self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
-            self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
-            self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
-            print( "Test: ", idx, " l_mode:", self.config.unit_test_config[idx][0], " g_mode:", self.config.unit_test_config[idx][1], " est_cov:", self.config.unit_test_config[idx][2] )
-            print( "  localization_rmse_val: ", l_rmse, " variance: ", l_var, " velocity ", l_vel)
-            print( "  onboard_rmse_val: ", o_rmse, " variance: ", o_var, " over misses: ", o_o_miss, " under misses: ", o_u_miss)
-            print( "  global_rmse_val: ", g_rmse, " variance: ", g_var, " over misses: ", g_o_miss, " under misses: ", g_u_miss)
+                                                                                                              self.unit_test_localization_velocity_results, self.unit_test_localization_variance_results,
+                                                                                                              self.unit_test_local_rmse_results, self.unit_test_local_variance_results,
+                                                                                                              self.unit_test_local_under_detection_miss_results, self.unit_test_local_over_detection_miss_results,
+                                                                                                              self.unit_test_global_rmse_results, self.unit_test_global_variance_results,
+                                                                                                              self.unit_test_global_under_detection_miss_results, self.unit_test_global_over_detection_miss_results):
+            print("Test: ", idx, " l_mode:", self.config.unit_test_config[idx][0], " g_mode:",
+                  self.config.unit_test_config[idx][1], " est_cov:", self.config.unit_test_config[idx][2])
+            print("  localization_rmse_val: ", l_rmse,
+                  " variance: ", l_var, " velocity ", l_vel)
+            print("  onboard_rmse_val: ", o_rmse, " variance: ", o_var,
+                  " over misses: ", o_o_miss, " under misses: ", o_u_miss)
+            print("  global_rmse_val: ", g_rmse, " variance: ", g_var,
+                  " over misses: ", g_o_miss, " under misses: ", g_u_miss)
             print(self.error_monitor[idx])
 
             # if end:
@@ -186,12 +195,14 @@ class UnitTest():
 
             idx += 1
 
+
 def GuiProcess(config):
     # Initialize a simulator with the GUI set to on, cm map, .1s timestep, and vehicle spawn scale of 1 (default)
     QTapp = gui.QtWidgets.QApplication(sys.argv)
     mainWin = gui.MainWindow(config)
     mainWin.show()
     QTapp.exec_()
+
 
 def initGui(config):
     # Start up the Flask front end processor as it's own thread
@@ -205,7 +216,12 @@ def initGui(config):
 
     return gui_handler
 
+
 def run_single_test(conf):
+    # We have to set this
+    conf.error_injection_time_tmp = 999999
+    conf.test_iteration = 0
+
     # Setup the RSU
     rsu_instance = rsu.RSU(conf)
 
@@ -218,7 +234,7 @@ def run_single_test(conf):
 
     rsu_instance.stepSim()
 
-    while(True):
+    while (True):
         rsu_instance.check_state()
 
         if rsu_instance.end:
@@ -226,9 +242,10 @@ def run_single_test(conf):
 
         time.sleep(.001)
 
+
 if __name__ == "__main__":
     # Configure the settings
-    multiple_mode = True
+    multiple_mode = False
     if multiple_mode:
         conf_list = error_malicious_injection_unit_test_set
         unit_test = UnitTest()
@@ -237,4 +254,4 @@ if __name__ == "__main__":
         conf = config.Setting("two_cav_simulation")
         run_single_test(conf)
 
-#sys.exit() 
+# sys.exit()

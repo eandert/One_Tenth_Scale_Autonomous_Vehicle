@@ -29,145 +29,152 @@ import timeout_decorator
 The hopse is that one day this will be more automated but for now the IP must be set manually.
 The communication backend is Flask and timouts are set here so that we do not drive
 infinitely into a wall if a connection times out or a response is not received.'''
+
+
 class connectServer:
     # TODO: Protect everything with TLS
     # RECEIVE: pk_RSU, symk_session
     # SEND: pk_CAV
     def __init__(self, rsu_ip):
         self.key = secrets.token_urlsafe(32)
-        #self.rsu_ip_address = 'http://192.168.100.198:5000'
+        # self.rsu_ip_address = 'http://192.168.100.198:5000'
         self.rsu_ip_address = 'http://' + str(rsu_ip) + ':5000'
 
     def register(self, vehicle_id, x, y, z, roll, pitch, yaw, timestamp):
-        # data to be sent to api 
-        packet = {'key':self.key, 
-                'id':vehicle_id,
-                'type':1,
-                'timestamp':timestamp,
-                'x':x,
-                'y':y,
-                'z':z,
-                'roll':roll,
-                'pitch':pitch,
-                'yaw':yaw} 
-  
-        #print("Sending:%s"%packet)
+        # data to be sent to api
+        packet = {'key': self.key,
+                  'id': vehicle_id,
+                  'type': 1,
+                  'timestamp': timestamp,
+                  'x': x,
+                  'y': y,
+                  'z': z,
+                  'roll': roll,
+                  'pitch': pitch,
+                  'yaw': yaw}
+
+        # print("Sending:%s"%packet)
         while True:
             try:
                 # sending post request
-                r = requests.get(url = self.rsu_ip_address + "/RSU/register/", json = packet, timeout = 5) 
-  
+                r = requests.get(url=self.rsu_ip_address +
+                                 "/RSU/register/", json=packet, timeout=5)
+
                 # extracting response text
                 response = r.json()
                 # TODO: Verify this better
 
                 return response
             except:
-                print ( "Error: Failed to message RSU, trying again" )
+                print("Error: Failed to message RSU, trying again")
                 time.sleep(.01)
 
     def checkin(self, vehicle_id, x, y, z, roll, pitch, yaw, detections, bosco_results, timestamp):
-  
-        # data to be sent to api 
-        packet = {'key':self.key, 
-                'id':vehicle_id, 
-                'type':1,
-                'timestamp':timestamp,
-                'x':x,
-                'y':y,
-                'z':z,
-                'roll':roll,
-                'pitch':pitch,
-                'yaw':yaw,
-                'steeringAcceleration':0.0, 
-                'motorAcceleration':0.0, 
-                'targetIndexX':0, 
-                'targetIndexY':0,
-                'targetIntersection':0,
-                'detections':detections,
-                'bosco_results':bosco_results}
-  
+
+        # data to be sent to api
+        packet = {'key': self.key,
+                  'id': vehicle_id,
+                  'type': 1,
+                  'timestamp': timestamp,
+                  'x': x,
+                  'y': y,
+                  'z': z,
+                  'roll': roll,
+                  'pitch': pitch,
+                  'yaw': yaw,
+                  'steering_acceleration': 0.0,
+                  'motor_acceleration': 0.0,
+                  'target_index_x': 0,
+                  'target_index_y': 0,
+                  'targetIntersection': 0,
+                  'detections': detections,
+                  'bosco_results': bosco_results}
+
         try:
             # sending post request
-            r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = 1)
+            r = requests.get(url=self.rsu_ip_address +
+                             "/RSU/checkin/", json=packet, timeout=1)
             # extracting response text
             response = r.json()
 
             # TODO: Verify this better
-            #print("The response is:%s"%response)
+            # print("The response is:%s"%response)
 
             return response
         except Exception as e:
-            print ( "Timeout! TODO: add fallback option" + str(e) )
+            print("Timeout! TODO: add fallback option" + str(e))
             response = None
 
     def getSimPositions(self, vehicle_id):
-  
-        # data to be sent to api 
-        packet = {'key':self.key, 
-                'id':vehicle_id, 
-                'type':1}
-  
+
+        # data to be sent to api
+        packet = {'key': self.key,
+                  'id': vehicle_id,
+                  'type': 1}
+
         try:
             # sending post request
-            r = requests.get(url = self.rsu_ip_address + "/RSU/getsimpositions/", json = packet, timeout = 1)
+            r = requests.get(url=self.rsu_ip_address +
+                             "/RSU/getsimpositions/", json=packet, timeout=1)
             # extracting response text
             response = r.json()
 
             # TODO: Verify this better
-            #print("The response is:%s"%response)
+            # print("The response is:%s"%response)
 
             return response
         except Exception as e:
-            print ( "Timeout! TODO: add fallback option" + str(e) )
-            response = {'step_sim_vehicle':False}
+            print("Timeout! TODO: add fallback option" + str(e))
+            response = {'step_sim_vehicle': False}
 
             return response
 
     def getSimTime(self):
-  
-        # data to be sent to api 
+
+        # data to be sent to api
         packet = {}
-  
+
         try:
             # sending post request
-            r = requests.get(url = self.rsu_ip_address + "/RSU/getsimtime/", json = packet, timeout = 1)
+            r = requests.get(url=self.rsu_ip_address +
+                             "/RSU/getsimtime/", json=packet, timeout=1)
             # extracting response text
             response = r.json()
 
             # TODO: Verify this better
-            #print("The response is:%s"%response)
+            # print("The response is:%s"%response)
 
             return response
         except Exception as e:
-            print ( "Timeout! TODO: add fallback option" + str(e) )
-            response = {'time':None}
+            print("Timeout! TODO: add fallback option" + str(e))
+            response = {'time': None}
             return response
 
     def sendSimPosition(self, vehicle_id, x, y, z, roll, pitch, yaw, velocity):
-  
-        # data to be sent to api 
-        packet = {'key':self.key, 
-                'id':vehicle_id,
-                'type':1,
-                'x':x,
-                'y':y,
-                'z':z,
-                'roll':roll,
-                'pitch':pitch,
-                'yaw':yaw,
-                'velocity':velocity}
-  
+
+        # data to be sent to api
+        packet = {'key': self.key,
+                  'id': vehicle_id,
+                  'type': 1,
+                  'x': x,
+                  'y': y,
+                  'z': z,
+                  'roll': roll,
+                  'pitch': pitch,
+                  'yaw': yaw,
+                  'velocity': velocity}
+
         try:
             # sending post request
-            r = requests.get(url = self.rsu_ip_address + "/RSU/sendsimposition/", json = packet, timeout = 1)
+            r = requests.get(url=self.rsu_ip_address +
+                             "/RSU/sendsimposition/", json=packet, timeout=1)
             # extracting response text
             response = r.json()
 
             # TODO: Verify this better
-            #print("The response is:%s"%response)
+            # print("The response is:%s"%response)
 
             return response
         except Exception as e:
-            print ( "Timeout! TODO: add fallback option" + str(e) )
+            print("Timeout! TODO: add fallback option" + str(e))
             response = None

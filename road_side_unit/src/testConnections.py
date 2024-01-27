@@ -18,18 +18,18 @@ register = dict(
 )
 
 # registerResponse = dict(
-#     v_t=self.vehicles[vehicle_id].targetVelocity,
+#     v_t=self.vehicles[vehicle_id].target_velocity,
 #     t_x=init_x,
 #     t_y=init_y,
 #     t_z="0.0",
 #     t_roll="0.0",
 #     t_pitch="0.0",
 #     t_yaw=init_yaw,
-#     route_x=self.mapSpecs.xCoordinates,
-#     route_y=self.mapSpecs.yCoordinates,
-#     route_TFL=self.mapSpecs.vCoordinates,
+#     route_x=self.mapSpecs.x_coordinates,
+#     route_y=self.mapSpecs.y_coordinates,
+#     route_TFL=self.mapSpecs.velocity_coordinates,
 #     tfl_state=trafficLightArray,
-#     veh_locations=vehicleList,
+#     veh_locations=vehicle_list,
 #     timestep=time.time()
 # )
 
@@ -47,11 +47,11 @@ checkin = dict(
 )
 
 resp = requests.get(url=url + "RSU/register/", json=register)
-data = resp.json() # Check the JSON Response Content documentation below
+data = resp.json()  # Check the JSON Response Content documentation below
 print(data)
 
 time.sleep(1)
 
 resp2 = requests.get(url=url + "RSU/checkin/", json=checkin)
-data2 = resp2.json() # Check the JSON Response Content documentation below
+data2 = resp2.json()  # Check the JSON Response Content documentation below
 print(data2)

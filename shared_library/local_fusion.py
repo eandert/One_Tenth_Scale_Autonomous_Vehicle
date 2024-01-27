@@ -4,9 +4,9 @@ from numpy.testing._private.utils import measure
 from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from sklearn.neighbors import BallTree
-#from filterpy.kalman import UnscentedKalmanFilter as UKF
-#from filterpy.kalman import MerweScaledSigmaPoints
-#from stonesoup.types.track import Track
+# from filterpy.kalman import UnscentedKalmanFilter as UKF
+# from filterpy.kalman import MerweScaledSigmaPoints
+# from stonesoup.types.track import Track
 
 from shared_library import shared_math
 
@@ -39,15 +39,16 @@ class Tracked:
         self.y = y
         self.dx = 0
         self.dy = 0
-        self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
-        self.lastTracked = time
+        self.error_covariance = np.array(
+            [[1.0, 0.0], [0.0, 1.0]], dtype='float')
+        self.last_tracked = time
         self.id = id
         self.idx = 0
         self.min_size = 0.5
         self.dt = .125
         self.track_count = 0
         self.fusion_steps = 0
-        self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
+        self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype='float')
         self.first = True
 
         self.localTrackersMeasurementList = []
@@ -56,7 +57,8 @@ class Tracked:
 
         # Build the match list and add our match to it
         self.match_list = []
-        new_match = MatchClass(x, y, cov, None, None, None, sensor_type, confidence, time, sensor_id)
+        new_match = MatchClass(x, y, cov, None, None,
+                               None, sensor_type, confidence, time, sensor_id)
         self.match_list.append(new_match)
 
         # Kalman stuff
@@ -84,12 +86,12 @@ class Tracked:
             self.Q_t = np.array([[three, 0, two, 0],
                                 [0, three, 0, two],
                                 [two, 0, process_variation, 0],
-                                [0, two, 0, process_variation]], dtype = 'float')
+                                [0, two, 0, process_variation]], dtype='float')
             # Control matrix
-            self.B_t = np.array([[0], [0], [0], [0]], dtype = 'float')
-            #self.B_t = G
+            self.B_t = np.array([[0], [0], [0], [0]], dtype='float')
+            # self.B_t = G
             # Control vector
-            #self.U_t = 0
+            # self.U_t = 0
             self.U_t = 0
             # Measurment Matrix
             # Generated on the fly
@@ -105,7 +107,7 @@ class Tracked:
             self.P_hat_t[4][4] = 0.0
             self.P_hat_t[5][5] = 0.0
             # Process cov
-            #self.Q_t = np.identity(6)
+            # self.Q_t = np.identity(6)
             five = process_variation * (.125*.125*.125*.125*.125)/8.0
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
@@ -115,9 +117,9 @@ class Tracked:
                                 [four, 0, three, 0, three, 0],
                                 [0, four, 0, three, 0, three],
                                 [0, 0, three, 0, two, 0],
-                                [0, 0, 0, three, 0, two]], dtype = 'float')
+                                [0, 0, 0, three, 0, two]], dtype='float')
             # Control matrix
-            self.B_t = np.array([[0], [0], [0], [0], [0], [0]], dtype = 'float')
+            self.B_t = np.array([[0], [0], [0], [0], [0], [0]], dtype='float')
             # Control vector
             self.U_t = 0
             # Measurment cov
@@ -131,7 +133,7 @@ class Tracked:
             self.P_hat_t[3][3] = 0.0
             self.P_hat_t[4][4] = 0.0
             # Process cov
-            #self.Q_t = np.identity(5)
+            # self.Q_t = np.identity(5)
             four = process_variation * (.125*.125*.125*.125)/4.0
             three = process_variation * (.125*.125*.125)/2.0
             angle_variation = process_variation
@@ -140,9 +142,9 @@ class Tracked:
                                 [0, four, 0, three, 0],
                                 [three, three, two, 0, 0],
                                 [0, 0, 0, two, 0],
-                                [0, 0, 0, 0, two]], dtype = 'float')
+                                [0, 0, 0, 0, two]], dtype='float')
             # Control matrix
-            self.B_t = np.array([[0], [0], [0], [0], [0]], dtype = 'float')
+            self.B_t = np.array([[0], [0], [0], [0], [0]], dtype='float')
             # Control vector
             self.U_t = 0
             # Measurment cov
@@ -150,11 +152,12 @@ class Tracked:
 
     # Update adds another detection to this track
     def update(self, other, time):
-        
-        new_match = MatchClass(other[1], other[2], other[3], None, None, None, other[4], other[5], time, other[0])
+
+        new_match = MatchClass(
+            other[1], other[2], other[3], None, None, None, other[4], other[5], time, other[0])
         self.match_list.append(new_match)
 
-        self.lastTracked = time
+        self.last_tracked = time
 
         self.track_count += 1
 
@@ -166,7 +169,7 @@ class Tracked:
 
     def getPositionPredicted(self, timestamp, estimate_covariance):
         if self.fusion_steps < 2 or not estimate_covariance:
-        # If this kalman fitler has never been run, we can't use it for prediction!
+            # If this kalman fitler has never been run, we can't use it for prediction!
             return [
                 [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
             ]
@@ -178,7 +181,8 @@ class Tracked:
                 ]
             except:
                 return [
-                [self.x, self.y, self.min_size, self.min_size, math.radians(0)]
+                    [self.x, self.y, self.min_size,
+                        self.min_size, math.radians(0)]
                 ]
 
     def clearLastFrame(self):
@@ -187,12 +191,12 @@ class Tracked:
     def fx(self, x, dt):
         """ state transition function for a 
         constant velocity aircraft"""
-    
+
         F = np.array([[1, 0, dt, 0],
                      [0, 1, 0, dt],
                      [0, 0, 1, 0],
-                     [0, 0, 0, 1]], dtype = 'float')
-                     
+                     [0, 0, 0, 1]], dtype='float')
+
         return F @ x
 
     def hx(self, x):
@@ -220,7 +224,8 @@ class Tracked:
                 if idx == 0:
                     temporary_mu = np.matmul(cov.transpose(), pos)
                 else:
-                    temporary_mu = np.add(temporary_mu, np.matmul(cov.transpose(), pos))
+                    temporary_mu = np.add(
+                        temporary_mu, np.matmul(cov.transpose(), pos))
             temporary_mu = np.matmul(temporary_c, temporary_mu)
             return temporary_mu, temporary_c
         except:
@@ -235,7 +240,8 @@ class Tracked:
         # Time to go through the track list and fuse!
         for match in self.match_list:
             self.localTrackersCovarianceList.append(match.covariance)
-            self.localTrackersMeasurementList.append(np.array([match.x, match.y]))
+            self.localTrackersMeasurementList.append(
+                np.array([match.x, match.y]))
             self.localTrackersIDList.append(match.sensor_type)
             self.localTrackersConfidenceList.append(match.confidence)
 
@@ -252,15 +258,17 @@ class Tracked:
 
             if self.fusion_mode == 0:
                 # Store so that next fusion is better
-                self.X_hat_t = np.array([[x_out], [y_out], [0], [0]], dtype = 'float')
+                self.X_hat_t = np.array(
+                    [[x_out], [y_out], [0], [0]], dtype='float')
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
-                self.X_hat_t = np.array([[x_out], [y_out], [0], [0], [0], [0]], dtype = 'float')
+                self.X_hat_t = np.array(
+                    [[x_out], [y_out], [0], [0], [0], [0]], dtype='float')
             else:
                 # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
                 self.X_hat_t = np.array(
-                    [[x_out], [y_out], [0], [0], [0]], dtype = 'float')
-            
+                    [[x_out], [y_out], [0], [0], [0]], dtype='float')
+
             # Seed the covariance values directly from the measurement
             try:
                 self.P_hat_t[0][0] = self.error_covariance[0][0]
@@ -272,7 +280,7 @@ class Tracked:
                 self.P_hat_t[0][1] = 0.0
                 self.P_hat_t[1][0] = 0.0
                 self.P_hat_t[1][1] = 1.0
-            self.prev_time = self.lastTracked
+            self.prev_time = self.last_tracked
             self.x = x_out
             self.y = y_out
             self.dx = 0.0
@@ -293,7 +301,7 @@ class Tracked:
                 self.confidence_trupercept = confidence / confidence_count
         else:
             # Prediction step!
-            elapsed = self.lastTracked - self.prev_time
+            elapsed = self.last_tracked - self.prev_time
             if elapsed <= 0.0:
                 # Set to arbitrary time
                 elapsed = 0.125
@@ -302,7 +310,7 @@ class Tracked:
                 self.F_t = np.array([[1, 0, elapsed, 0],
                                     [0, 1, 0, elapsed],
                                     [0, 0, 1, 0],
-                                    [0, 0, 0, 1]], dtype = 'float')
+                                    [0, 0, 0, 1]], dtype='float')
             elif self.fusion_mode == 1:
                 # setup for x, dx, dxdx
                 self.F_t = np.array([[1, 0, elapsed, 0, elapsed*elapsed, 0],
@@ -310,13 +318,13 @@ class Tracked:
                                     [0, 0, 1, 0, elapsed, 0],
                                     [0, 0, 0, 1, 0, elapsed],
                                     [0, 0, 0, 0, 1, 0],
-                                    [0, 0, 0, 0, 0, 1]], dtype = 'float')
+                                    [0, 0, 0, 0, 0, 1]], dtype='float')
             else:
                 # setup for https://journals.sagepub.com/doi/abs/10.1177/0959651820975523
                 v_1 = self.X_hat_t[2]
                 phi_1 = self.X_hat_t[3]
                 phi_dot_1 = self.X_hat_t[4]
-                #print ( self.X_hat_t, v_1, phi_1, phi_dot_1 )
+                # print ( self.X_hat_t, v_1, phi_1, phi_dot_1 )
                 if phi_1 == 0.0:
                     # Not moving, No correlation
                     v_x = 999.9
@@ -324,22 +332,28 @@ class Tracked:
                     phi_x = 999.9
                     phi_y = 999.9
                 else:
-                    v_x = ( 1.0 / phi_dot_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-                    v_y = ( 1.0 / phi_dot_1 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
-                    phi_x = ( v_1 / phi_dot_1 ) * ( -math.cos(phi_1) + math.cos(phi_1 + elapsed * phi_dot_1))
-                    phi_y = ( v_1 / phi_dot_1 ) * ( -math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
+                    v_x = (1.0 / phi_dot_1) * (-math.sin(phi_1) +
+                                               math.sin(phi_1 + elapsed * phi_dot_1))
+                    v_y = (1.0 / phi_dot_1) * (math.cos(phi_1) -
+                                               math.cos(phi_1 + elapsed * phi_dot_1))
+                    phi_x = (v_1 / phi_dot_1) * (-math.cos(phi_1) +
+                                                 math.cos(phi_1 + elapsed * phi_dot_1))
+                    phi_y = (v_1 / phi_dot_1) * (-math.sin(phi_1) +
+                                                 math.sin(phi_1 + elapsed * phi_dot_1))
                 if phi_dot_1 == 0.0:
                     # Not accelerating, NO correlation
                     phi_dot_x = 999.9
                     phi_dot_y = 999.9
                 else:
-                    phi_dot_x = ( v_1 * elapsed / phi_dot_1 ) * math.cos(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( - math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
-                    phi_dot_y = ( v_1 * elapsed / phi_dot_1 ) * math.sin(phi_1 + elapsed * phi_dot_1) - ( v_1 / phi_dot_1**2 ) * ( math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
+                    phi_dot_x = (v_1 * elapsed / phi_dot_1) * math.cos(phi_1 + elapsed * phi_dot_1) - (
+                        v_1 / phi_dot_1**2) * (- math.sin(phi_1) + math.sin(phi_1 + elapsed * phi_dot_1))
+                    phi_dot_y = (v_1 * elapsed / phi_dot_1) * math.sin(phi_1 + elapsed * phi_dot_1) - (
+                        v_1 / phi_dot_1**2) * (math.cos(phi_1) - math.cos(phi_1 + elapsed * phi_dot_1))
                 self.F_t = np.array([[1, 0, v_x, phi_x, phi_dot_x],
                                     [0, 1, v_y, phi_y, phi_dot_y],
                                     [0, 0, 1, 0, 0],
                                     [0, 0, 0, 1, elapsed],
-                                    [0, 0, 0, 0, 1]], dtype = 'float')
+                                    [0, 0, 0, 0, 1]], dtype='float')
 
             if sensor_fusion_messer == 1:
                 print("old-----------------------------------------", self.P_hat_t)
@@ -349,7 +363,8 @@ class Tracked:
                 print("new-----------------------------------------", self.P_hat_t)
 
             # Time to run our predictions!
-            self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_hat_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+            self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(
+                self.X_hat_t, self.P_hat_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
             if len(self.localTrackersMeasurementList) == 0:
                 nothing_cov = np.array([[1.0, 0.],
@@ -367,22 +382,24 @@ class Tracked:
 
                 Z_t = (measure).transpose()
                 Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                self.X_hat_t, self.P_hat_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, nothing_cov, nothing_Ht)
+                self.X_hat_t, self.P_hat_t = shared_math.kalman_update(
+                    self.X_hat_t, self.P_hat_t, Z_t, nothing_cov, nothing_Ht)
                 self.confidence_trupercept = 0.0
             else:
                 for mu, cov in zip(self.localTrackersMeasurementList, self.localTrackersCovarianceList):
                     if self.fusion_mode == 0:
                         h_t = np.array([[1., 0., 0., 0.],
-                                               [0., 1., 0., 0.]], dtype='float')
+                                        [0., 1., 0., 0.]], dtype='float')
                     elif self.fusion_mode == 1:
                         h_t = np.array([[1., 0., 0., 0., 0., 0.],
-                                               [0., 1., 0., 0., 0., 0.]], dtype='float')
+                                        [0., 1., 0., 0., 0., 0.]], dtype='float')
                     elif self.fusion_mode == 2:
                         h_t = np.array([[1., 0., 0., 0., 0.],
-                                               [0., 1., 0., 0., 0.]], dtype='float')
+                                        [0., 1., 0., 0., 0.]], dtype='float')
                     Z_t = (mu).transpose()
                     Z_t = Z_t.reshape(Z_t.shape[0], -1)
-                    self.X_hat_t, self.P_hat_t = shared_math.kalman_update(self.X_hat_t, self.P_hat_t, Z_t, cov, h_t)
+                    self.X_hat_t, self.P_hat_t = shared_math.kalman_update(
+                        self.X_hat_t, self.P_hat_t, Z_t, cov, h_t)
 
                 # This is purely for TruPercept
                 confidence = 0.0
@@ -400,9 +417,10 @@ class Tracked:
             # Here we run an extra predictive step since it takes 125 ms to compute our data, but
             # we do not save any of this and will re-run next time
             if predictive:
-                self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(self.X_hat_t, self.P_hat_t, self.F_t, self.B_t, self.U_t, self.Q_t)
+                self.X_hat_t, self.P_hat_t = shared_math.kalman_prediction(
+                    self.X_hat_t, self.P_hat_t, self.F_t, self.B_t, self.U_t, self.Q_t)
 
-            self.prev_time = self.lastTracked
+            self.prev_time = self.last_tracked
 
             self.x = self.X_hat_t[0][0]
             self.y = self.X_hat_t[1][0]
@@ -415,12 +433,16 @@ class Tracked:
                 self.dy = self.X_hat_t[3][0]
             self.idx += 1
             if self.P_hat_t[0][0] != 0.0 or self.P_hat_t[0][1] != 0.0:
-                self.error_covariance = np.array([[self.P_hat_t[0][0], self.P_hat_t[0][1]], [self.P_hat_t[1][0], self.P_hat_t[1][1]]], dtype = 'float')
-                self.d_covariance = np.array([[self.P_hat_t[2][2], self.P_hat_t[2][3]], [self.P_hat_t[3][2], self.P_hat_t[3][3]]], dtype = 'float')
+                self.error_covariance = np.array([[self.P_hat_t[0][0], self.P_hat_t[0][1]], [
+                                                 self.P_hat_t[1][0], self.P_hat_t[1][1]]], dtype='float')
+                self.d_covariance = np.array([[self.P_hat_t[2][2], self.P_hat_t[2][3]], [
+                                             self.P_hat_t[3][2], self.P_hat_t[3][3]]], dtype='float')
             else:
-                #print ( " what the heck: ", P_hat_t)
-                self.error_covariance = np.array([[1.0, 0.0], [0.0, 1.0]], dtype = 'float')
-                self.d_covariance = np.array([[2.0, 0.0], [0.0, 2.0]], dtype = 'float')
+                # print ( " what the heck: ", P_hat_t)
+                self.error_covariance = np.array(
+                    [[1.0, 0.0], [0.0, 1.0]], dtype='float')
+                self.d_covariance = np.array(
+                    [[2.0, 0.0], [0.0, 2.0]], dtype='float')
 
             self.fusion_steps += 1
 
@@ -440,7 +462,7 @@ class FUSION:
     # https://github.com/eandert/Jetson_Nano_Camera_Vehicle_Tracker
     def __init__(self, fusion_mode, cav_cis_id):
         # Set other parameters for the class
-        self.trackedList = []
+        self.tracked_list = []
         self.id = cav_cis_id
         self.prev_time = -99.0
         self.min_size = 0.5
@@ -452,21 +474,23 @@ class FUSION:
         # Indicate our success
         print('Started FUSION successfully...')
 
-    def fuseDetectionFrame(self, sensor_fusion_error_injection = 0, sensor_fusion_error_injection_rate = 1.0):
+    def fuseDetectionFrame(self, sensor_fusion_error_injection=0, sensor_fusion_error_injection_rate=1.0):
         # Time to go through each track list and fuse!
         result = []
-        for track in self.trackedList:
-            track.fusion(self.predictive, sensor_fusion_error_injection, sensor_fusion_error_injection_rate)
+        for track in self.tracked_list:
+            track.fusion(self.predictive, sensor_fusion_error_injection,
+                         sensor_fusion_error_injection_rate)
             if track.fusion_steps >= self.trackShowThreshold:
                 # Calculate a custom ID that encodes the sensor id and local fusion track number
                 universal_id = self.id * MAX_ID + track.id
-                result.append([universal_id, track.x, track.y, track.error_covariance.tolist(), track.dx, track.dy, track.d_covariance.tolist(), track.confidence_trupercept])
+                result.append([universal_id, track.x, track.y, track.error_covariance.tolist(
+                ), track.dx, track.dy, track.d_covariance.tolist(), track.confidence_trupercept])
             # Clear the previous detection list
             track.clearLastFrame()
 
         return result
 
-    def processDetectionFrame(self, sensor_type, timestamp, observations, cleanupTime, estimate_covariance, matching_messup_rate = 1.0):
+    def processDetectionFrame(self, sensor_type, timestamp, observations, cleanupTime, estimate_covariance, matching_messup_rate=1.0):
         # We need to generate and add the detections from this detector
         detections_position_list = []
         detections_list = []
@@ -486,36 +510,42 @@ class FUSION:
             #         # Use an arbitrary size if we have no covariance estimate
             #         detections_position_list.append([det[1], det[2], self.min_size, self.min_size, math.radians(0)])
             # else:
-                #print(" Warning: no covaraince data for ", sensor_id)
-                # Use an arbitrary size if we have no covariance estimate
-            detections_position_list.append([det[1] * matching_messup_rate, det[2] * matching_messup_rate, self.min_size, self.min_size, math.radians(0)])
+            # print(" Warning: no covaraince data for ", sensor_id)
+            # Use an arbitrary size if we have no covariance estimate
+            detections_position_list.append(
+                [det[1] * matching_messup_rate, det[2] * matching_messup_rate, self.min_size, self.min_size, math.radians(0)])
             if sensor_type == 0:
                 # If this is form the camera, add in the confidence term
-                detections_list.append([det[0], det[1], det[2], det[3], sensor_type, det[7]])
+                detections_list.append(
+                    [det[0], det[1], det[2], det[3], sensor_type, det[7]])
             else:
                 # If not, add in -1
-                detections_list.append([det[0], det[1], det[2], det[3], sensor_type, -1])
+                detections_list.append(
+                    [det[0], det[1], det[2], det[3], sensor_type, -1])
 
-        # Call the matching function to modify our detections in trackedList
-        self.matchDetections(detections_position_list, detections_list, timestamp, cleanupTime, estimate_covariance)
+        # Call the matching function to modify our detections in tracked_list
+        self.matchDetections(detections_position_list, detections_list,
+                             timestamp, cleanupTime, estimate_covariance)
 
     def matchDetections(self, detections_list_positions, detection_list, timestamp, cleanupTime, estimate_covariance):
         # try:
         matches = []
         if len(detections_list_positions) > 0:
-            if len(self.trackedList) > 0:
-                numpy_formatted = np.array(detections_list_positions).reshape(len(detections_list_positions), 5)
-                thisFrameTrackTree = BallTree(numpy_formatted, metric=shared_math.computeDistanceEuclidean)
+            if len(self.tracked_list) > 0:
+                numpy_formatted = np.array(detections_list_positions).reshape(
+                    len(detections_list_positions), 5)
+                thisFrameTrackTree = BallTree(
+                    numpy_formatted, metric=shared_math.computeDistanceEuclidean)
 
                 # Need to check the tree size here in order to figure out if we can even do this
                 length = len(numpy_formatted)
                 if length > 0:
-                    for trackedListIdx, track in enumerate(self.trackedList):
+                    for tracked_listIdx, track in enumerate(self.tracked_list):
                         # The only difference between this and our other version is that
                         # the below line is commented out
                         # track.calcEstimatedPos(timestamp - self.prev_time)
                         tuple = thisFrameTrackTree.query(np.array(track.getPositionPredicted(timestamp, estimate_covariance)), k=length,
-                                                        return_distance=True)
+                                                         return_distance=True)
                         first = True
                         for IOUVsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
                             if .99 >= IOUVsDetection >= 0:
@@ -523,11 +553,13 @@ class FUSION:
                                 # Before determining if this is a match check if this detection has been matched already
                                 if first:
                                     try:
-                                        index = [i[0] for i in matches].index(detectionIdx)
+                                        index = [i[0] for i in matches].index(
+                                            detectionIdx)
                                         # We have found the detection index, lets see which track is a better match
                                         if matches[index][2] > IOUVsDetection:
                                             # We are better so add ourselves
-                                            matches.append([detectionIdx, trackedListIdx, IOUVsDetection])
+                                            matches.append(
+                                                [detectionIdx, tracked_listIdx, IOUVsDetection])
                                             # Now unmatch the other one because we are better
                                             # This essentiall eliminates double matching
                                             matches[index][2] = 1
@@ -536,7 +568,8 @@ class FUSION:
                                             first = False
                                     except:
                                         # No matches in the list, go ahead and add
-                                        matches.append([detectionIdx, trackedListIdx, IOUVsDetection])
+                                        matches.append(
+                                            [detectionIdx, tracked_listIdx, IOUVsDetection])
                                         first = False
                                 else:
                                     # The other matches need to be marked so they arent made into a new track
@@ -549,13 +582,15 @@ class FUSION:
                 for match in matches:
                     if match[1] != -99:
                         # Now append to the correct track
-                        self.trackedList[match[1]].relations.append([match[0], match[2]])
+                        self.tracked_list[match[1]].relations.append(
+                            [match[0], match[2]])
 
                 # Old way
-                for track in self.trackedList:
+                for track in self.tracked_list:
                     if len(track.relations) == 1:
                         # Single match, go ahead and update the location
-                        track.update(detection_list[track.relations[0][0]], timestamp)
+                        track.update(
+                            detection_list[track.relations[0][0]], timestamp)
                     elif len(track.relations) > 1:
                         # if we have multiple matches, pick the best one
                         max = 0
@@ -569,7 +604,8 @@ class FUSION:
                             track.update(detection_list[idx], timestamp)
 
                 if len(matches):
-                    missing = sorted(set(range(0, len(detections_list_positions))) - set([i[0] for i in matches]))
+                    missing = sorted(
+                        set(range(0, len(detections_list_positions))) - set([i[0] for i in matches]))
                 else:
                     missing = list(range(0, len(detections_list_positions)))
 
@@ -577,7 +613,7 @@ class FUSION:
                 for add in missing:
                     # Before we add anything, let's check back against the list to make sure there is no IOU match over .5 with this new item and another new item
                     tuple = thisFrameTrackTree.query((np.array([detections_list_positions[add]])), k=length,
-                                                    return_distance=True)
+                                                     return_distance=True)
                     # first = True
                     # for IOUsDetection, detectionIdx in zip(tuple[0][0], tuple[1][0]):
                     #     # Check to make sure thie IOU match is high
@@ -603,30 +639,31 @@ class FUSION:
                     if add_this:
                         added.append(add)
                         new = Tracked(detection_list[add][0], detection_list[add][1], detection_list[add][2], detection_list[add][3],
-                                    detection_list[add][4], detection_list[add][5], timestamp, self.current_tracked_id, self.fusion_mode)
+                                      detection_list[add][4], detection_list[add][5], timestamp, self.current_tracked_id, self.fusion_mode)
                         if self.current_tracked_id < MAX_ID:
                             self.current_tracked_id += 1
                         else:
                             self.current_tracked_id = 0
-                        self.trackedList.append(new)
+                        self.tracked_list.append(new)
 
             else:
                 for dl in detection_list:
-                    new = Tracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5], timestamp, self.current_tracked_id, self.fusion_mode)
+                    new = Tracked(dl[0], dl[1], dl[2], dl[3], dl[4], dl[5],
+                                  timestamp, self.current_tracked_id, self.fusion_mode)
                     if self.current_tracked_id < MAX_ID:
                         self.current_tracked_id += 1
                     else:
                         self.current_tracked_id = 0
-                    self.trackedList.append(new)
+                    self.tracked_list.append(new)
 
         remove = []
-        for idx, track in enumerate(self.trackedList):
+        for idx, track in enumerate(self.tracked_list):
             track.relations = []
-            if track.lastTracked < ( timestamp - cleanupTime ):
+            if track.last_tracked < (timestamp - cleanupTime):
                 remove.append(idx)
 
         for delete in reversed(remove):
-            self.trackedList.pop(delete)
+            self.tracked_list.pop(delete)
         # except Exception as e:
         #     print("Error: ", str(e))
         #     return

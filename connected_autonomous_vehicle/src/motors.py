@@ -7,6 +7,8 @@ import math
 
 ''' This class communicates with the PCA9685 servo controller board in order to control the 
 steering servo and main motor PWM triggered motor driver.'''
+
+
 class Motors:
     def __init__(self):
         self.steering_angle_max = 30.0
@@ -15,7 +17,7 @@ class Motors:
         self.motorPIN = 1
         self.motorMax = 0.1
 
-        print ( " Initializing motors " )
+        print(" Initializing motors ")
 
         # Startup the i2c interface
         i2c = busio.I2C(SCL, SDA)
@@ -32,38 +34,36 @@ class Motors:
         self.steering = servo.Servo(self.pca.channels[self.servoPIN])
         self.steering.angle = self.servo_center
 
-        print ( " Motors initialized " )
+        print(" Motors initialized ")
 
-    def setControlMotors(self, steeringAcceleration, motorAcceleration):
-        if steeringAcceleration == 0.0:
+    def setControlMotors(self, steering_acceleration, motor_acceleration):
+        if steering_acceleration == 0.0:
             servo = servo_center
             motor = 0.0
         else:
             # Adjust to our 180 degree servo, 90 = 30, -90 = -30
-            servo = self.servo_center + (math.degrees(steeringAcceleration) * 3.0)
-        
-        if motorAcceleration > 0.0:
-            motor = self.motorMax * motorAcceleration
+            servo = self.servo_center + \
+                (math.degrees(steering_acceleration) * 3.0)
+
+        if motor_acceleration > 0.0:
+            motor = self.motorMax * motor_acceleration
             if motor > self.motorMax:
                 motor = self.motorMax
         else:
             motor = 0.0
 
         self.motor.duty_cycle = int(65535*motor)
-        #self.motor.duty_cycle = 0
+        # self.motor.duty_cycle = 0
         self.steering.angle = servo
 
-        print ( "motor target: " , motorAcceleration, " actual " , self.motor.duty_cycle)
-        print ( "Steering PID:" , servo, " Motor PID:", motor )
+        print("motor target: ", motor_acceleration,
+              " actual ", self.motor.duty_cycle)
+        print("Steering PID:", servo, " Motor PID:", motor)
 
     def emergencyStop(self):
         # emergency stop set the motor to 0
         self.motor.duty_cycle = 0
 
-    # Calling destructor 
+    # Calling destructor
     def __del__(self):
         self.pca.deinit()
-        
-
-
-
