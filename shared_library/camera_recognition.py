@@ -58,7 +58,7 @@ is a function for kalman filter to smooth the x and y values as well as a
 function for prediction where the next bounding box will be based on prior movement. '''
 
 
-class Tracked:
+class CameraBBoxTracker:
     def __init__(self, xmin, ymin, xmax, ymax, type, confidence, x, y, crossSection, time, id):
         self.xmin = xmin
         self.ymin = ymin
@@ -648,8 +648,8 @@ class YOLO:
                     # We are the best according to arbitrarily broken tie and can be added
                     if first:
                         added.append(add)
-                        new = Tracked(detections_list_positions[add][0], detections_list_positions[add][1], detections_list_positions[add][2], detections_list_positions[add]
-                                      [3], detection_list[add][0], detection_list[add][1], detection_list[add][2], detection_list[add][3], detection_list[add][4], self.time, self.id)
+                        new = CameraBBoxTracker(detections_list_positions[add][0], detections_list_positions[add][1], detections_list_positions[add][2], detections_list_positions[add]
+                                                [3], detection_list[add][0], detection_list[add][1], detection_list[add][2], detection_list[add][3], detection_list[add][4], self.time, self.id)
                         if self.id < 1000000:
                             self.id += 1
                         else:
@@ -658,8 +658,8 @@ class YOLO:
 
             else:
                 for dl, dlp in zip(detection_list, detections_list_positions):
-                    new = Tracked(dlp[0], dlp[1], dlp[2], dlp[3], dl[0],
-                                  dl[1], dl[2], dl[3], dl[4], self.time, self.id)
+                    new = CameraBBoxTracker(dlp[0], dlp[1], dlp[2], dlp[3], dl[0],
+                                            dl[1], dl[2], dl[3], dl[4], self.time, self.id)
                     if self.id < 1000:
                         self.id += 1
                     else:

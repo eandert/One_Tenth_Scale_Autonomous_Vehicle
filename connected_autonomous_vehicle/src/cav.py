@@ -92,7 +92,8 @@ def sourceLIDARThread(out_queue, pipeFromC, pipeToC, lidarSensor, simulation_tim
     target = interval
 
     # Init the LIDAR processing class
-    lidarRecognition = lidar_recognition.LIDAR(fetch_time(simulation_time))
+    lidarRecognition = lidar_recognition.LIDARClustering2D(
+        fetch_time(simulation_time))
 
     # Wait for 1 second before we start everything
     time.sleep(2)
@@ -313,13 +314,13 @@ def cav(config, vid, test_idx):
             comm_q, vehicle_id, init, response, config.rsu_ip))
         commThread.start()
     else:
-        # We are in sumulation and cannot start unlimited threads so this will be done in series
+        # We are in sumulation and should not start unlimited threads so this will be done in series
         fails = 0
         simulation_time = True
         global_time = 1.0
         init = {}
         response = {}
-        lidarRecognition = lidar_recognition.LIDAR(0.0)
+        lidarRecognition = lidar_recognition.LIDARClustering2D(0.0)
 
         # Manually do what the thread would normally do
         if debug:

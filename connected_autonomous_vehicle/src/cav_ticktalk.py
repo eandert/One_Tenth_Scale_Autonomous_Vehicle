@@ -64,7 +64,7 @@ def sourceLIDARThread(pipeFromC, pipeToC, network_send_queue, start_time, interv
     target = interval
 
     # Init the LIDAR processing class
-    lidarRecognition = lidar_recognition.LIDAR(time.time())
+    lidarRecognition = lidar_recognition.LIDARClusteringtime.time())
 
     # Wait for 1 second before we start everything
     time.sleep(2)

@@ -12,14 +12,6 @@ from shared_library import shared_math
 max_id = 10000
 
 
-def binarySearch(a, x):
-    'Locate the leftmost value exactly equal to x'
-    i = bisect.bisect_left(a, x)
-    if i != len(a) and a[i] == x:
-        return i
-    return -1
-
-
 class MatchClass:
     def __init__(self, id, x, y, covariance, dx, dy, d_confidence, confidence, trust_score, object_type, time):
         self.x = x

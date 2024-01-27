@@ -7,13 +7,56 @@ from sklearn.neighbors import BallTree
 from shared_library import shared_math
 
 
-'''This object tracks a single object that has been detected in a LIDAR frame.
-We use this primarily to match objects seen between frames and included in here
-is a function for kalman filter to smooth the x and y values as well as a
-function for prediction where the next bounding box will be based on prior movement.'''
+class ObjectTracker2D:
+    """
+    This object tracks a single object that has been detected in a LIDAR frame.
+    We use this primarily to match objects seen between frames. Included in here
+    is a function for a Kalman filter to smooth the x and y values, as well as a
+    function for prediction where the next bounding box will be based on prior movement.
 
+    Represents a tracked object with its position, velocity, and other attributes.
 
-class Tracked:
+    Attributes:
+        xmin (float): The minimum x-coordinate of the bounding box.
+        ymin (float): The minimum y-coordinate of the bounding box.
+        xmax (float): The maximum x-coordinate of the bounding box.
+        ymax (float): The maximum y-coordinate of the bounding box.
+        x (float): The current x-coordinate of the object.
+        y (float): The current y-coordinate of the object.
+        lastX (float): The previous x-coordinate of the object.
+        lastY (float): The previous y-coordinate of the object.
+        typeArray (list): An array to store the count of different types of the object.
+        type (int): The most frequent type of the object.
+        confidence (float): The confidence score of the object detection.
+        last_tracked (float): The timestamp of the last update.
+        id (int): The unique identifier of the object.
+        relations (list): A list of related objects.
+        velocity (float): The current velocity of the object.
+        lastVelocity (list): A list of the last 5 velocities of the object.
+        lastTimePassed (float): The time passed since the last update.
+        lastXmin (float): The previous minimum x-coordinate of the bounding box.
+        lastYmin (float): The previous minimum y-coordinate of the bounding box.
+        lastXmax (float): The previous maximum x-coordinate of the bounding box.
+        lastYmax (float): The previous maximum y-coordinate of the bounding box.
+        lastX2min (float): The second previous minimum x-coordinate of the bounding box.
+        lastY2min (float): The second previous minimum y-coordinate of the bounding box.
+        lastX2max (float): The second previous maximum x-coordinate of the bounding box.
+        lastY2max (float): The second previous maximum y-coordinate of the bounding box.
+        track_history_length (int): The length of the track history.
+        crossSection (float): The cross-sectional area of the object.
+        acceleration (float): The acceleration of the object.
+        delta_t (float): The time step for the Kalman filter.
+        F_t (numpy.ndarray): The transition matrix for the Kalman filter.
+        P_t (numpy.ndarray): The initial state covariance matrix for the Kalman filter.
+        Q_t (numpy.ndarray): The process covariance matrix for the Kalman filter.
+        timeOfLifeInherited (float): The time of life inherited from related objects.
+        B_t (numpy.ndarray): The control matrix for the Kalman filter.
+        U_t (float): The control vector for the Kalman filter.
+        H_t (numpy.ndarray): The measurement matrix for the Kalman filter.
+        R_t (numpy.ndarray): The measurement covariance matrix for the Kalman filter.
+        X_hat_t (numpy.ndarray): The estimated state vector for the Kalman filter.
+    """
+
     def __init__(self, xmin, ymin, xmax, ymax, type, confidence, x, y, crossSection, time, id):
         self.xmin = xmin
         self.ymin = ymin
@@ -23,9 +66,6 @@ class Tracked:
         self.y = y
         self.lastX = self.x
         self.lastY = self.y
-        self.dX = 0.0
-        self.dY = 0.0
-        self.timeToIntercept = 0.0
         self.typeArray = [0, 0, 0, 0]
         self.typeArray[type] += 1
         self.type = self.typeArray.index(max(self.typeArray))
@@ -49,8 +89,8 @@ class Tracked:
 
         # Kalman filter for position
         self.acceleration = 0
-        # Don't know this yet
-        self.delta_t = 0
+        # This is .125 seconds
+        self.delta_t = 0.125
         # Transition matrix
         self.F_t = np.array(
             [[1, 0, self.delta_t, 0], [0, 1, 0, self.delta_t], [0, 0, 1, 0], [0, 0, 0, 1]])
@@ -125,27 +165,44 @@ class Tracked:
                 sum += v
             self.velocity = sum/self.track_history_length
 
-        # Calcute the cahnge in x and change in y, we will use this for the timeToIntercept
-        # variable which will be used in the case of forward collision warning.
-        if self.x != self.lastX:
-            self.dX = (0.3*self.dX) + (0.7*(self.x - self.lastX))
-        if self.y != self.lastY:
-            self.dY = (0.3*self.dY) + (0.7*(self.y - self.lastY))
-        if self.dY != 0:
-            self.timeToIntercept = (
-                0.7*(self.y / self.dY * (1 / 30.0))) + (0.3*self.timeToIntercept)
+        # Setup the memory variables
         self.lastX = self.x
         self.lastY = self.y
         self.last_tracked = time
 
-    # This is the predict function for the Kalman filter
     def predictionKalman(self, X_hat_t_1, P_t_1, F_t, B_t, U_t, Q_t):
+        """
+        Perform Kalman prediction step.
+
+        Args:
+            X_hat_t_1 (numpy.ndarray): State estimate at time t-1.
+            P_t_1 (numpy.ndarray): Covariance matrix of state estimate at time t-1.
+            F_t (numpy.ndarray): State transition matrix.
+            B_t (numpy.ndarray): Control input matrix.
+            U_t (numpy.ndarray): Control input vector.
+            Q_t (numpy.ndarray): Process noise covariance matrix.
+
+        Returns:
+            tuple: A tuple containing the updated state estimate (X_hat_t) and covariance matrix (P_t).
+        """
         X_hat_t = F_t.dot(X_hat_t_1) + (B_t.dot(U_t).reshape(B_t.shape[0], -1))
         P_t = np.diag(np.diag(F_t.dot(P_t_1).dot(F_t.transpose()))) + Q_t
         return X_hat_t, P_t
 
-    # This is the update function for the Kalman filter
     def updateKalman(self, X_hat_t, P_t, Z_t, R_t, H_t):
+        """
+        Updates the Kalman filter with the given parameters.
+
+        Args:
+            X_hat_t (numpy.ndarray): The estimated state vector at time t.
+            P_t (numpy.ndarray): The estimated error covariance matrix at time t.
+            Z_t (numpy.ndarray): The measurement vector at time t.
+            R_t (numpy.ndarray): The measurement noise covariance matrix at time t.
+            H_t (numpy.ndarray): The measurement matrix at time t.
+
+        Returns:
+            tuple: A tuple containing the updated state vector (X_t) and error covariance matrix (P_t).
+        """
         K_prime = P_t.dot(H_t.transpose()).dot(
             np.linalg.inv(H_t.dot(P_t).dot(H_t.transpose()) + R_t))
         X_t = X_hat_t + K_prime.dot(Z_t - H_t.dot(X_hat_t))
@@ -153,19 +210,39 @@ class Tracked:
 
         return X_t, P_t
 
-    # Gets our position in an array form so we can use it in the BallTree
     def getPosition(self):
-        return [
-            self.xmin, self.ymin, self.xmax, self.ymax]
+        """
+        Returns the position of the object as a list of coordinates primarily so we can use it in the BallTree.
 
-    # Gets our predicted position in an array form so we can use it in the BallTree
+        Returns:
+            list: A list containing the x and y coordinates of the object's minimum and maximum points.
+        """
+        return [self.xmin, self.ymin, self.xmax, self.ymax]
+
     def getPositionPredicted(self):
-        return [
-            self.xminp, self.yminp, self.xmaxp, self.ymaxp]
+        """
+        Returns the predicted position as an array.
 
-    # Calcualtes our estimated next bounding box position velicity variables dxmin/max and dymin/max
-    # using the previous x and y values
+        The predicted position is represented by the coordinates (xminp, yminp, xmaxp, ymaxp).
+        This array can be used in the BallTree for further processing.
+
+        Returns:
+            list: The predicted position as an array [xminp, yminp, xmaxp, ymaxp].
+        """
+        return [self.xminp, self.yminp, self.xmaxp, self.ymaxp]
+
     def calcEstimatedPos(self, timePassed):
+        """
+        Calculates the estimated next bounding box position velocity variables dxmin/max and dymin/max
+        using the previous x and y values.
+
+        Args:
+            timePassed (float): The time passed since the last calculation.
+
+        Returns:
+            None
+        """
+        # TODO(eandert): This should ideally be replaced with the Kalman filter output
         # A moving average window of 3 seems most effective for this as it can change rapidly
         if self.track_history_length >= 2:
             dxmin = (0.7 * (self.xmin - self.lastXmin) / (timePassed)) + (
@@ -229,7 +306,18 @@ class Tracked:
 
 
 def convertBack(x, y, w, h):
-    # Converts xmin ymin xmax ymax to centroid x,y with height and width
+    """
+    Converts xmin, ymin, xmax, ymax to centroid x, y with height and width.
+
+    Parameters:
+    x (float): The x-coordinate of the bounding box center.
+    y (float): The y-coordinate of the bounding box center.
+    w (float): The width of the bounding box.
+    h (float): The height of the bounding box.
+
+    Returns:
+    tuple: A tuple containing the converted values (xmin, ymin, xmax, ymax).
+    """
     xmin = int(round(x - w / 2))
     xmax = int(round(x + w / 2))
     ymin = int(round(y - h / 2))
@@ -284,14 +372,38 @@ def computeDistance(a, b, epsilon=1e-5):
     return distance
 
 
-'''This class contains the code for parsing the data from the LIDAR process.
-Uses DBscan to cluster points and then matches them to either potential CAVs or
-other large obstacles (read carboard boxes used for localization, walls, etc.)
-so that we do not match large objects to moving CAVs during fusion.'''
+class LIDARClustering2D:
+    """
+    This class is responsible for parsing the data from the LIDAR process. It uses DBSCAN 
+    (Density-Based Spatial Clustering of Applications with Noise) to cluster points and 
+    then matches them to either potential Connected Autonomous Vehicles (CAVs) or other 
+    large obstacles (such as cardboard boxes used for localization, walls, etc.). This 
+    ensures that large objects are not incorrectly identified as moving CAVs during the 
+    fusion process.
 
+    Attributes:
+        tracked_list (list): A list to keep track of identified objects.
+        id (int): An identifier for the LIDARClustering2D instance.
+        time (int): The current time.
+        prev_time (int): The previous timestamp.
+        min_size (float): The minimum size for an object to be considered in the clustering process.
 
-class LIDAR:
+    Methods:
+        __init__(self, timestamp): Initializes the LIDARClustering2D instance with the given timestamp.
+        processLidarFrame(self, output, timestamp, vehicle_x, vehicle_y, vehicle_theta, lidar_sensor): Process a lidar frame and perform object recognition.
+        matchDetections(self, detections_list_positions, detection_list, timestamp): Matches LIDAR point bounding boxes to keep IDs constant across frames.
+    """
+
     def __init__(self, timestamp):
+        """
+        Initializes the LIDARClustering2D instance with the given timestamp.
+
+        Args:
+            timestamp (int): The initial timestamp.
+
+        Side effects:
+            Prints a success message to the console.
+        """
         # Set other parameters for the class
         self.tracked_list = []
         self.id = 0
@@ -303,6 +415,25 @@ class LIDAR:
         print('Started LIDAR successfully...')
 
     def processLidarFrame(self, output, timestamp, vehicle_x, vehicle_y, vehicle_theta, lidar_sensor):
+        """
+        Process a lidar frame and perform object recognition.
+
+        Args:
+            output (list): List of lidar points.
+            timestamp (float): Timestamp of the lidar frame.
+            vehicle_x (float): X-coordinate of the vehicle.
+            vehicle_y (float): Y-coordinate of the vehicle.
+            vehicle_theta (float): Orientation angle of the vehicle.
+            lidar_sensor (object): Lidar sensor object.
+
+        Returns:
+            list: List of recognized objects with their properties.
+            float: Updated timestamp.
+
+        Raises:
+            Exception: If an error occurs during the lidar frame processing.
+
+        """
         try:
             debug = False
 
@@ -433,11 +564,19 @@ class LIDAR:
             print("LIDAR ERROR in processLidarFrame", e)
             return [], timestamp
 
-    '''Similar to the frame by frame matchign done for image recognition to keeps IDs contant, this fuction
-    does the same but for LIDAR point boundin boxes instead of image bounding boxes. It operates from an 
-    overhead perpective rather than a horizonatal one like a a camera'''
-
     def matchDetections(self, detections_list_positions, detection_list, timestamp):
+        '''Similar to the frame by frame matching done for image recognition to keep IDs constant, this function
+        does the same but for LIDAR point bounding boxes instead of image bounding boxes. It operates from an 
+        overhead perspective rather than a horizontal one like a camera.
+
+        Args:
+            detections_list_positions (list): List of positions of LIDAR point bounding boxes.
+            detection_list (list): List of LIDAR point bounding boxes.
+            timestamp (float): Timestamp of the current frame.
+
+        Returns:
+            None
+        '''
         self.time += 1
         matches = []
         if len(detections_list_positions) > 0:
@@ -537,8 +676,8 @@ class LIDAR:
                     # We are the best according to arbitrarily broken tie and can be added
                     if first:
                         added.append(add)
-                        new = Tracked(detections_list_positions[add][0], detections_list_positions[add][1], detections_list_positions[add][2], detections_list_positions[add]
-                                      [3], detection_list[add][0], detection_list[add][1], detection_list[add][2], detection_list[add][3], detection_list[add][4], self.time, self.id)
+                        new = ObjectTracker2D(detections_list_positions[add][0], detections_list_positions[add][1], detections_list_positions[add][2], detections_list_positions[add]
+                                              [3], detection_list[add][0], detection_list[add][1], detection_list[add][2], detection_list[add][3], detection_list[add][4], self.time, self.id)
                         if self.id < 1000000:
                             self.id += 1
                         else:
@@ -547,8 +686,8 @@ class LIDAR:
 
             else:
                 for dl, dlp in zip(detection_list, detections_list_positions):
-                    new = Tracked(dlp[0], dlp[1], dlp[2], dlp[3], dl[0],
-                                  dl[1], dl[2], dl[3], dl[4], self.time, self.id)
+                    new = ObjectTracker2D(dlp[0], dlp[1], dlp[2], dlp[3], dl[0],
+                                          dl[1], dl[2], dl[3], dl[4], self.time, self.id)
                     if self.id < 1000:
                         self.id += 1
                     else:
