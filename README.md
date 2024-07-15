@@ -11,7 +11,7 @@ To Install on physical Jetson hardware:
  * Download the SD card image and upload to 64 GB SD card. This will save days of building the correct libraries, etc. 
  * TODO: Place google drive link here for Jetson TX2
  * Clone this repo on the ~/workspace/ folder.
- * Download [yolov4-tiny-cav.cfg]([https://drive.google.com/file/d/1yMQntYWsVbJ8h7x0r0Hv5y34o2IGRVJ2/view?usp=sharing](https://drive.google.com/drive/folders/1KclkWlJhZVFET0ApPIYRnKprPp9X9jDT?usp=drive_link)) and unpack to ~/workspace/darknet
+ * Download [yolo config files](https://drive.google.com/drive/folders/1KclkWlJhZVFET0ApPIYRnKprPp9X9jDT?usp=drive_link) and unpack to ~/workspace/darknet
 
 In order to recognise the 1/10th scale vehicles you will need the retrained version of YoloV4 tiny. Be sure to download and add the following YoloV4 files into the darknet folder: 
  * [yolov4-tiny-cav.cfg](https://drive.google.com/file/d/1yMQntYWsVbJ8h7x0r0Hv5y34o2IGRVJ2/view?usp=sharing), needs to be located in /cfg
