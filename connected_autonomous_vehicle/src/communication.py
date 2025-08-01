@@ -12,6 +12,7 @@ import requests
 from io import StringIO
 import csv
 import timeout_decorator
+import random
 
 
 ''' A utility function for determining our IP address for printing or watnot via python.'''
@@ -87,14 +88,28 @@ class connectServer:
   
         try:
             # sending post request
-            r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = 1)
-            # extracting response text
-            response = r.json()
+            # roll a dice 2x to see if we should send/recieve this properly or fail
+            probability_of_sucess = 0.10
+            send_suceeds = random.random()
+            send_suceeds_2 = random.random()
+            if send_suceeds >= probability_of_sucess:
+                r = requests.get(url = self.rsu_ip_address + "/RSU/checkin/", json = packet, timeout = 1)
+                # extracting response text
+                response = r.json()
 
-            # TODO: Verify this better
-            #print("The response is:%s"%response)
-
-            return response
+                # TODO: Verify this better
+                #print("The response is:%s"%response)
+                if send_suceeds_2 >= probability_of_sucess: 
+                    return response
+                else:
+                    time.sleep(0.5)
+                    print("Recieve failed ---------------------------")
+                    return None
+            else:
+                # Sleep for the timout duraion
+                time.sleep(0.5)
+                print("Send failed ---------------------------")
+                return None
         except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
             response = None
@@ -118,7 +133,7 @@ class connectServer:
             return response
         except Exception as e:
             print ( "Timeout! TODO: add fallback option" + str(e) )
-            response = None
+            response = {}
 
     def getSimTime(self):
   
